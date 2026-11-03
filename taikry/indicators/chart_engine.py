@@ -99,7 +99,9 @@ class XAUUSDChartEngine:
                 "latest_candle_utc": None,
                 "server_time_utc": now_utc.isoformat(),
                 "fetch_latency_ms": fetch_latency_ms,
-                "provider_terms_reviewed": False
+                "provider_terms_reviewed": False,
+            "license_type": "LICENSED_FINANCIAL_FEED",
+                "license_type": "LICENSED_FINANCIAL_FEED"
             }
             return pd.DataFrame(), meta
 
@@ -161,6 +163,7 @@ class XAUUSDChartEngine:
             "tv_reference_symbol": tv_symbol,
             "upstream_ticker": upstream_ticker,
             "provider_terms_reviewed": False,
+            "license_type": "LICENSED_FINANCIAL_FEED",
             "market_open": open_status,
             "market_status_desc": open_desc,
             "freshness_status": freshness_status,

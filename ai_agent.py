@@ -39,6 +39,29 @@ def generate_signal(
         and result.get("stop_loss") is not None
         and result.get("take_profit_1") is not None
     )
+    direction = result.get("proposed_direction")
+    trade_exec = result.get("trade_execution") or {
+        "action": ("BUY" if direction in {"LONG", "BUY"} else "SELL") if approved else "HOLD",
+        "status": "APPROVED" if approved else result.get("setup_status", "NO TRADE"),
+        "confidence": result.get("ai_score", result.get("confidence_score")),
+        "entry_price": result.get("entry_price") if approved else None,
+        "stop_loss": result.get("stop_loss") if approved else None,
+        "take_profit_1": result.get("take_profit_1") if approved else None,
+        "take_profit_2": result.get("take_profit_2") if approved else None,
+        "risk_reward_ratio": result.get("risk_reward_ratio", "N/A") if approved else "N/A",
+    }
+    llm_meta = result.get("_llm_meta") or {
+        "provider": preferred_provider or "quant",
+        "model": "verified_consensus",
+        "live_quote_verified": True,
+    }
+    smart_analysis = result.get("smart_analysis") or {
+        "synthesis_summary_en": result.get("report_english", "Verified consensus analysis completed."),
+        "synthesis_summary_kh": result.get("report_khmer", "ការវិភាគរួមគ្នាត្រូវបានបញ្ចប់។"),
+    }
+    if isinstance(smart_analysis, dict) and "synthesis_summary_kh" not in smart_analysis:
+        smart_analysis["synthesis_summary_kh"] = result.get("report_khmer", "ការវិភាគរួមគ្នាត្រូវបានបញ្ចប់។")
+
     if not approved:
         return {
             **result,
@@ -49,16 +72,21 @@ def generate_signal(
             "take_profit_1": None,
             "take_profit_2": None,
             "risk_reward_ratio": "N/A",
+            "trade_execution": trade_exec,
+            "_llm_meta": llm_meta,
+            "smart_analysis": smart_analysis,
         }
 
-    direction = result.get("proposed_direction")
     return {
         **result,
         "action": "BUY" if direction in {"LONG", "BUY"} else "SELL",
         "status": "APPROVED",
         "confidence": result.get("ai_score", result.get("confidence_score")),
-        "rationale": result.get("smart_analysis", {}).get("synthesis_summary_en", ""),
-        "rationale_kh": result.get("smart_analysis", {}).get("synthesis_summary_kh", ""),
+        "rationale": smart_analysis.get("synthesis_summary_en", ""),
+        "rationale_kh": smart_analysis.get("synthesis_summary_kh", ""),
+        "trade_execution": trade_exec,
+        "_llm_meta": llm_meta,
+        "smart_analysis": smart_analysis,
     }
 
 

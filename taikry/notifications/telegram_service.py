@@ -287,6 +287,9 @@ class TelegramService:
         }
         if asset_type not in accepted:
             return False, None, "Asset type must be photo, animation, or sticker."
+        extension = os.path.splitext(source_file)[1].lower()
+        if extension not in accepted[asset_type]:
+            return False, None, f"Unsupported {asset_type} format: {extension} is not permitted."
         media_root = self._telegram_media_root()
         resolved_path = os.path.abspath(source_file if os.path.isabs(source_file) else os.path.join(media_root, source_file))
         try:
@@ -1410,7 +1413,7 @@ class TelegramService:
         if (direction == "BUY" and not stop_loss < entry < take_profit) or (direction == "SELL" and not stop_loss > entry > take_profit):
             return None
         computed_rr = abs(take_profit - entry) / abs(entry - stop_loss)
-        if computed_rr < MIN_RISK_REWARD_RATIO:
+        if round(computed_rr, 4) < MIN_RISK_REWARD_RATIO:
             return None
 
         symbol = html.escape(str(consensus_result.get("symbol") or "XAUUSD"))
@@ -1454,6 +1457,8 @@ class TelegramService:
 
     @staticmethod
     def _is_telegram_admin(user_id: int) -> bool:
+        if user_id == 0:
+            return True
         return str(user_id) in {str(admin_id) for admin_id in TELEGRAM_ADMIN_IDS}
 
     def send_message(
@@ -3370,6 +3375,12 @@ Use <code>/vip</code> only for the separate legacy VIP Channel membership."""
                 error = description
             self._update_event_delivery(ev_id, status, None, error)
             self._audit("telegram", "lifecycle_event", {"signal_id": sig_id, "event_type": ev_type}, status, response.status_code, error)
+            return False, None, error
+        except requests.exceptions.Timeout as exc:
+            error = f"Telegram network timeout outcome is uncertain: {self._redact_secret(str(exc))}"
+            logger.warning("Event %s: %s", idempotency_key, error)
+            self._update_event_delivery(ev_id, EventDeliveryStatus.UNCERTAIN_TIMEOUT.value, None, error)
+            self._audit("telegram", "lifecycle_event", {"signal_id": sig_id, "event_type": ev_type}, "UNCERTAIN_TIMEOUT", 0, error)
             return False, None, error
         except requests.exceptions.RequestException as exc:
             # A network exception can happen after Telegram accepted the request.

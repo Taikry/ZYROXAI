@@ -98,7 +98,7 @@ def run_pending_migrations(database_engine) -> List[str]:
         with database_engine.begin() as connection:
             connection.execute(
                 text(
-                    "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                    "CREATE TABLE IF NOT EXISTS system_versioned_migrations ("
                     "version VARCHAR(80) PRIMARY KEY, "
                     "description VARCHAR(255) NOT NULL, "
                     "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"
@@ -108,7 +108,7 @@ def run_pending_migrations(database_engine) -> List[str]:
         for version, description, migration in _migration_steps(database_engine):
             with database_engine.connect() as connection:
                 applied = connection.execute(
-                    text("SELECT 1 FROM schema_migrations WHERE version = :version"),
+                    text("SELECT 1 FROM system_versioned_migrations WHERE version = :version"),
                     {"version": version},
                 ).first()
             if applied:
@@ -119,7 +119,7 @@ def run_pending_migrations(database_engine) -> List[str]:
             with database_engine.begin() as connection:
                 connection.execute(
                     text(
-                        "INSERT INTO schema_migrations (version, description) "
+                        "INSERT INTO system_versioned_migrations (version, description) "
                         "VALUES (:version, :description) ON CONFLICT (version) DO NOTHING"
                     ),
                     {"version": version, "description": description},

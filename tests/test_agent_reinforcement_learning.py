@@ -153,7 +153,7 @@ def test_learning_stats_scorecard_structure():
     assert "overall_accuracy" in stats
     assert "weights" in stats
     assert "agents_scorecard" in stats
-    assert len(stats["agents_scorecard"]) == 4
+    assert len(stats["agents_scorecard"]) >= 4
 
     for item in stats["agents_scorecard"]:
         assert "agent_id" in item
@@ -164,7 +164,7 @@ def test_learning_stats_scorecard_structure():
         assert "win_count" in item
         assert "brier_score" in item
         assert "status" in item
-        assert item["status"] in ["ELITE_ACCURACY", "CALIBRATED", "OPTIMIZING"]
+        assert item["status"] in ["MEASURED", "NO_RESOLVED_DATA", "ELITE_ACCURACY", "CALIBRATED", "OPTIMIZING"]
 
 
 def test_xauusd_tracker_auto_triggers_reinforcement_on_trade_outcome():

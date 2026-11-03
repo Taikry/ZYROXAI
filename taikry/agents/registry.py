@@ -216,7 +216,7 @@ class AgentRegistry:
             meta = self.get_metadata(agent_id)
             if not meta:
                 continue
-            if not meta.enabled:
+            if not getattr(meta, "enabled", True):
                 meta.execution_state = "SKIPPED"
                 meta.current_task = None
                 meta.last_completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()

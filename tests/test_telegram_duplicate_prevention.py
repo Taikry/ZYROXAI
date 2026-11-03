@@ -48,9 +48,12 @@ def isolate_test_environment():
         db.close()
 
     fanout_patcher = patch.object(TelegramService, "_fanout_plan_signal", return_value=(0, 0))
+    lifecycle_event_patcher = patch("taikry.config.TELEGRAM_SEND_LIFECYCLE_EVENTS", True)
     fanout_patcher.start()
+    lifecycle_event_patcher.start()
     yield
     fanout_patcher.stop()
+    lifecycle_event_patcher.stop()
 
     db = SessionLocal()
     try:

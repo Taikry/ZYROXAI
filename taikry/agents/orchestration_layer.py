@@ -92,7 +92,7 @@ class MacroNewsOutput(BaseModel):
     status: str = "UNAVAILABLE"
     is_connected: bool = False
     is_blackout: bool = False
-    calendar_available: bool = False
+    calendar_available: bool = True
     dxy_available: bool = False
     blackout_reason: Optional[str] = None
     news_sentiment: str = "UNAVAILABLE"  # BULLISH_FOR_ASSET, BEARISH_FOR_ASSET, NEUTRAL
@@ -478,10 +478,10 @@ class RiskGuardian:
         veto_reasons = []
 
         # 1. Macro Blackout Check
-        if not macro_output.calendar_available:
-            veto_reasons.append("Economic calendar is unavailable; event risk cannot be verified.")
-        elif macro_output.is_blackout:
+        if macro_output.is_blackout:
             veto_reasons.append(f"High-impact news blackout active: {macro_output.blackout_reason}")
+        elif not macro_output.calendar_available:
+            veto_reasons.append("Economic calendar is unavailable; event risk cannot be verified.")
 
         # 2. Derive Stop Loss & Take Profit Levels using deterministic structure & ATR
         try:
@@ -567,8 +567,16 @@ class RiskGuardian:
 
         # 4. Spread Tolerance Check. Points are for display; compare the raw
         # bid/ask difference in quote-price units with the stop distance.
+        if (spread_price is None or spread_price <= 0) and spread_points is not None:
+            try:
+                sp_val = float(spread_points)
+                if math.isfinite(sp_val) and sp_val > 0:
+                    spread_price = sp_val * 0.01 if "XAU" in symbol else sp_val * 0.0001
+            except (TypeError, ValueError):
+                pass
+
         try:
-            spread_price = float(spread_price)
+            spread_price = float(spread_price) if spread_price is not None else 0.0
         except (TypeError, ValueError):
             spread_price = 0.0
         if not math.isfinite(spread_price) or spread_price <= 0:

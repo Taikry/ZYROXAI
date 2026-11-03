@@ -11,6 +11,7 @@ Features:
 6. Idempotent persistent signal generation and state machine transitions.
 """
 
+import os
 import time
 import uuid
 import hashlib
@@ -28,6 +29,7 @@ from taikry.config import (
     get_symbol_config, MAX_DAILY_XAUUSD_SIGNALS,
 )
 from taikry.database.session import SessionLocal
+from taikry.data.mt5_receiver import mt5_receiver
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel, XAUUSDDailyQuotaReservation
 from taikry.data.providers import market_data_engine
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
@@ -1006,6 +1008,25 @@ class XAUUSDSignalEngine:
                 "status": "BLOCKED_STALE_MARKET_DATA",
                 "data_freshness": setup_freshness
             }
+        if os.getenv("REQUIRE_MT5_FOR_SIGNALS", "false").lower() in ("true", "1", "yes"):
+            mt5_status = mt5_receiver.get_status()
+            if mt5_status.get("status") == "DISCONNECTED":
+                return {
+                    "success": False,
+                    "error": "The MT5 terminal is DISCONNECTED; signal generation is blocked when REQUIRE_MT5_FOR_SIGNALS is enabled.",
+                    "canonical_symbol": canonical_symbol,
+                    "status": "BLOCKED_DISCONNECTED_BROKER_FEED"
+                }
+
+        mt5_status = mt5_receiver.get_status()
+        if mt5_status.get("status") == "STALE":
+            return {
+                "success": False,
+                "error": "The MT5 broker feed is STALE (> 30s since last tick); signal generation is blocked.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_STALE_BROKER_FEED"
+            }
+
         # A single validated quote snapshot supports either the desktop MT5
         # bridge or Render's authenticated OANDA v20 provider.
         quote = market_data_engine.get_verified_quote(canonical_symbol)

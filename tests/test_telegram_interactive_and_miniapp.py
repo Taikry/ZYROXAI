@@ -52,8 +52,22 @@ def mock_external_services():
         "debate_summary_en": "Consensus approved with 1:2.4 RR.",
         "debate_summary_kh": "ក្រុម AI Agents ទាំងអស់បានឯកភាពអនុម័តសញ្ញាជួញដូរ។"
     }
+    mock_xauusd = {
+        "success": True,
+        "status": "APPROVED",
+        "signal_id": "SIG-TEST-XAU-001",
+        "symbol": "XAUUSD",
+        "direction": "BUY",
+        "entry_price": 2750.0,
+        "stop_loss": 2740.0,
+        "take_profit_1": 2765.0,
+        "ai_score": 88.0,
+    }
     with patch("taikry.agents.consensus_engine.ai_consensus_engine.analyze_symbol", return_value=mock_consensus), \
          patch("taikry.agents.debate_engine.agent_debate_engine.conduct_debate", return_value=mock_debate), \
+         patch("taikry.trading.xauusd_signal_engine.xauusd_signal_engine.generate_xauusd_signal", return_value=mock_xauusd), \
+         patch.object(telegram_service, "send_xauusd_signal_alert", return_value=(True, 9991, None)), \
+         patch.object(telegram_service, "_is_telegram_admin", return_value=True), \
          patch.object(telegram_service, "send_message", return_value=True), \
          patch.object(telegram_service, "edit_message_text", return_value=True), \
          patch.object(telegram_service, "answer_callback_query", return_value=True):

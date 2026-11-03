@@ -23,6 +23,10 @@ def run_migration(database_engine=None) -> None:
             connection.execute(text(
                 "ALTER TABLE paper_trades ADD COLUMN user_id INTEGER NULL REFERENCES users(id)"
             ))
+        if "take_profit_3" not in columns:
+            connection.execute(text(
+                "ALTER TABLE paper_trades ADD COLUMN take_profit_3 FLOAT NULL"
+            ))
         connection.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_paper_trades_user_id ON paper_trades (user_id)"
         ))

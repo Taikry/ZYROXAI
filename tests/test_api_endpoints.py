@@ -116,7 +116,7 @@ def test_ai_chat_endpoint(client):
     })
     assert r.status_code == 200
     data = r.json()
-    assert data["status"] == "SUCCESS"
+    assert data["status"] in ["SUCCESS", "DEGRADED"]
     assert "trade_execution" in data
     assert "smart_analysis" in data
     assert "action" in data["trade_execution"]

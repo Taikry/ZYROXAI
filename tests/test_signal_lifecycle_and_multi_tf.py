@@ -21,6 +21,16 @@ def setup_database():
 
 
 @pytest.fixture(autouse=True)
+def clean_lifecycle_signals_each_test():
+    db = SessionLocal()
+    try:
+        db.query(SignalLifecycleModel).delete()
+        db.commit()
+    finally:
+        db.close()
+    yield
+
+@pytest.fixture(autouse=True)
 def fast_mock_notifications(monkeypatch):
     """Mocks notification dispatches so tests execute in milliseconds without external network latency."""
     monkeypatch.setattr(signal_lifecycle_manager, "_notify_transition", lambda *args, **kwargs: None)

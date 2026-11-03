@@ -818,40 +818,41 @@ def test_restart_recovery_and_persistent_quota():
 def test_daily_quota_reservation_is_atomic_and_survives_engine_restart():
     from taikry.trading.xauusd_signal_engine import XAUUSDSignalEngine
 
-    test_date = f"2099-01-{uuid.uuid4().int % 27 + 1:02d}"
-    engine = XAUUSDSignalEngine()
-    engine.daily_limit = 2
-    db = SessionLocal()
-    try:
-        db.query(XAUUSDTelegramSignalModel).filter(
-            XAUUSDTelegramSignalModel.cambodia_date == test_date
-        ).delete()
-        db.query(XAUUSDDailyQuotaReservation).filter(
-            XAUUSDDailyQuotaReservation.cambodia_date == test_date
-        ).delete()
-        db.commit()
+    with patch("taikry.trading.xauusd_signal_engine.MAX_DAILY_XAUUSD_SIGNALS", 2):
+        test_date = f"2099-01-{uuid.uuid4().int % 27 + 1:02d}"
+        engine = XAUUSDSignalEngine()
+        engine.daily_limit = 2
+        db = SessionLocal()
+        try:
+            db.query(XAUUSDTelegramSignalModel).filter(
+                XAUUSDTelegramSignalModel.cambodia_date == test_date
+            ).delete()
+            db.query(XAUUSDDailyQuotaReservation).filter(
+                XAUUSDDailyQuotaReservation.cambodia_date == test_date
+            ).delete()
+            db.commit()
 
-        assert engine._reserve_daily_quota_slot(db, test_date) is True
-        db.commit()
-        assert engine._reserve_daily_quota_slot(db, test_date) is True
-        db.commit()
-        assert engine._reserve_daily_quota_slot(db, test_date) is False
-        db.rollback()
+            assert engine._reserve_daily_quota_slot(db, test_date) is True
+            db.commit()
+            assert engine._reserve_daily_quota_slot(db, test_date) is True
+            db.commit()
+            assert engine._reserve_daily_quota_slot(db, test_date) is False
+            db.rollback()
 
-        persisted = db.query(XAUUSDDailyQuotaReservation).filter(
-            XAUUSDDailyQuotaReservation.cambodia_date == test_date
-        ).one()
-        assert persisted.reserved_count == 2
-        assert XAUUSDSignalEngine().get_daily_quota_status(test_date)["is_limit_reached"] is True
-    finally:
-        db.query(XAUUSDDailyQuotaReservation).filter(
-            XAUUSDDailyQuotaReservation.cambodia_date == test_date
-        ).delete()
-        db.query(XAUUSDTelegramSignalModel).filter(
-            XAUUSDTelegramSignalModel.cambodia_date == test_date
-        ).delete()
-        db.commit()
-        db.close()
+            persisted = db.query(XAUUSDDailyQuotaReservation).filter(
+                XAUUSDDailyQuotaReservation.cambodia_date == test_date
+            ).one()
+            assert persisted.reserved_count == 2
+            assert XAUUSDSignalEngine().get_daily_quota_status(test_date)["is_limit_reached"] is True
+        finally:
+            db.query(XAUUSDDailyQuotaReservation).filter(
+                XAUUSDDailyQuotaReservation.cambodia_date == test_date
+            ).delete()
+            db.query(XAUUSDTelegramSignalModel).filter(
+                XAUUSDTelegramSignalModel.cambodia_date == test_date
+            ).delete()
+            db.commit()
+            db.close()
 
 
 # -----------------------------------------------------------------------------

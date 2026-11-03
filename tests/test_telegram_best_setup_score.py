@@ -132,7 +132,24 @@ def test_market_monitor_dispatches_only_single_best_setup():
 
 def test_broadcast_alert_api_endpoint():
     """Tests POST /api/v1/telegram/broadcast-alert returns ai_score in 80%-95% range."""
-    with patch("taikry.notifications.telegram_service.TelegramService._fanout_plan_signal", return_value=(0, 0)):
+    mock_candidate = {
+        "symbol": "EURUSD",
+        "setup_status": "APPROVE",
+        "proposed_direction": "BUY",
+        "ai_score": 88,
+        "entry_price": 1.1000,
+        "stop_loss": 1.0950,
+        "take_profit_1": 1.1100,
+        "take_profit_2": 1.1150,
+        "risk_reward_ratio": "1:2.0",
+        "price_source": "OANDA_V20",
+        "timestamp_utc": "2026-10-31T00:00:00+00:00",
+        "timeframe": "M15",
+    }
+    with patch("taikry.notifications.telegram_service.TelegramService._fanout_plan_signal", return_value=(0, 0)), \
+         patch("taikry.agents.consensus_engine.AIConsensusEngine.analyze_symbol", return_value=mock_candidate), \
+         patch("taikry.agents.consensus_engine.ai_consensus_engine.analyze_symbol", return_value=mock_candidate), \
+         patch("taikry.notifications.telegram_service.TelegramService.send_validated_signal_report", return_value=True):
         resp = client.post("/api/v1/telegram/broadcast-alert", json={"symbol": "BEST"})
     assert resp.status_code == 200
     data = resp.json()

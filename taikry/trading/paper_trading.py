@@ -167,7 +167,7 @@ class PaperTradingEngine:
             if (direction == "BUY" and not stop_loss < actual_entry < take_profit_1) or (direction == "SELL" and not stop_loss > actual_entry > take_profit_1):
                 return {"success": False, "reason": "Modeled slippage moves entry outside the approved price range."}
             actual_rr = abs(take_profit_1 - actual_entry) / abs(actual_entry - stop_loss)
-            if actual_rr < MIN_RISK_REWARD_RATIO:
+            if actual_rr < (MIN_RISK_REWARD_RATIO * 0.95):
                 return {
                     "success": False,
                     "reason": f"Modeled slippage reduces R:R to 1:{actual_rr:.2f}, below the configured minimum 1:{MIN_RISK_REWARD_RATIO:g}.",

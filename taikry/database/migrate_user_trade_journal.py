@@ -18,6 +18,7 @@ def run_migration(database_engine=None) -> None:
             raise RuntimeError("paper_trades must exist before the journal migration")
         columns = {column["name"] for column in inspector.get_columns("paper_trades")}
         for name, definition in {
+            "take_profit_3": "FLOAT NULL",
             "journal_notes": "TEXT NULL",
             "journal_tags": "JSON NULL",
             "emotion_tag": "VARCHAR(40) NULL",

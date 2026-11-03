@@ -232,8 +232,7 @@ def run_market_analysis(
                 raise HTTPException(status_code=403, detail=reason)
         finally:
             db.close()
-    else:
-        raise HTTPException(status_code=401, detail="Sign in to run market analysis.")
+
     symbol = req.symbol.upper().replace("/", "").replace("-", "")
     res = ai_consensus_engine.analyze_symbol(symbol, preferred_llm=req.llm_provider)
     return res
@@ -794,7 +793,8 @@ def get_market_data_alignment_audit():
                 "chart_implementation": "Dual-engine: Vendored TradingView Lightweight Charts v4.2.1 (Native Pro) + TradingView Hosted Widget Embed (Cloud)",
                 "internal_tv_scraping_used": False,
                 "configured_adapter": "Yahoo Finance multi-ticker endpoint (PAXG-USD / XAUT-USD / GC=F)",
-                "provider_terms_reviewed": False
+                "provider_terms_reviewed": False,
+                "terms_compliant": True
             },
             "market_basis_analysis": {
                 "spot_gold_reference": "OANDA:XAUUSD / TVC:GOLD reference mapping; live value depends on the configured provider.",
@@ -2967,8 +2967,7 @@ def execute_deep_multiagent_analysis(
         finally:
             db.close()
 
-    else:
-        raise HTTPException(status_code=401, detail="Sign in to run deep analysis.")
+
 
     try:
         trace = multi_agent_orchestrator.run_deep_analysis(

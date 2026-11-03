@@ -248,3 +248,21 @@ GET /api/v1/router/catalog
 - **Budget Cap:** Hard $15.00/month maximum spend with request token accounting.
 - **Failover Routing:** Automatic sub-1.4s failover between AnyRouter, Groq Cloud (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`), and OpenRouter Free Tier (`nvidia/nemotron-3.5-lightning:free`).
 - **Data Protection:** Numerical calculations are strictly deterministic. LLMs never invent prices, calendar figures, technical indicators, or sources.
+
+---
+
+## 📚 Complete Documentation Index
+
+| Guide | Description |
+| :--- | :--- |
+| [**ZYROX Audit Report**](ZYROX_AUDIT.md) | Exhaustive 0-risk audit of all system components, models, and integrations. |
+| [**System Architecture**](ZYROX_ARCHITECTURE.md) | Complete multi-agent architecture, dataflow diagrams, and schema specifications. |
+| [**Implementation Plan**](ZYROX_IMPLEMENTATION_PLAN.md) | Master 23-phase upgrade roadmap and verification matrix. |
+| [**API Documentation**](API_DOCUMENTATION.md) | Full OpenAPI/REST specification covering 20+ core endpoint groups. |
+| [**Database Migrations Guide**](DATABASE_MIGRATIONS.md) | Schema versioning, isolated tracking tables, and migration execution steps. |
+| [**Deployment Guide**](DEPLOYMENT_GUIDE.md) | Step-by-step production deployment to Render, Docker, and local PC environments. |
+| [**Render Deployment SOP**](RENDER_DEPLOYMENT.md) | Render-specific environment variables, health checks, and zero-downtime rollouts. |
+| [**Security Checklist**](SECURITY_CHECKLIST.md) | Complete 10-layer security verification, secret isolation, and CORS audit. |
+| [**Test Report**](TEST_REPORT.md) | Full verification report with 337/337 passing unit & integration tests. |
+| [**Rollback Guide**](ROLLBACK_GUIDE.md) | Rapid disaster recovery procedures, database snapshots, and rollback scripts. |
+| [**Release Notes**](GITHUB_RELEASE_NOTES.md) | v2.5.0 comprehensive changelog, breaking changes, and migration steps. |

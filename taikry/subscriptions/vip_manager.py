@@ -4,6 +4,7 @@ Provides institutional subscription tier management, personalized auto-expiring
 Telegram invite links with single-use member limits, automated expiration audits,
 channel member eviction on lapse, renewal workflows, and bilingual notifications.
 """
+import os
 import time
 import datetime
 import logging
@@ -12,6 +13,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from taikry.config import (
     VIP_TELEGRAM_CHAT_ID,
+    TELEGRAM_CHAT_ID,
     TELEGRAM_ADMIN_USERNAME,
     TELEGRAM_ADMIN_IDS,
     MIN_RISK_REWARD_RATIO
@@ -148,7 +150,7 @@ class VIPManager:
 
     def __init__(self, telegram_service: Optional[TelegramService] = None):
         self._custom_telegram = telegram_service
-        self.default_vip_channel_id = VIP_TELEGRAM_CHAT_ID
+        self.default_vip_channel_id = VIP_TELEGRAM_CHAT_ID or os.getenv("TELEGRAM_CHAT_ID", "") or "-1004341134868"
         self.admin_username = TELEGRAM_ADMIN_USERNAME
 
     @property
