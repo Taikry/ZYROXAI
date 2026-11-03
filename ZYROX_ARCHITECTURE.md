@@ -106,3 +106,4 @@ sequenceDiagram
 - **Constant-Time Cryptography:** All API token comparisons, HMAC verifications, and webhook authentication checks utilize `hmac.compare_digest` to prevent timing attacks.
 - **Replay Attack Defense:** MT5 bridge requests require timestamp headers within $\pm 60\text{ seconds}$ and cache request signatures for $120\text{ seconds}$.
 - **Shadow Mode Invariant:** Automated live broker order placement is strictly disabled at the source code level to safeguard user capital.
+

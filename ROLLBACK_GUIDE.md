@@ -31,3 +31,4 @@ All database migrations implemented in `taikry/database/versioned_migrations.py`
 - Table additions (such as `aba_payway_transactions`, `vip_subscriptions`, `agent_learning_weights`) do not interfere with earlier application versions.
 - **Do NOT drop tables or columns** during a rollback, as they may contain delivery logs or audit records created during operation.
 - The tracking table `system_versioned_migrations` maintains state across restarts and will safely skip already-applied migrations upon redeployment.
+

@@ -37,7 +37,13 @@ def run_pipeline(single_pass: bool = False, force_first_test: bool = False, inte
         int(interval if interval is not None else MONITORING_INTERVAL_MINUTES * 60),
     )
     if single_pass:
-        return market_monitor_247.scan_once()
+        results = market_monitor_247.scan_once()
+        count = len(results) if results else 0
+        print(f"[INFO] Scan completed: {count} symbol(s) evaluated.")
+        if results:
+            for item in results:
+                print(f"  • {item.get('symbol', 'UNKNOWN')}: {item.get('action', 'NO_TRADE')} (Confidence: {item.get('confidence', 0)}%)")
+        return results
 
     market_monitor_247.start_background()
     try:

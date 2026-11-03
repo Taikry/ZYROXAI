@@ -28,3 +28,4 @@ ZYROX AI utilizes an automated startup migration system located in `taikry/datab
 - **`aba_payway_transactions`:** Real-time log of ABA PayWay transaction hashes, status codes, amounts, and webhook responses.
 - **`vip_subscriptions`:** User membership records with tier (`PRO`, `VIP`, `LIFETIME`), validity windows, expiring invite links, and renewal tracking.
 - **`vip_invite_links`:** Ledger of one-time expiring Telegram invite links created via `createChatInviteLink`.
+

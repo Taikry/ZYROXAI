@@ -29,3 +29,4 @@
 - [x] **Telegram Single-Asset Invariant:** Automated Telegram alerts are restricted exclusively to `XAUUSD`.
 - [x] **Hard Daily Limit:** At most 4 signals are broadcast to Telegram per Cambodia calendar day (4/4).
 - [x] **Lifecycle Quietness:** Lifecycle event notifications (TP/SL/BE) are suppressed by default to prevent message spam.
+

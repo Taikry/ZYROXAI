@@ -29,3 +29,4 @@
 - Fixed floating-point precision in Risk:Reward threshold evaluations.
 - Enhanced MT5 Bridge authentication with timestamp drift and HMAC signature verification.
 - 100% test pass rate across all 337 unit and integration tests.
+

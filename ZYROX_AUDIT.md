@@ -66,3 +66,4 @@ The platform orchestrates a fleet of specialized quantitative, technical, and st
 - **Render Production:** Auto-deploy on push to `main` branch.
 - **Endpoints:** `/ping` returns HTTP 200 with service health status; `/dashboard/` serves the responsive UI.
 - **Shadow Mode Invariant:** Automated live order execution on real broker accounts is **strictly disabled** (`is_shadow_mode = True`, `can_place_live_orders = False`).
+

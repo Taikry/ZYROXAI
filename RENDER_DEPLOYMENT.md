@@ -59,3 +59,4 @@ Expected HTTP Response: `200 OK`
   Ensure `TELEGRAM_SEND_LIFECYCLE_EVENTS=false` is set.
 - **To Roll Back a Deployment:**
   Use the Render Dashboard "Rollback" feature to revert to the previous successful deploy hash. Database migrations are backwards-compatible (all added columns are nullable).
+

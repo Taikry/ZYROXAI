@@ -100,3 +100,4 @@
 
 ### `POST /api/v1/telegram/webhook`
 - **Description:** Inbound webhook processing user commands (`/start`, `/gold`, `/debate`, `/risk`, `/vip`, `/myplan`) and inline button callback queries (`scan:XAUUSD`, `debate:XAUUSD`, `calendar:news`).
+
