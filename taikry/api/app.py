@@ -2,6 +2,7 @@
 FastAPI Application Entry Point for TAIKRY AI MARKET INTELLIGENCE PRO
 """
 import os
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,8 +41,33 @@ async def lifespan(app: FastAPI):
     auto_monitor = os.getenv("AUTO_START_MONITORING", "true").lower() in ("true", "1", "yes")
     if auto_monitor:
         market_monitor_247.start_background()
+
+    # Cloud 24/7 Keep-Alive Heartbeat (prevents Render from idling into sleep mode)
+    keep_alive_stop = threading.Event()
+    def _keep_alive_worker():
+        target_url = (PUBLIC_APP_URL or os.getenv("RENDER_EXTERNAL_URL", "")).strip().rstrip("/")
+        if not target_url or not target_url.startswith("http"):
+            return
+        ping_url = f"{target_url}/ping"
+        if keep_alive_stop.wait(300):
+            return
+        while not keep_alive_stop.is_set():
+            try:
+                import urllib.request
+                req = urllib.request.Request(ping_url, headers={"User-Agent": "ZYROX-KeepAlive/2.0"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    pass
+            except Exception:
+                pass
+            if keep_alive_stop.wait(600):
+                break
+
+    keep_alive_thread = threading.Thread(target=_keep_alive_worker, name="zyrox-keepalive", daemon=True)
+    keep_alive_thread.start()
+
     yield
     # Shutdown
+    keep_alive_stop.set()
     market_monitor_247.stop()
 
 app = FastAPI(
