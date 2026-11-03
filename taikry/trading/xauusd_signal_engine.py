@@ -940,8 +940,10 @@ class XAUUSDSignalEngine:
             }
 
         trade_style = str(trade_style or "INTRADAY").strip().upper()
-        if trade_style not in {"INTRADAY", "SWING"}:
-            return {"success": False, "error": "trade_style must be INTRADAY or SWING.", "status": "INVALID_TRADE_STYLE"}
+        if trade_style in {"SCALP", "SCALPING"}:
+            trade_style = "SCALPING"
+        elif trade_style not in {"INTRADAY", "SWING"}:
+            return {"success": False, "error": "trade_style must be SCALPING, INTRADAY, or SWING.", "status": "INVALID_TRADE_STYLE"}
 
         # Step 2: Market Open & Calendar Hours
         market_ok, reason = is_market_open(canonical_symbol)
@@ -954,14 +956,23 @@ class XAUUSDSignalEngine:
             }
 
         # Step 3: Fetch Market Data Snapshot
-        timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
-        setup_timeframe = "H4" if trade_style == "SWING" else "M15"
+        if trade_style == "SCALPING":
+            timeframes = ["H1", "M15", "M5", "M1"]
+            setup_timeframe = "M5"
+            required_timeframes = {"H1", "M15", "M5"}
+        elif trade_style == "SWING":
+            timeframes = ["W1", "D1", "H4", "H1"]
+            setup_timeframe = "H4"
+            required_timeframes = {"W1", "D1", "H4", "H1"}
+        else:
+            timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+            setup_timeframe = "M15"
+            required_timeframes = {"D1", "H4", "H1", "M15", "M5"}
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(canonical_symbol, timeframes)
         synthetic_timeframes = [
             tf for tf, frame in multi_tf_data.items()
             if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("DEMO|SYNTHETIC").any())
         ]
-        required_timeframes = {"W1", "D1", "H4", "H1"} if trade_style == "SWING" else {"D1", "H4", "H1", "M15", "M5"}
         required_synthetic_timeframes = [tf for tf in synthetic_timeframes if tf in required_timeframes]
         if required_synthetic_timeframes:
             return {

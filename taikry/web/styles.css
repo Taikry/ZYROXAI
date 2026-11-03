@@ -10369,3 +10369,275 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 .cockpit-setup-levels-bar .level-rr b {
   color: #cbd5e1;
 }
+
+/* ==========================================================================
+   SCALPING, DIRECTION RADAR & SMART TRADING ASSISTANT STYLING
+   ========================================================================== */
+
+.cockpit-direction-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.cockpit-radar-pill {
+  font-size: 10px;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+  font-weight: 700;
+}
+
+.cockpit-radar-pill.radar-active {
+  animation: radar-pulse 2s infinite ease-in-out;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.45);
+}
+
+@keyframes radar-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.82; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Smart Trading Assistant Strip in Cockpit Plan Card */
+.smart-trading-strip {
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.smart-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.smart-strip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #f1f5f9;
+}
+
+.smart-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: dot-glow 2s infinite ease-in-out;
+}
+
+@keyframes dot-glow {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0.6; }
+}
+
+.smart-suitability-pill {
+  font-size: 9.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.smart-strip-lots {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.smart-strip-lots strong {
+  color: #f59e0b;
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.smart-stages-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.smart-stage-box {
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  text-align: center;
+}
+
+.smart-stage-box.stage-be {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.smart-stage-box.stage-partial {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.smart-stage-box.stage-runner {
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.stage-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 3px;
+}
+
+.stage-price {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.stage-hint {
+  font-size: 8px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.smart-execution-row {
+  margin-top: 8px;
+}
+
+.btn-smart-execute {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.35) 0%, rgba(37, 99, 235, 0.35) 100%);
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-smart-execute:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.55) 0%, rgba(37, 99, 235, 0.55) 100%);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Dual Best Pick Hero Banner (Long vs Short) */
+.cockpit-dual-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hero-pick {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.88);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hero-pick:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.hero-pick.hero-long {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 78, 59, 0.2) 100%);
+}
+
+.hero-pick.hero-short {
+  border-color: rgba(244, 63, 94, 0.45);
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(136, 19, 55, 0.2) 100%);
+}
+
+.hero-pick-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.hero-long .hero-pick-title { color: #34d399; }
+.hero-short .hero-pick-title { color: #fb7185; }
+
+.hero-pick-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hero-pick-symbol {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.hero-pick-score {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.hero-pick-levels {
+  display: flex;
+  gap: 8px;
+  font-size: 9.5px;
+  color: #cbd5e1;
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.cockpit-direction-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cockpit-dir-chip {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.6);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cockpit-dir-chip.active {
+  border-color: #38bdf8;
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+@media (max-width: 640px) {
+  .cockpit-dual-hero {
+    grid-template-columns: 1fr;
+  }
+  .smart-stages-grid {
+    grid-template-columns: 1fr;
+  }
+}

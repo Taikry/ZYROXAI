@@ -49,6 +49,7 @@ class RiskValidatorAgent:
         candidate_levels: Optional[Dict[str, Any]] = None,
         bid_price: Optional[float] = None,
         ask_price: Optional[float] = None,
+        trade_style: str = "INTRADAY",
         risk_mode: Optional[str] = None,
         risk_options: Optional[Dict[str, Any]] = None,
         min_risk_reward_ratio: Optional[float] = None,
@@ -268,7 +269,8 @@ class RiskValidatorAgent:
                         rejection_reasons.append("A valid stop-loss or measured ATR is required to calculate risk levels.")
                         levels_valid = False
                     else:
-                        sl = round(entry + (1.5 * atr), dec)
+                        atr_mult = 0.9 if str(trade_style).upper() == "SCALPING" else 1.5
+                        sl = round(entry + (atr_mult * atr), dec)
                 if levels_valid:
                     risk = sl - entry
                     if not tp1 or tp1 >= entry:
@@ -286,7 +288,8 @@ class RiskValidatorAgent:
                         rejection_reasons.append("A valid stop-loss or measured ATR is required to calculate risk levels.")
                         levels_valid = False
                     else:
-                        sl = round(entry - (1.5 * atr), dec)
+                        atr_mult = 0.9 if str(trade_style).upper() == "SCALPING" else 1.5
+                        sl = round(entry - (atr_mult * atr), dec)
                 if levels_valid:
                     risk = entry - sl
                     if not tp1 or tp1 <= entry:
@@ -354,6 +357,23 @@ class RiskValidatorAgent:
                 f"Setup validated: Direction {proposed_dir}, verified R:R 1:{rr_ratio} >= 1:{eff_min_rr}, Risk capped at {eff_risk_pct}% equity (${max_risk_dollars}) under {active_profile['name']} profile."
             ]
 
+        be_trigger = None
+        partial_tp = tp1
+        runner_tp = tp2
+        if entry and sl and risk > 0:
+            be_trigger = round(entry + risk, dec) if proposed_dir == "LONG" else round(entry - risk, dec)
+            if runner_tp is None:
+                runner_tp = round(entry + (2.5 * risk), dec) if proposed_dir == "LONG" else round(entry - (2.5 * risk), dec)
+
+        smart_trading = {
+            "breakeven_trigger": be_trigger,
+            "partial_take_profit": partial_tp,
+            "runner_take_profit": runner_tp,
+            "recommended_lots": validation_checks.get("recommended_position_lots", 0.0),
+            "trade_style": trade_style,
+            "scalp_suitability": "HIGH" if (spread_price is not None and risk > 0 and (spread_price / risk) <= 0.15) else "MODERATE"
+        }
+
         return {
             "agent_id": self.AGENT_ID,
             "agent_name": self.AGENT_NAME,
@@ -370,6 +390,7 @@ class RiskValidatorAgent:
                 "risk_amount_dollars": max_risk_dollars,
                 "recommended_lots": validation_checks.get("recommended_position_lots", 0.0)
             },
+            "smart_trading": smart_trading,
             "reasons": reasons,
             "warnings": warning_notes,
             "checks": validation_checks

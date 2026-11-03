@@ -54,6 +54,7 @@ logger = logging.getLogger("taikry.api.routes")
 class AnalyzeRequest(BaseModel):
     symbol: str = Field(default="XAUUSD", description="Market symbol, e.g. XAUUSD, EURUSD, BTCUSDT")
     timeframe: Optional[str] = Field(default="M15", description="Primary execution timeframe")
+    trade_style: Optional[str] = Field(default="INTRADAY", description="Trade style: SCALPING, INTRADAY, or SWING")
     force_fresh: Optional[bool] = Field(default=False, description="Bypass cache")
     llm_provider: Optional[str] = Field(default="quant", description="LLM provider: quant, auto, claude, openai, gemini, manus")
     risk_mode: Optional[str] = Field(default=None, description="Risk Profile: CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM; uses saved user setting when omitted")
@@ -261,6 +262,7 @@ def run_market_analysis(
         risk_mode=effective_risk_mode,
         risk_options=effective_risk_options,
         user_id=user_id,
+        trade_style=req.trade_style or "INTRADAY",
     )
     return res
 
@@ -273,6 +275,7 @@ def run_admin_market_analysis(req: AnalyzeRequest, _: bool = Depends(require_adm
         symbol,
         preferred_llm=req.llm_provider,
         force_refresh=bool(req.force_fresh),
+        trade_style=req.trade_style or "INTRADAY",
     )
 
 # 2a. POST /api/v1/ai/chat
@@ -356,10 +359,16 @@ def get_verified_model_catalog(force_refresh: bool = False):
 
 # 2b. GET /api/v1/best-setup
 @router.get("/api/v1/best-setup")
-def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", refresh: bool = False):
+def get_best_market_setup(
+    category: str = "ALL",
+    trade_style: str = "INTRADAY",
+    direction: str = "ALL",
+    refresh: bool = False
+):
     """
     Returns a ranked analysis for every symbol in the selected market universe.
     Fresh monitor results are reused; missing or old results are refreshed locally.
+    Supports SCALPING, INTRADAY, and SWING styles, and dual LONG / SHORT direction filters.
     """
     from taikry.config import WATCHLIST, MONITORING_INTERVAL_MINUTES
     from taikry.agents.consensus_engine import _ANALYSIS_CACHE
@@ -368,8 +377,17 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
     if category_key not in {"ALL", "CRYPTO", "FOREX"}:
         raise HTTPException(status_code=400, detail="category must be ALL, CRYPTO, or FOREX")
     trade_style_key = str(trade_style or "INTRADAY").strip().upper()
-    if trade_style_key not in {"INTRADAY", "SWING"}:
-        raise HTTPException(status_code=400, detail="trade_style must be INTRADAY or SWING")
+    if trade_style_key == "SCALP":
+        trade_style_key = "SCALPING"
+    if trade_style_key not in {"INTRADAY", "SWING", "SCALPING"}:
+        raise HTTPException(status_code=400, detail="trade_style must be INTRADAY, SWING, or SCALPING")
+    direction_key = str(direction or "ALL").strip().upper()
+    if direction_key not in {"ALL", "LONG", "SHORT", "BUY", "SELL"}:
+        raise HTTPException(status_code=400, detail="direction must be ALL, LONG, or SHORT")
+    if direction_key == "BUY":
+        direction_key = "LONG"
+    elif direction_key == "SELL":
+        direction_key = "SHORT"
 
     if category_key == "CRYPTO":
         universe = [item for item in WATCHLIST if str(item.get("category", "")).upper() == "CRYPTO"]
@@ -393,7 +411,12 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
             if cache_key.split(":", 1)[0].upper() != symbol:
                 continue
             cached_is_swing = cache_key.upper().endswith(":SWING")
-            if cached_is_swing != (trade_style_key == "SWING"):
+            cached_is_scalp = cache_key.upper().endswith(":SCALPING") or cache_key.upper().endswith(":SCALP")
+            if trade_style_key == "SWING" and not cached_is_swing:
+                continue
+            if trade_style_key == "SCALPING" and not cached_is_scalp:
+                continue
+            if trade_style_key == "INTRADAY" and (cached_is_swing or cached_is_scalp):
                 continue
             if not isinstance(cache_value, (tuple, list)) or len(cache_value) < 2 or not isinstance(cache_value[1], dict):
                 continue
@@ -474,6 +497,22 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
         if not reason_summary:
             reason_summary = str(analysis.get("error") or smart_analysis.get("synthesis_summary_en") or "")
 
+        smart_trading = analysis.get("smart_trading") or smart_analysis.get("smart_trading") or {}
+        if not smart_trading and entry is not None and stop is not None and target is not None:
+            try:
+                e_f, s_f, t_f = float(entry), float(stop), float(target)
+                r_diff = abs(e_f - s_f)
+                is_long = "BUY" in str(analysis.get("proposed_direction") or "").upper() or "BULL" in str(analysis.get("market_bias") or "").upper()
+                smart_trading = {
+                    "breakeven_trigger": round(e_f + r_diff if is_long else e_f - r_diff, 4),
+                    "partial_take_profit": round(e_f + (1.5 * r_diff) if is_long else e_f - (1.5 * r_diff), 4),
+                    "runner_take_profit": round(t_f, 4),
+                    "trade_style": trade_style_key,
+                    "scalp_suitability": "HIGH" if trade_style_key == "SCALPING" else "MODERATE",
+                }
+            except Exception:
+                pass
+
         setups.append({
             "symbol": symbol,
             "trade_style": trade_style_key,
@@ -492,6 +531,7 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
             "candidate_plan": analysis.get("candidate_plan"),
             "proposed_direction": str(analysis.get("proposed_direction") or "NONE").upper(),
             "smart_analysis": smart_analysis,
+            "smart_trading": smart_trading,
             "agents": analysis.get("agents", {}),
             "ict_smc_summary": analysis.get("ict_smc_summary", {}),
             "data_quality": analysis.get("data_quality", {}),
@@ -509,19 +549,49 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
         item.get("setup_status") != "UNAVAILABLE",
         float(item.get("ai_score") or 0),
     ), reverse=True)
-    best = next((item for item in setups if item.get("setup_status") == "APPROVE"), None)
+
+    def _is_long_setup(item: dict) -> bool:
+        dir_val = str(item.get("proposed_direction") or "").upper()
+        bias_val = str(item.get("market_bias") or "").upper()
+        return "BUY" in dir_val or "LONG" in dir_val or "BULL" in bias_val
+
+    def _is_short_setup(item: dict) -> bool:
+        dir_val = str(item.get("proposed_direction") or "").upper()
+        bias_val = str(item.get("market_bias") or "").upper()
+        return "SELL" in dir_val or "SHORT" in dir_val or "BEAR" in bias_val
+
+    qualified_longs = [s for s in setups if _is_long_setup(s) and s.get("setup_status") == "APPROVE"]
+    qualified_shorts = [s for s in setups if _is_short_setup(s) and s.get("setup_status") == "APPROVE"]
+
+    best_long = qualified_longs[0] if qualified_longs else next((s for s in setups if _is_long_setup(s) and s.get("setup_status") != "UNAVAILABLE"), None)
+    best_short = qualified_shorts[0] if qualified_shorts else next((s for s in setups if _is_short_setup(s) and s.get("setup_status") != "UNAVAILABLE"), None)
+
+    if direction_key == "LONG":
+        filtered_setups = [s for s in setups if _is_long_setup(s)]
+    elif direction_key == "SHORT":
+        filtered_setups = [s for s in setups if _is_short_setup(s)]
+    else:
+        filtered_setups = setups
+
+    best = next((item for item in filtered_setups if item.get("setup_status") == "APPROVE"), None)
     if best is None:
-        best = next((item for item in setups if item.get("setup_status") != "UNAVAILABLE"), None)
+        best = next((item for item in filtered_setups if item.get("setup_status") != "UNAVAILABLE"), None)
 
     return {
         "trade_style": trade_style_key,
+        "direction_filter": direction_key,
         "status": "SUCCESS" if setups else "NO_SETUP",
         "best_setup": best,
-        "setups": setups,
+        "best_long": best_long,
+        "best_short": best_short,
+        "setups": filtered_setups,
+        "all_setups": setups,
         "scanned_universe": symbols,
         "candidate_count": len(symbols),
         "scanned_count": sum(1 for item in setups if item.get("analysis_source") != "UNAVAILABLE"),
         "qualified_count": sum(1 for item in setups if item.get("setup_status") == "APPROVE"),
+        "long_count": sum(1 for item in setups if _is_long_setup(item)),
+        "short_count": sum(1 for item in setups if _is_short_setup(item)),
         "unavailable_count": sum(1 for item in setups if item.get("setup_status") == "UNAVAILABLE"),
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

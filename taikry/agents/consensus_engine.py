@@ -128,9 +128,11 @@ class AIConsensusEngine:
                     pass
 
         trade_style = str(trade_style or "INTRADAY").strip().upper()
-        if trade_style not in {"INTRADAY", "SWING"}:
-            raise ValueError("trade_style must be INTRADAY or SWING")
-        cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}" + (":SWING" if trade_style == "SWING" else "")
+        if trade_style in {"SCALP", "SCALPING"}:
+            trade_style = "SCALPING"
+        elif trade_style not in {"INTRADAY", "SWING"}:
+            raise ValueError("trade_style must be SCALPING, INTRADAY, or SWING")
+        cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}" + (f":{trade_style}" if trade_style in {"SWING", "SCALPING"} else "")
         cache_key += f":USER:{user_id if user_id is not None else 'SYSTEM'}"
         if primary_timeframe or requested_timeframes:
             tf_key = ",".join(str(tf).strip().upper() for tf in (requested_timeframes or []))
@@ -140,9 +142,10 @@ class AIConsensusEngine:
         if risk_options:
             cache_key += f":ROPT:{hash(str(sorted(risk_options.items())))}"
         from taikry.config import get_risk_profile
-        active_risk_profile = get_risk_profile(risk_mode, risk_options)
-        min_ai_score_threshold = int(active_risk_profile.get("min_ai_score", 75))
-        directional_share_floor = float(active_risk_profile.get("directional_share_threshold", 0.55))
+        effective_risk_mode = risk_mode or ("AGGRESSIVE" if trade_style == "SCALPING" else None)
+        active_risk_profile = get_risk_profile(effective_risk_mode, risk_options)
+        min_ai_score_threshold = int(active_risk_profile.get("min_ai_score", 65 if trade_style == "SCALPING" else 75))
+        directional_share_floor = float(active_risk_profile.get("directional_share_threshold", 0.50 if trade_style == "SCALPING" else 0.55))
         now_ts = t_start
         if not force_refresh and cache_key in _ANALYSIS_CACHE:
             c_time, c_data = _ANALYSIS_CACHE[cache_key]
@@ -171,20 +174,20 @@ class AIConsensusEngine:
                 if str(tf).strip().upper() in allowed_timeframes
             ))
         else:
-            timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+            timeframes = ["H1", "M15", "M5", "M1"] if trade_style == "SCALPING" else (["W1", "D1", "H4", "H1"] if trade_style == "SWING" else ["W1", "D1", "H4", "H1", "M15", "M5"])
         requested_primary = str(primary_timeframe or "").strip().upper()
         if requested_primary in allowed_timeframes and requested_primary not in timeframes:
             timeframes.append(requested_primary)
         if not timeframes:
-            timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+            timeframes = ["H1", "M15", "M5", "M1"] if trade_style == "SCALPING" else ["W1", "D1", "H4", "H1", "M15", "M5"]
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(symbol, timeframes)
 
         setup_timeframe = requested_primary if requested_primary in allowed_timeframes else (
-            "H4" if trade_style == "SWING" else "M15"
+            "H4" if trade_style == "SWING" else ("M5" if trade_style == "SCALPING" else "M15")
         )
         primary_df = multi_tf_data.get(setup_timeframe)
         if (primary_df is None or primary_df.empty) and not requested_timeframes:
-            primary_df = multi_tf_data.get("M5") if trade_style == "INTRADAY" else None
+            primary_df = multi_tf_data.get("M1") if trade_style == "SCALPING" else (multi_tf_data.get("M5") if trade_style == "INTRADAY" else None)
 
         val = validate_dataframe(primary_df, min_bars=15)
 
@@ -508,7 +511,8 @@ class AIConsensusEngine:
                     agent3_report=agent3_out,
                     simulated_equity=simulated_equity,
                     open_positions_count=open_positions_count,
-                    risk_mode=risk_mode,
+                    trade_style=trade_style,
+                    risk_mode=effective_risk_mode,
                     risk_options=risk_options,
                     **risk_quote_fields
                 )
@@ -877,6 +881,7 @@ class AIConsensusEngine:
 
         smart_analysis = {
             "synthesis_summary_en": synthesis_en,
+            "smart_trading": (risk_out.get("smart_trading") if isinstance(risk_out, dict) else {}) or {},
             "synthesis_summary_kh": synthesis_kh,
             "technical_causes": tech_causes,
             "smc_causes": smc_causes,
@@ -938,6 +943,7 @@ class AIConsensusEngine:
             "risk_reward_ratio": rr_str,
             "invalidation_rules": agent1_out.get("invalidation_level") or agent2_out.get("invalidation_level"),
             "smart_analysis": smart_analysis,
+            "smart_trading": (risk_out.get("smart_trading") if isinstance(risk_out, dict) else {}) or {},
             "agent_1_summary": (
                 f"ទំនោរ: {agent1_out.get('bias')} ({agent1_out.get('confidence')}%) | "
                 f"{agent1_out.get('asset_class', 'MARKET')} Long/Short: {technical_scores.get('long', 'N/A')}/{technical_scores.get('short', 'N/A')} | "
@@ -1017,6 +1023,7 @@ class AIConsensusEngine:
             "risk_profile": active_risk_profile,
             "invalidation_rules": agent1_out.get("invalidation_level") or agent2_out.get("invalidation_level"),
             "smart_analysis": smart_analysis,
+            "smart_trading": (risk_out.get("smart_trading") if isinstance(risk_out, dict) else {}) or {},
             "agent_run_summary": agent_run_summary,
             "agents": {
                 "agent_1_technical": agent1_out,

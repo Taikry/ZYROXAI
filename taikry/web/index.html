@@ -436,7 +436,8 @@
             <label class="cockpit-style-control" for="cockpit-trade-style">
               <span id="t-cockpit-style-label">Analysis style</span>
               <select id="cockpit-trade-style" onchange="selectCockpitTradeStyle(this.value)">
-                <option value="INTRADAY">Intraday · M15</option>
+                <option value="SCALPING">⚡ Scalp · M1 / M5 (Ultra-Fast)</option>
+                <option value="INTRADAY" selected>Intraday · M15</option>
                 <option value="SWING">Swing · H4 / D1 / W1</option>
               </select>
             </label>
@@ -452,6 +453,28 @@
                 </select>
               </label>
               <span class="adv-badge adv-badge-emerald cockpit-risk-pill" id="cockpit-active-risk-pill">1.5% · 1:1.8</span>
+            </div>
+
+            <!-- Direction & Continuous Auto-Radar Controls -->
+            <div class="cockpit-direction-row">
+              <label class="cockpit-style-control" for="cockpit-direction-filter">
+                <span>🎯 Direction</span>
+                <select id="cockpit-direction-filter" onchange="selectCockpitDirectionFilter(this.value)" title="Trade Direction Filter" aria-label="Trade Direction Filter">
+                  <option value="ALL">🌐 All Sides (Long & Short)</option>
+                  <option value="LONG">🟢 Longs Only (BUY)</option>
+                  <option value="SHORT">🔴 Shorts Only (SELL)</option>
+                </select>
+              </label>
+              <label class="cockpit-style-control" for="cockpit-autoscan-interval">
+                <span>⏱️ Auto-Radar</span>
+                <select id="cockpit-autoscan-interval" onchange="selectCockpitAutoScan(this.value)" title="Continuous Market Radar Interval" aria-label="Continuous Market Radar Interval">
+                  <option value="0">Off (Manual)</option>
+                  <option value="30">⚡ 30s Rapid Scalp</option>
+                  <option value="60">⏱️ 1m Radar</option>
+                  <option value="180">📊 3m Standard</option>
+                </select>
+              </label>
+              <span class="adv-badge adv-badge-cyan cockpit-radar-pill" id="cockpit-radar-status-pill" title="Continuous Market Radar">Radar: Off</span>
             </div>
 
             <!-- Primary Action Buttons: Analyze vs Best Setup -->
@@ -612,6 +635,43 @@
                   <div class="plan-metric-box">
                     <div class="plan-metric-lbl" id="plan-valid-label">VALID UNTIL</div>
                     <div class="plan-metric-val val-blue" id="plan-valid-val">--</div>
+                  </div>
+                </div>
+
+                <!-- 🧠 SMART TRADING ASSISTANT & STAGED EXECUTION -->
+                <div class="smart-trading-strip" id="smart-trading-strip">
+                  <div class="smart-strip-header">
+                    <div class="smart-strip-title">
+                      <span class="smart-pulse-dot"></span>
+                      <b>Smart Trading Assistant</b>
+                      <span class="adv-badge adv-badge-cyan smart-suitability-pill" id="smart-suitability-val">Intelligent Scaling</span>
+                    </div>
+                    <div class="smart-strip-lots">
+                      <span>Auto Lot Size:</span>
+                      <strong id="smart-lots-val">--</strong>
+                    </div>
+                  </div>
+                  <div class="smart-stages-grid">
+                    <div class="smart-stage-box stage-be">
+                      <div class="stage-label">🛡️ Breakeven (+1.0R)</div>
+                      <div class="stage-price" id="smart-be-val">--</div>
+                      <div class="stage-hint">Shift SL to entry</div>
+                    </div>
+                    <div class="smart-stage-box stage-partial">
+                      <div class="stage-label">💰 Partial TP (+1.5R)</div>
+                      <div class="stage-price" id="smart-partial-val">--</div>
+                      <div class="stage-hint">Bank 50% profit</div>
+                    </div>
+                    <div class="smart-stage-box stage-runner">
+                      <div class="stage-label">🚀 Runner Target (TP2)</div>
+                      <div class="stage-price" id="smart-runner-val">--</div>
+                      <div class="stage-hint">Trailing ride</div>
+                    </div>
+                  </div>
+                  <div class="smart-execution-row">
+                    <button type="button" class="btn-smart-execute" id="btn-smart-execute" onclick="executeCockpitSmartTrade()" title="One-Click Smart Paper Trade with computed levels and lots">
+                      ⚡ One-Click Smart Paper Trade
+                    </button>
                   </div>
                 </div>
 

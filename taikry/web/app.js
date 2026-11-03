@@ -14,6 +14,11 @@ let isKhmer = false;
 let latestAnalysisData = null;
 let latestBestSetups = [];
 let currentCockpitTradeStyle = "INTRADAY";
+let currentDirectionFilter = "ALL";
+let latestBestSetupsRawData = null;
+let cockpitAutoScanTimer = null;
+let cockpitAutoScanCountdown = 0;
+let cockpitAutoScanIntervalSec = 0;
 let currentRiskProfile = localStorage.getItem("zyrox_risk_profile") || "BALANCED";
 let customRiskOptions = null;
 let currentXauusdCatalyst = null;
@@ -683,6 +688,8 @@ async function triggerScan() {
       body: JSON.stringify({
         symbol: currentSymbol,
         timeframe: tfParam,
+        trade_style: currentCockpitTradeStyle,
+        risk_mode: currentRiskProfile,
         force_fresh: true,
         llm_provider: currentLLMProvider
       })
@@ -2864,11 +2871,13 @@ async function runCockpitBestSetup() {
     const scanParams = new URLSearchParams({
       category: currentChipFilter,
       trade_style: currentCockpitTradeStyle,
+      direction: currentDirectionFilter || "ALL",
       refresh: "true",
     });
     const res = await fetch(`${API_BASE}/api/v1/best-setup?${scanParams}`, { credentials: "include" });
     if (!res.ok) throw new Error(`Best-setup scan failed (${res.status})`);
     const data = await res.json();
+    latestBestSetupsRawData = data;
     renderCockpitBestSetups(data);
     if (data.best_setup) {
       const best = data.best_setup;
@@ -2932,10 +2941,161 @@ window.updateRiskProfileDisplay = updateRiskProfileDisplay;
 
 function selectCockpitTradeStyle(style) {
   const normalized = String(style || "INTRADAY").toUpperCase();
-  currentCockpitTradeStyle = normalized === "SWING" ? "SWING" : "INTRADAY";
+  if (normalized === "SCALPING" || normalized === "SCALP") {
+    currentCockpitTradeStyle = "SCALPING";
+    if (typeof selectTimeframe === "function") selectTimeframe("5");
+    if (currentRiskProfile !== "AGGRESSIVE") selectCockpitRiskProfile("AGGRESSIVE");
+  } else if (normalized === "SWING") {
+    currentCockpitTradeStyle = "SWING";
+    if (typeof selectTimeframe === "function") selectTimeframe("240");
+  } else {
+    currentCockpitTradeStyle = "INTRADAY";
+    if (typeof selectTimeframe === "function") selectTimeframe("15");
+  }
   const label = document.getElementById("t-cockpit-style-label");
   if (label) label.innerText = isKhmer ? "របៀបវិភាគ" : "Analysis style";
 }
+
+function selectCockpitDirectionFilter(direction) {
+  const norm = String(direction || "ALL").toUpperCase();
+  currentDirectionFilter = ["ALL", "LONG", "SHORT"].includes(norm) ? norm : "ALL";
+  const select = document.getElementById("cockpit-direction-filter");
+  if (select && select.value !== currentDirectionFilter) {
+    select.value = currentDirectionFilter;
+  }
+  if (latestBestSetupsRawData) {
+    renderCockpitBestSetups(latestBestSetupsRawData);
+  } else {
+    runCockpitBestSetup();
+  }
+}
+window.selectCockpitDirectionFilter = selectCockpitDirectionFilter;
+
+function selectCockpitAutoScan(seconds) {
+  const sec = parseInt(seconds, 10) || 0;
+  cockpitAutoScanIntervalSec = sec;
+  if (cockpitAutoScanTimer) {
+    clearInterval(cockpitAutoScanTimer);
+    cockpitAutoScanTimer = null;
+  }
+  const pill = document.getElementById("cockpit-radar-status-pill");
+  if (sec <= 0) {
+    if (pill) {
+      pill.innerText = "Radar: Off";
+      pill.className = "adv-badge adv-badge-cyan cockpit-radar-pill";
+    }
+    return;
+  }
+
+  cockpitAutoScanCountdown = sec;
+  const updatePill = () => {
+    if (pill) {
+      pill.innerText = `Radar: ${cockpitAutoScanCountdown}s`;
+      pill.className = "adv-badge adv-badge-emerald cockpit-radar-pill radar-active";
+    }
+  };
+  updatePill();
+
+  cockpitAutoScanTimer = setInterval(async () => {
+    cockpitAutoScanCountdown--;
+    if (cockpitAutoScanCountdown <= 0) {
+      cockpitAutoScanCountdown = cockpitAutoScanIntervalSec;
+      updatePill();
+      try {
+        await runCockpitBestSetup();
+      } catch (e) {
+        console.warn("Auto-radar scan cycle failed:", e);
+      }
+    } else {
+      updatePill();
+    }
+  }, 1000);
+}
+window.selectCockpitAutoScan = selectCockpitAutoScan;
+
+async function executeCockpitSmartTrade() {
+  const btn = document.getElementById("btn-smart-execute");
+  const origText = btn ? btn.innerHTML : "";
+  const restoreBtn = () => {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origText || "⚡ One-Click Smart Paper Trade";
+    }
+  };
+
+  const analysis = latestAnalysisData;
+  if (!analysis) {
+    alert("No analysis is loaded. Please analyze or run Best Setup first.");
+    return;
+  }
+
+  const rawDir = String(analysis.proposed_direction || analysis.market_bias || "").toUpperCase();
+  const dir = (rawDir.includes("BUY") || rawDir.includes("LONG") || rawDir.includes("BULL")) ? "BUY" :
+              ((rawDir.includes("SELL") || rawDir.includes("SHORT") || rawDir.includes("BEAR")) ? "SELL" : null);
+
+  if (!dir) {
+    alert("Cannot determine trade direction (BUY/SELL) for this setup.");
+    return;
+  }
+
+  const entry = Number(analysis.entry_price);
+  const sl = Number(analysis.stop_loss);
+  const tp1 = Number(analysis.take_profit_1);
+
+  if (![entry, sl, tp1].every(v => Number.isFinite(v) && v > 0)) {
+    alert("Setup is missing valid entry, SL, or TP levels.");
+    return;
+  }
+
+  let riskPct = 1.5;
+  if (currentRiskProfile === "CONSERVATIVE") riskPct = 0.8;
+  else if (currentRiskProfile === "AGGRESSIVE" || currentCockpitTradeStyle === "SCALPING") riskPct = 2.5;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳ Executing Smart Order...</span>";
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/me/paper-trades`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        symbol: currentSymbol,
+        direction: dir,
+        entry_price: entry,
+        stop_loss: sl,
+        take_profit_1: tp1,
+        risk_percentage: riskPct
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      const tradeId = data.paper_trade?.trade_id || "";
+      const toast = document.getElementById("cockpit-status-toast");
+      if (toast) {
+        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Smart Trade #${tradeId} placed: ${dir} ${currentSymbol} @ ${entry} (Risk ${riskPct}%)</b>`;
+      }
+      if (btn) {
+        btn.innerHTML = `<span>✓ Smart Trade #${tradeId} Placed!</span>`;
+        setTimeout(restoreBtn, 3000);
+      }
+      if (typeof fetchHealthAndPaper === "function") {
+        fetchHealthAndPaper();
+      }
+    } else {
+      alert(data.detail || data.message || "Could not execute smart paper trade.");
+      restoreBtn();
+    }
+  } catch (err) {
+    console.error("Smart execute error:", err);
+    alert("Connection error executing smart trade.");
+    restoreBtn();
+  }
+}
+window.executeCockpitSmartTrade = executeCockpitSmartTrade;
 
 function selectCockpitBestSetup(symbol) {
   const candidate = latestBestSetups.find(item => item.symbol === symbol);
@@ -2954,11 +3114,13 @@ function renderCockpitBestSetups(data) {
   const panel = document.getElementById("cockpit-best-setups-panel");
   if (!panel) return;
 
+  const rawSetups = Array.isArray(data?.all_setups || data?.setups) ? (data.all_setups || data.setups) : [];
   const setups = Array.isArray(data?.setups) ? data.setups : [];
   latestBestSetups = setups;
+  latestBestSetupsRawData = data;
   panel.hidden = false;
 
-  if (setups.length === 0) {
+  if (setups.length === 0 && rawSetups.length === 0) {
     const message = escapeHtml(String(data?.message || (isKhmer ? "មិនទាន់មានលទ្ធផលស្កេនទេ។" : "No market analyses are available yet.")));
     panel.innerHTML = `<div class="cockpit-setups-empty">${message}</div>`;
     return;
@@ -2967,14 +3129,81 @@ function renderCockpitBestSetups(data) {
   const qualified = Number(data.qualified_count ?? 0);
   const scanned = Number(data.scanned_count ?? setups.length);
   const total = Number(data.candidate_count ?? setups.length);
-  const title = isKhmer ? "ជម្រើសស្កេនទីផ្សារទាំងអស់" : "All Market Scan Options";
+  const title = isKhmer ? "ជម្រើសស្កេនទីផ្សារស្វ័យប្រវត្ត & ផែនការជួញដូរឆ្លាតវៃ" : "Smart Multi-Market Radar & Best Setup Intelligence";
   const tradeStyle = String(data?.trade_style || currentCockpitTradeStyle).toUpperCase();
-  const styleLabel = tradeStyle === "SWING"
-    ? (isKhmer ? "Swing · H4 / D1 / W1" : "Swing · H4 / D1 / W1")
-    : (isKhmer ? "Intraday · M15" : "Intraday · M15");
+  const styleLabel = tradeStyle === "SCALPING"
+    ? "⚡ Scalp · M1 / M5"
+    : (tradeStyle === "SWING" ? "Swing · H4 / D1 / W1" : "Intraday · M15");
   const summary = isKhmer
     ? `${styleLabel} · បានវិភាគ ${scanned}/${total} · អនុម័ត ${qualified}`
     : `${styleLabel} · Analyzed ${scanned}/${total} · Approved ${qualified}`;
+
+  // 1. Dual Best Pick Hero Banner (Top Long vs Top Short)
+  const bestLong = data.best_long || rawSetups.find(s => {
+    const d = String(s.proposed_direction || s.market_bias || "").toUpperCase();
+    return (d.includes("BUY") || d.includes("LONG") || d.includes("BULL")) && s.setup_status === "APPROVE";
+  });
+  const bestShort = data.best_short || rawSetups.find(s => {
+    const d = String(s.proposed_direction || s.market_bias || "").toUpperCase();
+    return (d.includes("SELL") || d.includes("SHORT") || d.includes("BEAR")) && s.setup_status === "APPROVE";
+  });
+
+  let dualHeroHtml = "";
+  if (bestLong || bestShort) {
+    const longHtml = bestLong ? `
+      <div class="hero-pick hero-long" onclick="selectCockpitBestSetup('${bestLong.symbol}')">
+        <div class="hero-pick-title">
+          <span>🟢 Top Long Opportunity</span>
+          <span class="adv-badge adv-badge-emerald">${escapeHtml(bestLong.setup_status || "APPROVE")}</span>
+        </div>
+        <div class="hero-pick-body">
+          <span class="hero-pick-symbol">${getAssetRealLogoHTML(bestLong.symbol)} ${escapeHtml(bestLong.symbol)}</span>
+          <span class="hero-pick-score">⭐ ${Math.round(bestLong.ai_score || 0)}% Score</span>
+        </div>
+        <div class="hero-pick-levels">
+          <span>Entry: <b>${escapeHtml(String(bestLong.entry_price || "Market"))}</b></span>
+          <span>SL: <b style="color:#fb7185;">${escapeHtml(String(bestLong.stop_loss || "--"))}</b></span>
+          <span>TP: <b style="color:#34d399;">${escapeHtml(String(bestLong.take_profit_1 || "--"))}</b></span>
+          <span>R:R: <b>${escapeHtml(String(bestLong.risk_reward_ratio || "--"))}</b></span>
+        </div>
+      </div>` : `
+      <div class="hero-pick" style="opacity:0.6; display:flex; align-items:center; justify-content:center; font-size:11px; color:#94a3b8;">
+        <span>No qualified Long setup currently</span>
+      </div>`;
+
+    const shortHtml = bestShort ? `
+      <div class="hero-pick hero-short" onclick="selectCockpitBestSetup('${bestShort.symbol}')">
+        <div class="hero-pick-title">
+          <span>🔴 Top Short Opportunity</span>
+          <span class="adv-badge adv-badge-rose">${escapeHtml(bestShort.setup_status || "APPROVE")}</span>
+        </div>
+        <div class="hero-pick-body">
+          <span class="hero-pick-symbol">${getAssetRealLogoHTML(bestShort.symbol)} ${escapeHtml(bestShort.symbol)}</span>
+          <span class="hero-pick-score">⭐ ${Math.round(bestShort.ai_score || 0)}% Score</span>
+        </div>
+        <div class="hero-pick-levels">
+          <span>Entry: <b>${escapeHtml(String(bestShort.entry_price || "Market"))}</b></span>
+          <span>SL: <b style="color:#fb7185;">${escapeHtml(String(bestShort.stop_loss || "--"))}</b></span>
+          <span>TP: <b style="color:#34d399;">${escapeHtml(String(bestShort.take_profit_1 || "--"))}</b></span>
+          <span>R:R: <b>${escapeHtml(String(bestShort.risk_reward_ratio || "--"))}</b></span>
+        </div>
+      </div>` : `
+      <div class="hero-pick" style="opacity:0.6; display:flex; align-items:center; justify-content:center; font-size:11px; color:#94a3b8;">
+        <span>No qualified Short setup currently</span>
+      </div>`;
+
+    dualHeroHtml = `<div class="cockpit-dual-hero">${longHtml}${shortHtml}</div>`;
+  }
+
+  // 2. Direction Filter Chips
+  const curDir = currentDirectionFilter || "ALL";
+  const chipsHtml = `
+    <div class="cockpit-direction-chips">
+      <button type="button" class="cockpit-dir-chip ${curDir === 'ALL' ? 'active' : ''}" onclick="selectCockpitDirectionFilter('ALL')">🌐 All Setups (${total})</button>
+      <button type="button" class="cockpit-dir-chip ${curDir === 'LONG' ? 'active' : ''}" onclick="selectCockpitDirectionFilter('LONG')">🟢 Longs Only (${Number(data.long_count || 0)})</button>
+      <button type="button" class="cockpit-dir-chip ${curDir === 'SHORT' ? 'active' : ''}" onclick="selectCockpitDirectionFilter('SHORT')">🔴 Shorts Only (${Number(data.short_count || 0)})</button>
+    </div>`;
+
   const cards = setups.map((item, index) => {
     const symbol = String(item.symbol || "");
     if (!/^[A-Z0-9._-]{1,20}$/.test(symbol)) return "";
@@ -2990,7 +3219,6 @@ function renderCockpitBestSetups(data) {
       ? price.toLocaleString(undefined, { maximumFractionDigits: price > 100 ? 2 : 5 })
       : "N/A";
 
-    // Extract Plan & Levels (Cascade: Root -> candidate_plan -> agent_4_risk)
     const candidate = item.candidate_plan || item.agents?.agent_4_risk;
     const rawDir = String(item.candidate_plan?.direction || item.proposed_direction || item.agents?.agent_4_risk?.proposed_direction || item.market_bias || "NONE").toUpperCase();
     const isBuy = rawDir.includes("BUY") || rawDir.includes("LONG") || rawDir.includes("BULLISH");
@@ -3052,6 +3280,8 @@ function renderCockpitBestSetups(data) {
       <div><b>${title}</b><small>${summary}</small></div>
       <button type="button" class="cockpit-setups-hide" onclick="document.getElementById('cockpit-best-setups-panel').hidden = true">${isKhmer ? "លាក់" : "Hide"}</button>
     </div>
+    ${dualHeroHtml}
+    ${chipsHtml}
     <div class="cockpit-setups-grid">${cards}</div>`;
 }
 
@@ -3325,6 +3555,34 @@ function updateCockpitPlanCard(data) {
   // Active AI Chart Trade Signal Overlay
   if (window.taikryChart && typeof window.taikryChart.setActiveTradeSignal === "function") {
     window.taikryChart.setActiveTradeSignal(data);
+  }
+
+  // Populate Smart Trading Assistant Strip
+  try {
+    const smartData = data.smart_trading || data.smart_analysis?.smart_trading || {};
+    const smartBeEl = document.getElementById("smart-be-val");
+    const smartPartialEl = document.getElementById("smart-partial-val");
+    const smartRunnerEl = document.getElementById("smart-runner-val");
+    const smartLotsEl = document.getElementById("smart-lots-val");
+    const smartSuitabilityEl = document.getElementById("smart-suitability-val");
+
+    const rDiff = Math.abs((entryPrice || 0) - (stopLoss || 0));
+    const calcBE = smartData.breakeven_trigger ?? (hasEntry && rDiff > 0 ? (isBuy ? (entryPrice + rDiff) : (entryPrice - rDiff)) : null);
+    const calcPartial = smartData.partial_take_profit ?? (hasEntry && rDiff > 0 ? (isBuy ? (entryPrice + 1.5 * rDiff) : (entryPrice - 1.5 * rDiff)) : null);
+    const calcRunner = smartData.runner_take_profit ?? (takeProfit || (hasEntry && rDiff > 0 ? (isBuy ? (entryPrice + 3.0 * rDiff) : (entryPrice - 3.0 * rDiff)) : null));
+    const lots = smartData.recommended_lots || currentCalculatedLots || "Auto";
+
+    if (smartBeEl) smartBeEl.innerText = Number.isFinite(Number(calcBE)) ? Number(calcBE).toFixed(decimals) : "--";
+    if (smartPartialEl) smartPartialEl.innerText = Number.isFinite(Number(calcPartial)) ? Number(calcPartial).toFixed(decimals) : "--";
+    if (smartRunnerEl) smartRunnerEl.innerText = Number.isFinite(Number(calcRunner)) ? Number(calcRunner).toFixed(decimals) : "--";
+    if (smartLotsEl) smartLotsEl.innerText = typeof lots === "number" ? `${lots.toFixed(2)} Lots` : String(lots);
+    if (smartSuitabilityEl) {
+      const suit = smartData.scalp_suitability || (currentCockpitTradeStyle === "SCALPING" ? "HIGH" : "BALANCED");
+      smartSuitabilityEl.innerText = `${currentCockpitTradeStyle} · ${suit}`;
+      smartSuitabilityEl.className = suit === "HIGH" ? "adv-badge adv-badge-emerald smart-suitability-pill" : "adv-badge adv-badge-cyan smart-suitability-pill";
+    }
+  } catch (err) {
+    console.warn("Could not populate smart trading assistant strip:", err);
   }
 
 }
