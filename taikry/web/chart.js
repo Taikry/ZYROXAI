@@ -60,6 +60,12 @@
       stale: "⚠️ ទិន្នន័យចាស់ (Stale)",
       weekend_closed: "🔒 ទីផ្សារចុងសប្តាហ៍បិទ (Weekend Closed)",
       provider: "ប្រភព",
+      asia_session: "អាស៊ី · តូក្យូ",
+      london_session: "ឡុងដ៍",
+      new_york_session: "ញូវយ៉ក",
+      session_open: "បើក",
+      session_closed: "បិទ",
+      session_clock_title: "ម៉ោងទីផ្សារ · ម៉ោងក្នុងតំបន់",
       entry: "ចំណុចចូល (Entry)",
       sl: "កាត់ខាត (SL)",
       tp1: "ចំណេញ ១ (TP1)",
@@ -100,6 +106,12 @@
       stale: "⚠️ Stale Data",
       weekend_closed: "🔒 Weekend Closed",
       provider: "Provider",
+      asia_session: "Asia · Tokyo",
+      london_session: "London",
+      new_york_session: "New York",
+      session_open: "OPEN",
+      session_closed: "CLOSED",
+      session_clock_title: "Market sessions · local time",
       entry: "Entry",
       sl: "Stop Loss",
       tp1: "Take Profit 1",
@@ -132,6 +144,7 @@
     volume: true,
     rsi: true,
     macd: true,
+    stochastic: false,
     // SMC Structural Overlays
     smc_bos: true,
     smc_choch: true,
@@ -156,6 +169,9 @@
       this.volumeSeries = null;
       this.rsiChart = null;
       this.rsiSeries = null;
+      this.stochChart = null;
+      this.stochKSeries = null;
+      this.stochDSeries = null;
       this.macdChart = null;
       this.macdLineSeries = null;
       this.macdSignalSeries = null;
@@ -193,6 +209,8 @@
       this.proWorkspaceWrapper = null;
       this.tvEmbedWrapper = null;
       this._isSyncingRange = false;
+      this.sessionClockTimer = null;
+      this.sessionClockContainer = null;
     }
 
     // -------------------------------------------------------------------------
@@ -227,6 +245,7 @@
     setLanguage(lang) {
       this.lang = lang === "en" ? "en" : "kh";
       this.updateToolbarLabels();
+      this.updateSessionClocks();
     }
 
     // -------------------------------------------------------------------------
@@ -253,7 +272,42 @@
 
     setupWorkspaceStructure() {
       if (!this.chartContainer) return;
+      if (this.sessionClockTimer) {
+        window.clearInterval(this.sessionClockTimer);
+        this.sessionClockTimer = null;
+      }
       this.chartContainer.innerHTML = "";
+      this.chartContainer.style.display = "flex";
+      this.chartContainer.style.flexDirection = "column";
+      this.chartContainer.style.minHeight = "0";
+
+      this.sessionClockContainer = document.createElement("div");
+      this.sessionClockContainer.className = "taikry-session-clock-bar";
+      this.sessionClockContainer.setAttribute("aria-label", this.t("session_clock_title"));
+      this.sessionClockContainer.innerHTML = `
+        <div class="session-clock-heading" id="session-clock-heading">${this.t("session_clock_title")}</div>
+        <div class="session-clock-grid">
+          <div class="session-clock-card" data-session="asia">
+            <div class="session-clock-name" id="session-clock-asia-name">${this.t("asia_session")}</div>
+            <div class="session-clock-time" id="session-clock-asia-time">--:--:--</div>
+            <div class="session-clock-date" id="session-clock-asia-date">---</div>
+            <div class="session-clock-status" id="session-clock-asia-status">---</div>
+          </div>
+          <div class="session-clock-card" data-session="london">
+            <div class="session-clock-name" id="session-clock-london-name">${this.t("london_session")}</div>
+            <div class="session-clock-time" id="session-clock-london-time">--:--:--</div>
+            <div class="session-clock-date" id="session-clock-london-date">---</div>
+            <div class="session-clock-status" id="session-clock-london-status">---</div>
+          </div>
+          <div class="session-clock-card" data-session="new-york">
+            <div class="session-clock-name" id="session-clock-new-york-name">${this.t("new_york_session")}</div>
+            <div class="session-clock-time" id="session-clock-new-york-time">--:--:--</div>
+            <div class="session-clock-date" id="session-clock-new-york-date">---</div>
+            <div class="session-clock-status" id="session-clock-new-york-status">---</div>
+          </div>
+        </div>
+      `;
+      this.chartContainer.appendChild(this.sessionClockContainer);
 
       // 1. Native Pro Chart Workspace Wrapper
       this.proWorkspaceWrapper = document.createElement("div");
@@ -261,7 +315,9 @@
       this.proWorkspaceWrapper.className = "taikry-pro-chart-workspace";
       this.proWorkspaceWrapper.style.display = "none";
       this.proWorkspaceWrapper.style.width = "100%";
-      this.proWorkspaceWrapper.style.height = "100%";
+      this.proWorkspaceWrapper.style.height = "0";
+      this.proWorkspaceWrapper.style.flex = "1 1 0";
+      this.proWorkspaceWrapper.style.minHeight = "0";
       this.proWorkspaceWrapper.style.position = "relative";
       this.chartContainer.appendChild(this.proWorkspaceWrapper);
 
@@ -271,9 +327,71 @@
       this.tvEmbedWrapper.className = "tv-cloud-embed-wrapper";
       this.tvEmbedWrapper.style.display = "none";
       this.tvEmbedWrapper.style.width = "100%";
-      this.tvEmbedWrapper.style.height = "100%";
+      this.tvEmbedWrapper.style.height = "0";
+      this.tvEmbedWrapper.style.flex = "1 1 0";
+      this.tvEmbedWrapper.style.minHeight = "0";
       this.tvEmbedWrapper.style.position = "relative";
       this.chartContainer.appendChild(this.tvEmbedWrapper);
+      this.updateSessionClocks();
+      this.sessionClockTimer = window.setInterval(() => this.updateSessionClocks(), 1000);
+    }
+
+    updateSessionClocks() {
+      if (!this.sessionClockContainer) return;
+      const heading = this.sessionClockContainer.querySelector("#session-clock-heading");
+      if (heading) heading.textContent = this.t("session_clock_title");
+      this.sessionClockContainer.setAttribute("aria-label", this.t("session_clock_title"));
+      const now = new Date();
+      const sessions = [
+        { id: "asia", zone: "Asia/Tokyo", open: 9 * 60, close: 18 * 60, label: "asia_session" },
+        { id: "london", zone: "Europe/London", open: 8 * 60, close: 17 * 60, label: "london_session" },
+        { id: "new-york", zone: "America/New_York", open: 8 * 60, close: 17 * 60, label: "new_york_session" },
+      ];
+
+      sessions.forEach(session => {
+        try {
+          const parts = new Intl.DateTimeFormat("en-GB", {
+            timeZone: session.zone,
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23",
+          }).formatToParts(now).reduce((acc, part) => {
+            acc[part.type] = part.value;
+            return acc;
+          }, {});
+          const dateLabel = new Intl.DateTimeFormat(this.lang === "kh" ? "km-KH" : "en-GB", {
+            timeZone: session.zone,
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+          }).format(now);
+          const hour = Number(parts.hour || 0);
+          const minute = Number(parts.minute || 0);
+          const weekday = String(parts.weekday || "").toLowerCase();
+          const minuteOfDay = hour * 60 + minute;
+          const weekdayOpen = weekday !== "sat" && weekday !== "sun";
+          const isOpen = weekdayOpen && minuteOfDay >= session.open && minuteOfDay < session.close;
+          const timeNode = document.getElementById(`session-clock-${session.id}-time`);
+          const dateNode = document.getElementById(`session-clock-${session.id}-date`);
+          const statusNode = document.getElementById(`session-clock-${session.id}-status`);
+          const nameNode = document.getElementById(`session-clock-${session.id}-name`);
+          const card = this.sessionClockContainer.querySelector(`[data-session="${session.id}"]`);
+          if (nameNode) nameNode.textContent = this.t(session.label);
+          if (timeNode) timeNode.textContent = `${parts.hour}:${parts.minute}:${parts.second}`;
+          if (dateNode) dateNode.textContent = `${dateLabel} · ${session.zone}`;
+          if (statusNode) statusNode.textContent = isOpen ? this.t("session_open") : this.t("session_closed");
+          if (card) {
+            card.classList.toggle("is-open", isOpen);
+            card.classList.toggle("is-closed", !isOpen);
+          }
+        } catch (error) {
+          console.warn(`Could not render ${session.zone} session clock:`, error);
+        }
+      });
     }
 
     // -------------------------------------------------------------------------
@@ -360,6 +478,7 @@
           <span class="quote-item">C: <b id="hud-close">---</b></span>
           <span class="quote-item" id="hud-change-wrap">Chg: <b id="hud-change">---</b></span>
           <span class="quote-item">Vol: <b id="hud-vol">---</b></span>
+          <span class="quote-item">ATR 14: <b id="hud-atr">---</b></span>
           <span class="quote-time" id="hud-time">---</span>
         </div>
 
@@ -372,6 +491,7 @@
           </div>
           <div class="pro-chart-state-overlay" id="pro-chart-state-overlay" hidden aria-live="polite"></div>
           <div class="pro-chart-subpane" id="pro-chart-rsi-pane" style="display: ${this.indicatorSettings.rsi ? 'block' : 'none'};"></div>
+          <div class="pro-chart-subpane" id="pro-chart-stoch-pane" style="display: ${this.indicatorSettings.stochastic ? 'block' : 'none'};"></div>
           <div class="pro-chart-subpane" id="pro-chart-macd-pane" style="display: ${this.indicatorSettings.macd ? 'block' : 'none'};"></div>
         </div>
       `;
@@ -504,7 +624,10 @@
       // 3. Create MACD Subpane if enabled
       this.initMacdPane(chartTheme);
 
-      // 4. Synchronize all active panes without cyclic ping-pong
+      // 4. Create Stochastic Subpane if enabled
+      this.initStochasticPane(chartTheme);
+
+      // 5. Synchronize all active panes without cyclic ping-pong
       this.syncAllCharts();
 
       // 5. Crosshair Move Handler for Quote HUD
@@ -614,6 +737,29 @@
       });
     }
 
+    initStochasticPane(theme) {
+      if (!this.indicatorSettings.stochastic) return;
+      const container = document.getElementById("pro-chart-stoch-pane");
+      if (!container) return;
+      container.style.display = "block";
+      if (this.stochChart) return;
+
+      const chartTheme = theme || {
+        layout: { background: { color: "#080c14" }, textColor: "#94a3b8", fontSize: 10 },
+        grid: { vertLines: { color: "rgba(255, 255, 255, 0.04)" }, horzLines: { color: "rgba(255, 255, 255, 0.04)" } },
+      };
+      this.stochChart = LightweightCharts.createChart(container, Object.assign({}, chartTheme, {
+        height: 100,
+        rightPriceScale: { borderColor: "rgba(255, 255, 255, 0.12)", scaleMargins: { top: 0.1, bottom: 0.1 } },
+        timeScale: { visible: false },
+      }));
+      this.stochKSeries = this.stochChart.addLineSeries({ color: "#a78bfa", lineWidth: 2, title: "%K 14,3" });
+      this.stochDSeries = this.stochChart.addLineSeries({ color: "#38bdf8", lineWidth: 1, title: "%D 3" });
+      this.stochKSeries.createPriceLine({ price: 80, color: "rgba(239, 68, 68, 0.6)", lineWidth: 1, lineStyle: 2, title: "OB 80" });
+      this.stochKSeries.createPriceLine({ price: 20, color: "rgba(34, 197, 94, 0.6)", lineWidth: 1, lineStyle: 2, title: "OS 20" });
+      this.stochKSeries.createPriceLine({ price: 50, color: "rgba(148, 163, 184, 0.3)", lineWidth: 1, lineStyle: 3 });
+    }
+
     createMainPriceSeries() {
       if (!this.chart) return;
       if (this.mainSeries) {
@@ -661,18 +807,22 @@
     }
 
     syncAllCharts() {
-      const all = [this.chart, this.rsiChart, this.macdChart].filter(Boolean);
+      const getActiveCharts = () => [
+        this.chart,
+        this.indicatorSettings.rsi ? this.rsiChart : null,
+        this.indicatorSettings.stochastic ? this.stochChart : null,
+        this.indicatorSettings.macd ? this.macdChart : null,
+      ].filter(Boolean);
+      const all = getActiveCharts();
       if (all.length <= 1) return;
 
       all.forEach(src => {
-        if (src._syncAttached) return;
-        src._syncAttached = true;
-
-        src.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (src._taikrySyncHandler) return;
+        src._taikrySyncHandler = range => {
           if (!range || this._isSyncingRange) return;
           this._isSyncingRange = true;
           try {
-            all.forEach(target => {
+            getActiveCharts().forEach(target => {
               if (target !== src) {
                 const cur = target.timeScale().getVisibleLogicalRange();
                 if (!cur || Math.abs(cur.from - range.from) > 0.01 || Math.abs(cur.to - range.to) > 0.01) {
@@ -685,7 +835,8 @@
           } finally {
             this._isSyncingRange = false;
           }
-        });
+        };
+        src.timeScale().subscribeVisibleLogicalRangeChange(src._taikrySyncHandler);
       });
     }
 
@@ -704,6 +855,13 @@
         const rsiPane = document.getElementById("pro-chart-rsi-pane");
         if (rsiPane && rsiPane.clientWidth > 0) {
           this.rsiChart.applyOptions({ width: rsiPane.clientWidth, height: rsiPane.clientHeight || 100 });
+        }
+      }
+
+      if (this.stochChart) {
+        const pane = document.getElementById("pro-chart-stoch-pane");
+        if (pane && pane.clientWidth > 0) {
+          this.stochChart.applyOptions({ width: pane.clientWidth, height: pane.clientHeight || 100 });
         }
       }
 
@@ -807,6 +965,8 @@
           if (series && typeof series.setData === "function") series.setData([]);
         });
         if (this.rsiSeries) this.rsiSeries.setData([]);
+        if (this.stochKSeries) this.stochKSeries.setData([]);
+        if (this.stochDSeries) this.stochDSeries.setData([]);
         if (this.macdLineSeries) this.macdLineSeries.setData([]);
         if (this.macdSignalSeries) this.macdSignalSeries.setData([]);
         if (this.macdHistSeries) this.macdHistSeries.setData([]);
@@ -815,7 +975,8 @@
 
       try {
         // Fetch fresh verified candles in background
-        const endpoint = `/api/v1/chart/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(cleanTf)}&limit=150`;
+        // 300 bars provide enough warm-up for EMA/SMA 200 and a cleaner initial EMA.
+        const endpoint = `/api/v1/chart/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(cleanTf)}&limit=300`;
         const res = await fetch(endpoint, { signal: controller.signal });
         if (controller.signal.aborted) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -974,7 +1135,19 @@
         this.rsiSeries.setData(rsiData);
       }
 
-      // 2. MACD Data
+      // 2. Stochastic oscillator (%K / %D)
+      if (this.stochKSeries && this.candlesData.length) {
+        const kData = this.candlesData
+          .filter(c => c.stoch_k !== null && c.stoch_k !== undefined && Number.isFinite(Number(c.stoch_k)))
+          .map(c => ({ time: c.time, value: Number(c.stoch_k) }));
+        const dData = this.candlesData
+          .filter(c => c.stoch_d !== null && c.stoch_d !== undefined && Number.isFinite(Number(c.stoch_d)))
+          .map(c => ({ time: c.time, value: Number(c.stoch_d) }));
+        this.stochKSeries.setData(kData);
+        this.stochDSeries.setData(dData);
+      }
+
+      // 3. MACD Data
       if (this.macdLineSeries && this.candlesData.length) {
         const macdData = [];
         const signalData = [];
@@ -1006,67 +1179,242 @@
     // INCREMENTAL REAL-TIME CANDLE UPDATES (Zero Lookahead & Continuous Feed)
     // -------------------------------------------------------------------------
 
+    calculateLatestIndicatorValues() {
+      const rows = this.candlesData || [];
+      const closes = rows.map(c => Number(c.close));
+      if (!closes.length || closes.some(value => !Number.isFinite(value))) return null;
+      const emaSeries = (values, period) => {
+        if (!values.length) return [];
+        const alpha = 2 / (period + 1);
+        const result = [values[0]];
+        for (let i = 1; i < values.length; i++) result.push(alpha * values[i] + (1 - alpha) * result[i - 1]);
+        return result;
+      };
+      const smaLast = (values, period) => values.length < period ? null : values.slice(-period).reduce((a, b) => a + b, 0) / period;
+      const ema9 = emaSeries(closes, 9).at(-1);
+      const ema20Series = emaSeries(closes, 20);
+      const ema50Series = emaSeries(closes, 50);
+      const ema100Series = emaSeries(closes, 100);
+      const ema200Series = emaSeries(closes, 200);
+      const fast = emaSeries(closes, 12);
+      const slow = emaSeries(closes, 26);
+      const macdSeries = fast.map((value, index) => value - slow[index]);
+      const signalSeries = emaSeries(macdSeries, 9);
+
+      const gains = [];
+      const losses = [];
+      for (let i = 0; i < closes.length; i++) {
+        const delta = i ? closes[i] - closes[i - 1] : 0;
+        gains.push(Math.max(0, delta));
+        losses.push(Math.max(0, -delta));
+      }
+      // Recalculate Wilder smoothing with its exact alpha rather than EMA's 2/(n+1).
+      const wilderLast = values => values.reduce((prev, current, index) => index ? ((prev * 13) + current) / 14 : current, 0);
+      const avgGain = wilderLast(gains);
+      const avgLoss = wilderLast(losses);
+      const rsi = avgLoss <= 0 ? (avgGain > 0 ? 100 : 50) : 100 - (100 / (1 + avgGain / avgLoss));
+
+      const trueRanges = rows.map((c, index) => {
+        const high = Number(c.high), low = Number(c.low);
+        if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+        if (!index) return high - low;
+        const prevClose = closes[index - 1];
+        return Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+      });
+      let atr = null;
+      if (trueRanges.length >= 14 && trueRanges.slice(0, 14).every(Number.isFinite)) {
+        atr = trueRanges.slice(0, 14).reduce((a, b) => a + b, 0) / 14;
+        for (let i = 14; i < trueRanges.length; i++) {
+          if (Number.isFinite(trueRanges[i])) atr = ((atr * 13) + trueRanges[i]) / 14;
+        }
+      }
+
+      const highs = rows.map(c => Number(c.high));
+      const lows = rows.map(c => Number(c.low));
+      const rawStoch = [];
+      for (let i = 0; i < rows.length; i++) {
+        const start = Math.max(0, i - 13);
+        const highest = Math.max(...highs.slice(start, i + 1));
+        const lowest = Math.min(...lows.slice(start, i + 1));
+        rawStoch.push(highest === lowest ? 50 : 100 * (closes[i] - lowest) / (highest - lowest));
+      }
+      const kSeries = rawStoch.map((_, index) => {
+        const window = rawStoch.slice(Math.max(0, index - 2), index + 1);
+        return window.reduce((a, b) => a + b, 0) / window.length;
+      });
+      const dSeries = kSeries.map((_, index) => {
+        const window = kSeries.slice(Math.max(0, index - 2), index + 1);
+        return window.reduce((a, b) => a + b, 0) / window.length;
+      });
+
+      const last20 = closes.slice(-20);
+      const bbMiddle = last20.reduce((a, b) => a + b, 0) / last20.length;
+      const bbVariance = last20.length > 1 ? last20.reduce((sum, value) => sum + ((value - bbMiddle) ** 2), 0) / (last20.length - 1) : 0;
+      const bbStd = Math.sqrt(bbVariance);
+
+      const last = rows[rows.length - 1];
+      const utcDate = new Date(Number(last.time) * 1000).toISOString().slice(0, 10);
+      let pv = 0, totalVolume = 0;
+      rows.forEach(c => {
+        if (new Date(Number(c.time) * 1000).toISOString().slice(0, 10) !== utcDate) return;
+        const volume = Number(c.volume || 0);
+        if (!Number.isFinite(volume) || volume <= 0) return;
+        pv += ((Number(c.high) + Number(c.low) + Number(c.close)) / 3) * volume;
+        totalVolume += volume;
+      });
+      const ema20 = ema20Series.at(-1);
+      return {
+        ema_9: ema9,
+        ema_20: ema20,
+        ema_50: rows.length >= 50 ? ema50Series.at(-1) : null,
+        ema_100: rows.length >= 100 ? ema100Series.at(-1) : null,
+        ema_200: rows.length >= 200 ? ema200Series.at(-1) : null,
+        sma_20: smaLast(closes, 20),
+        sma_50: smaLast(closes, 50),
+        sma_200: smaLast(closes, 200),
+        vwap: totalVolume > 0 ? pv / totalVolume : null,
+        bb_upper: bbMiddle + (2 * bbStd),
+        bb_lower: bbMiddle - (2 * bbStd),
+        kc_upper: ema20 + (1.5 * (atr || 0)),
+        kc_lower: ema20 - (1.5 * (atr || 0)),
+        rsi_14: rsi,
+        stoch_k: kSeries.at(-1),
+        stoch_d: dSeries.at(-1),
+        macd: macdSeries.at(-1),
+        macd_signal: signalSeries.at(-1),
+        macd_hist: macdSeries.at(-1) - signalSeries.at(-1),
+        atr_14: atr,
+      };
+    }
+
+    updateRealtimeIndicators(candle) {
+      if (!candle) return;
+      const values = this.calculateLatestIndicatorValues();
+      if (!values) return;
+      Object.assign(candle, values);
+      const specs = {
+        ema_9: values.ema_9, ema_20: values.ema_20, ema_50: values.ema_50,
+        ema_100: values.ema_100, ema_200: values.ema_200, sma_20: values.sma_20,
+        sma_50: values.sma_50, sma_200: values.sma_200, vwap: values.vwap,
+        bb_upper: values.bb_upper, bb_lower: values.bb_lower,
+        kc_upper: values.kc_upper, kc_lower: values.kc_lower,
+      };
+      Object.entries(specs).forEach(([id, value]) => {
+        if (this.lineSeriesMap[id] && Number.isFinite(value)) {
+          this.lineSeriesMap[id].update({ time: candle.time, value });
+        }
+      });
+      if (this.rsiSeries && Number.isFinite(values.rsi_14)) this.rsiSeries.update({ time: candle.time, value: values.rsi_14 });
+      if (this.stochKSeries && Number.isFinite(values.stoch_k)) this.stochKSeries.update({ time: candle.time, value: values.stoch_k });
+      if (this.stochDSeries && Number.isFinite(values.stoch_d)) this.stochDSeries.update({ time: candle.time, value: values.stoch_d });
+      if (this.macdLineSeries && Number.isFinite(values.macd)) this.macdLineSeries.update({ time: candle.time, value: values.macd });
+      if (this.macdSignalSeries && Number.isFinite(values.macd_signal)) this.macdSignalSeries.update({ time: candle.time, value: values.macd_signal });
+      if (this.macdHistSeries && Number.isFinite(values.macd_hist)) {
+        this.macdHistSeries.update({
+          time: candle.time,
+          value: values.macd_hist,
+          color: values.macd_hist >= 0 ? "rgba(34, 197, 94, 0.7)" : "rgba(239, 68, 68, 0.7)",
+        });
+      }
+      if (this.volumeSeries) {
+        this.volumeSeries.update({
+          time: candle.time,
+          value: Number(candle.volume || 0),
+          color: candle.close >= candle.open ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)",
+        });
+      }
+    }
+
     updateRealtimeTick(price, volume = 0, timestamp = null) {
       if (!this.mainSeries || !this.candlesData.length) return;
 
       const p = parseFloat(price);
-      if (isNaN(p) || p <= 0) return;
-
+      if (!Number.isFinite(p) || p <= 0) return;
       const lastCandle = this.candlesData[this.candlesData.length - 1];
-      const nowUnix = timestamp ? Math.floor(new Date(timestamp).getTime() / 1000) : Math.floor(Date.now() / 1000);
-
-      // Determine candle duration in seconds
-      const tfSecondsMap = { "1": 60, "5": 300, "15": 900, "30": 1800, "60": 3600, "240": 14400, "D": 86400, "W": 604800 };
+      const parsedTimestamp = timestamp
+        ? (typeof timestamp === "number"
+          ? (timestamp > 1e12 ? timestamp : timestamp * 1000)
+          : new Date(timestamp).getTime())
+        : Date.now();
+      const nowUnix = Number.isFinite(parsedTimestamp) ? Math.floor(parsedTimestamp / 1000) : Math.floor(Date.now() / 1000);
+      const tfSecondsMap = {
+        "1": 60, M1: 60, "5": 300, M5: 300, "15": 900, M15: 900,
+        "30": 1800, M30: 1800, "60": 3600, H1: 3600,
+        "240": 14400, H4: 14400, D: 86400, D1: 86400, W: 604800, W1: 604800,
+      };
       const tfSec = tfSecondsMap[this.currentTimeframe] || 900;
-
-      // Strict Monotonicity & Quant Bar Aggregation Guard
       const candleTime = Math.floor(nowUnix / tfSec) * tfSec;
-      if (candleTime < lastCandle.time) {
-        return; // Ignore out-of-order tick
-      }
+      if (candleTime < Number(lastCandle.time)) return;
 
-      if (candleTime > lastCandle.time) {
-        // Form a brand new candle
-        const newCandle = {
+      const tickVolume = Number.isFinite(Number(volume)) && Number(volume) > 0 ? Number(volume) : 0;
+      let updatedCandle;
+      let historyTrimmed = false;
+      if (candleTime > Number(lastCandle.time)) {
+        updatedCandle = {
           time: candleTime,
           open: p,
           high: p,
           low: p,
           close: p,
-          volume: volume || 10
+          volume: tickVolume,
         };
-        this.candlesData.push(newCandle);
+        this.candlesData.push(updatedCandle);
+        if (this.candlesData.length > 500) {
+          this.candlesData.shift();
+          historyTrimmed = true;
+        }
         if (this.currentChartType === "line" || this.currentChartType === "area") {
-          this.mainSeries.update({ time: newCandle.time, value: p });
+          this.mainSeries.update({ time: updatedCandle.time, value: p });
         } else {
-          this.mainSeries.update(newCandle);
+          this.mainSeries.update(updatedCandle);
         }
       } else {
-        // Update current running candle
-        lastCandle.high = Math.max(lastCandle.high, p);
-        lastCandle.low = Math.min(lastCandle.low, p);
-        lastCandle.close = p;
-        if (volume > 0) lastCandle.volume = (lastCandle.volume || 0) + volume;
-
+        updatedCandle = lastCandle;
+        updatedCandle.high = Math.max(Number(updatedCandle.high), p);
+        updatedCandle.low = Math.min(Number(updatedCandle.low), p);
+        updatedCandle.close = p;
+        if (tickVolume > 0) updatedCandle.volume = (Number(updatedCandle.volume) || 0) + tickVolume;
         if (this.currentChartType === "line" || this.currentChartType === "area") {
-          this.mainSeries.update({ time: lastCandle.time, value: p });
+          this.mainSeries.update({ time: updatedCandle.time, value: p });
         } else {
           this.mainSeries.update({
-            time: lastCandle.time,
-            open: lastCandle.open,
-            high: lastCandle.high,
-            low: lastCandle.low,
-            close: lastCandle.close
+            time: updatedCandle.time,
+            open: updatedCandle.open,
+            high: updatedCandle.high,
+            low: updatedCandle.low,
+            close: updatedCandle.close,
           });
         }
       }
 
-      this.updateHudWithCandle(lastCandle);
+      this.updateRealtimeIndicators(updatedCandle);
+      if (historyTrimmed) {
+        this.populateMainSeries();
+        this.populateVolumeSeries();
+        this.populateIndicatorOverlays();
+        this.populateOscillatorPanes();
+      }
+      this.updateHudWithCandle(updatedCandle);
     }
 
     // -------------------------------------------------------------------------
     // HUD & DATA FRESHNESS BANNER
     // -------------------------------------------------------------------------
+
+    getPricePrecision() {
+      const configured = Number(this.metadata?.price_precision);
+      if (Number.isInteger(configured) && configured >= 0 && configured <= 10) return configured;
+      const symbol = String(this.currentSymbol || "").toUpperCase();
+      if (symbol.includes("XAU")) return 2;
+      if (symbol.includes("JPY") || symbol.includes("XAG")) return 3;
+      if (/^[A-Z]{6}$/.test(symbol)) return 5;
+      return 2;
+    }
+
+    formatPrice(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toFixed(this.getPricePrecision()) : "---";
+    }
 
     updateHudWithCandle(c) {
       if (!c) return;
@@ -1076,24 +1424,30 @@
       const elClose = document.getElementById("hud-close");
       const elChg = document.getElementById("hud-change");
       const elVol = document.getElementById("hud-vol");
+      const elAtr = document.getElementById("hud-atr");
       const elTime = document.getElementById("hud-time");
 
-      if (elOpen) elOpen.innerText = (c.open || 0).toFixed(2);
-      if (elHigh) elHigh.innerText = (c.high || 0).toFixed(2);
-      if (elLow) elLow.innerText = (c.low || 0).toFixed(2);
+      if (elOpen) elOpen.innerText = this.formatPrice(c.open);
+      if (elHigh) elHigh.innerText = this.formatPrice(c.high);
+      if (elLow) elLow.innerText = this.formatPrice(c.low);
       if (elClose) {
-        elClose.innerText = (c.close || 0).toFixed(2);
+        elClose.innerText = this.formatPrice(c.close);
         elClose.style.color = c.close >= c.open ? "#10b981" : "#ef4444";
       }
       if (elChg) {
         const chg = c.close - c.open;
         const pct = c.open > 0 ? (chg / c.open) * 100 : 0;
-        elChg.innerText = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)} (${pct.toFixed(2)}%)`;
+        elChg.innerText = `${chg >= 0 ? '+' : ''}${this.formatPrice(chg)} (${pct.toFixed(2)}%)`;
         elChg.style.color = chg >= 0 ? "#10b981" : "#ef4444";
       }
       if (elVol) elVol.innerText = (c.volume || 0).toLocaleString();
-      if (elTime && c.timestamp_cambodia) {
-        elTime.innerText = `${c.timestamp_cambodia} (KH)`;
+      if (elAtr) elAtr.innerText = c.atr_14 == null ? "---" : this.formatPrice(c.atr_14);
+      if (elTime) {
+        if (c.timestamp_cambodia) {
+          elTime.innerText = `${c.timestamp_cambodia} (KH)`;
+        } else if (Number.isFinite(Number(c.time))) {
+          elTime.innerText = `${new Date(Number(c.time) * 1000).toLocaleString("en-GB", { timeZone: "Asia/Phnom_Penh" })} (KH)`;
+        }
       }
     }
 
@@ -1342,7 +1696,7 @@
           if (y !== null) {
             svgElements += `
               <line x1="0" y1="${y}" x2="100%" y2="${y}" stroke="${lvl.color}" stroke-width="0.8" stroke-dasharray="5,4" opacity="0.6" />
-              <text x="8" y="${y - 3}" fill="${lvl.color}" font-size="8.5" opacity="0.85">${lvl.label}: ${lvl.price.toFixed(2)}</text>
+              <text x="8" y="${y - 3}" fill="${lvl.color}" font-size="8.5" opacity="0.85">${lvl.label}: ${this.formatPrice(lvl.price)}</text>
             `;
           }
         });
@@ -1470,7 +1824,7 @@
           if (y !== null) {
             svg += `
               <line x1="0" y1="${y}" x2="100%" y2="${y}" stroke="${d.color}" stroke-width="1.5" />
-              <text x="12" y="${y - 4}" fill="${d.color}" font-size="9" font-weight="bold">RAY: ${d.price.toFixed(2)}</text>
+              <text x="12" y="${y - 4}" fill="${d.color}" font-size="9" font-weight="bold">RAY: ${this.formatPrice(d.price)}</text>
             `;
           }
         } else if (d.type === "trendline") {
@@ -1507,7 +1861,7 @@
             if (y !== null) {
               svg += `
                 <line x1="0" y1="${y}" x2="100%" y2="${y}" stroke="${f.color}" stroke-width="1" stroke-dasharray="3,3" opacity="0.8" />
-                <text x="8" y="${y - 3}" fill="${f.color}" font-size="8.5" font-weight="600">${f.label} (${levelPrice.toFixed(2)})</text>
+                <text x="8" y="${y - 3}" fill="${f.color}" font-size="8.5" font-weight="600">${f.label} (${this.formatPrice(levelPrice)})</text>
               `;
             }
           });
@@ -1529,7 +1883,7 @@
               <rect x="${leftX}" y="${topY}" width="${width}" height="${height}" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4,2" />
               <rect x="${leftX + (width / 2) - 40}" y="${topY + (height / 2) - 10}" width="80" height="20" fill="#090d16" stroke="#38bdf8" rx="3" />
               <text x="${leftX + (width / 2)}" y="${topY + (height / 2) + 4}" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="middle">
-                ${pDiff.toFixed(2)} (${pPct.toFixed(2)}%)
+                ${this.formatPrice(pDiff)} (${pPct.toFixed(2)}%)
               </text>
             `;
           }
@@ -1574,8 +1928,7 @@
     }
 
     hasActiveIndicators() {
-      return this.indicatorSettings.ema_20 || this.indicatorSettings.ema_50 ||
-             this.indicatorSettings.ema_200 || this.indicatorSettings.vwap;
+      return Object.keys(this.indicatorSettings).some(key => this.indicatorSettings[key] === true);
     }
 
     openIndicatorModal() {
@@ -1626,6 +1979,7 @@
               <div class="ind-options-grid">
                 <label class="ind-checkbox-item"><input type="checkbox" id="ind-chk-vol" ${this.indicatorSettings.volume ? 'checked' : ''}> Volume Histogram</label>
                 <label class="ind-checkbox-item"><input type="checkbox" id="ind-chk-rsi" ${this.indicatorSettings.rsi ? 'checked' : ''}> Wilder's RSI 14</label>
+                <label class="ind-checkbox-item"><input type="checkbox" id="ind-chk-stochastic" ${this.indicatorSettings.stochastic ? 'checked' : ''}> Stochastic (14, 3, 3)</label>
                 <label class="ind-checkbox-item"><input type="checkbox" id="ind-chk-macd" ${this.indicatorSettings.macd ? 'checked' : ''}> MACD (12, 26, 9)</label>
               </div>
             </div>
@@ -1661,6 +2015,7 @@
       this.indicatorSettings.session_levels = document.getElementById("ind-chk-levels")?.checked || false;
       this.indicatorSettings.volume = document.getElementById("ind-chk-vol")?.checked || false;
       this.indicatorSettings.rsi = document.getElementById("ind-chk-rsi")?.checked || false;
+      this.indicatorSettings.stochastic = document.getElementById("ind-chk-stochastic")?.checked || false;
       this.indicatorSettings.macd = document.getElementById("ind-chk-macd")?.checked || false;
 
       this.saveSettings();
@@ -1702,7 +2057,17 @@
         if (rsiPane) rsiPane.style.display = "none";
       }
 
-      // 4. MACD Subpane
+      // 4. Stochastic Subpane
+      const stochPane = document.getElementById("pro-chart-stoch-pane");
+      if (this.indicatorSettings.stochastic) {
+        if (stochPane) stochPane.style.display = "block";
+        if (!this.stochChart) this.initStochasticPane();
+        this.populateOscillatorPanes();
+      } else if (stochPane) {
+        stochPane.style.display = "none";
+      }
+
+      // 5. MACD Subpane
       const macdPane = document.getElementById("pro-chart-macd-pane");
       if (this.indicatorSettings.macd) {
         if (macdPane) macdPane.style.display = "block";
@@ -1714,7 +2079,7 @@
         if (macdPane) macdPane.style.display = "none";
       }
 
-      // 5. Re-sync all charts & resize
+      // 6. Re-sync all charts & resize
       this.syncAllCharts();
       this.handleResize();
 

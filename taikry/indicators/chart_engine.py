@@ -90,6 +90,7 @@ class XAUUSDChartEngine:
             meta = {
                 "symbol": self.DEFAULT_SYMBOL,
                 "timeframe": tf,
+                "price_precision": int(cfg.get("decimals", 2)),
                 "candle_count": 0,
                 "provider": "UNAVAILABLE",
                 "provider_display": cfg.get("provider_display"),
@@ -153,6 +154,7 @@ class XAUUSDChartEngine:
 
         meta = {
             "symbol": self.DEFAULT_SYMBOL,
+            "price_precision": int(cfg.get("decimals", 2)),
             "asset_name": f"Gold / US Dollar ({'Spot Mid' if ref_mode == 'SPOT' else 'Futures Last'})",
             "timeframe": tf,
             "candle_count": len(df),
@@ -209,16 +211,18 @@ class XAUUSDChartEngine:
         closes = data["close"].astype(float)
 
         # 1. Exponential Moving Averages (EMA 9, 20, 50, 100, 200)
-        data["ema_9"] = calculate_ema(closes, 9).round(2)
-        data["ema_20"] = calculate_ema(closes, 20).round(2)
-        data["ema_50"] = calculate_ema(closes, 50).round(2) if len(data) >= 50 else np.nan
-        data["ema_100"] = calculate_ema(closes, 100).round(2) if len(data) >= 100 else np.nan
-        data["ema_200"] = calculate_ema(closes, 200).round(2) if len(data) >= 200 else np.nan
+        # Preserve instrument precision here. Rounding every asset to two decimals
+        # flattens FX moving averages and can erase small MACD/ATR values.
+        data["ema_9"] = calculate_ema(closes, 9)
+        data["ema_20"] = calculate_ema(closes, 20)
+        data["ema_50"] = calculate_ema(closes, 50) if len(data) >= 50 else np.nan
+        data["ema_100"] = calculate_ema(closes, 100) if len(data) >= 100 else np.nan
+        data["ema_200"] = calculate_ema(closes, 200) if len(data) >= 200 else np.nan
 
         # 2. Simple Moving Averages (SMA 20, 50, 200)
-        data["sma_20"] = calculate_sma(closes, 20).round(2)
-        data["sma_50"] = calculate_sma(closes, 50).round(2) if len(data) >= 50 else np.nan
-        data["sma_200"] = calculate_sma(closes, 200).round(2) if len(data) >= 200 else np.nan
+        data["sma_20"] = calculate_sma(closes, 20)
+        data["sma_50"] = calculate_sma(closes, 50) if len(data) >= 50 else np.nan
+        data["sma_200"] = calculate_sma(closes, 200) if len(data) >= 200 else np.nan
 
         # 3. Relative Strength Index (RSI 14) via Wilder's Smoothing
         delta = closes.diff()
@@ -229,36 +233,36 @@ class XAUUSDChartEngine:
         avg_gain = gain.ewm(alpha=alpha, adjust=False).mean()
         avg_loss = loss.ewm(alpha=alpha, adjust=False).mean()
         rs = avg_gain / (avg_loss + 1e-10)
-        data["rsi_14"] = (100.0 - (100.0 / (1.0 + rs))).round(2)
+        data["rsi_14"] = 100.0 - (100.0 / (1.0 + rs))
 
         # 4. MACD (12, 26, 9)
         macd_dict = calculate_macd(closes, fast=12, slow=26, signal=9)
-        data["macd"] = macd_dict["macd"].round(2)
-        data["macd_signal"] = macd_dict["macd_signal"].round(2)
-        data["macd_hist"] = macd_dict["macd_hist"].round(2)
+        data["macd"] = macd_dict["macd"]
+        data["macd_signal"] = macd_dict["macd_signal"]
+        data["macd_hist"] = macd_dict["macd_hist"]
 
         # 5. Average True Range (ATR 14)
-        data["atr_14"] = calculate_atr(data, period=14).round(2)
+        data["atr_14"] = calculate_atr(data, period=14)
 
         # 6. Stochastic Oscillator (14, 3)
         stoch_dict = calculate_stochastic(data, period=14, smooth_k=3, smooth_d=3)
-        data["stoch_k"] = stoch_dict["stoch_k"].round(2)
-        data["stoch_d"] = stoch_dict["stoch_d"].round(2)
+        data["stoch_k"] = stoch_dict["stoch_k"]
+        data["stoch_d"] = stoch_dict["stoch_d"]
 
         # 7. Bollinger Bands (20, 2)
         bb_dict = calculate_bollinger_bands(closes, period=20, num_std=2.0)
-        data["bb_middle"] = bb_dict["bb_middle"].round(2)
-        data["bb_upper"] = bb_dict["bb_upper"].round(2)
-        data["bb_lower"] = bb_dict["bb_lower"].round(2)
+        data["bb_middle"] = bb_dict["bb_middle"]
+        data["bb_upper"] = bb_dict["bb_upper"]
+        data["bb_lower"] = bb_dict["bb_lower"]
 
         # 8. Keltner Channels (20, 14, 1.5)
         kc_dict = calculate_keltner_channels(data, ema_period=20, atr_period=14, multiplier=1.5)
-        data["kc_middle"] = kc_dict["kc_middle"].round(2)
-        data["kc_upper"] = kc_dict["kc_upper"].round(2)
-        data["kc_lower"] = kc_dict["kc_lower"].round(2)
+        data["kc_middle"] = kc_dict["kc_middle"]
+        data["kc_upper"] = kc_dict["kc_upper"]
+        data["kc_lower"] = kc_dict["kc_lower"]
 
         # 9. Volume Weighted Average Price (VWAP)
-        data["vwap"] = calculate_vwap(data).round(2)
+        data["vwap"] = calculate_vwap(data)
 
         return data
 

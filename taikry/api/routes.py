@@ -33,7 +33,8 @@ from taikry.config import (
     get_risk_profile
 )
 from taikry.database.session import SessionLocal
-from taikry.database.models import PaperTrade, BacktestJob, ConsensusReport
+from taikry.database.models import PaperTrade, BacktestJob, ConsensusReport, User
+from taikry.api.saas_routes import get_current_user, get_current_user_optional
 from taikry.data.providers import market_data_engine
 from taikry.data.validator import is_market_open, check_data_freshness
 from taikry.agents.consensus_engine import ai_consensus_engine
@@ -55,7 +56,7 @@ class AnalyzeRequest(BaseModel):
     timeframe: Optional[str] = Field(default="M15", description="Primary execution timeframe")
     force_fresh: Optional[bool] = Field(default=False, description="Bypass cache")
     llm_provider: Optional[str] = Field(default="quant", description="LLM provider: quant, auto, claude, openai, gemini, manus")
-    risk_mode: Optional[str] = Field(default="BALANCED", description="Risk Profile: CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_mode: Optional[str] = Field(default=None, description="Risk Profile: CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM; uses saved user setting when omitted")
     risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom risk parameters overriding profile defaults")
 
 class ChatHistoryMessage(BaseModel):
@@ -217,6 +218,10 @@ def run_market_analysis(
     Enforces SaaS subscription and 14-day free trial quotas when user is authenticated.
     """
     token = None
+    user_id = None
+    simulated_equity = float(INITIAL_PAPER_BALANCE)
+    effective_risk_mode = req.risk_mode
+    effective_risk_options = req.risk_options
     if isinstance(authorization, str) and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
     elif isinstance(zyrox_session, str) and zyrox_session:
@@ -231,20 +236,31 @@ def run_market_analysis(
             user = authenticate_session(db, token)
             if not user:
                 raise HTTPException(status_code=401, detail="Session expired or invalid. Please sign in again.")
+            user_id = user.id
             allowed, reason, _ = check_and_consume_quota(db, user.id, "standard_scan", symbol=req.symbol)
             if not allowed:
                 raise HTTPException(status_code=403, detail=reason)
         finally:
             db.close()
 
+        from taikry.risk.service import risk_intelligence_service
+        user_risk_settings = risk_intelligence_service.get_user_risk_settings(user_id)
+        if not effective_risk_mode:
+            effective_risk_mode = user_risk_settings.get("risk_mode")
+        effective_risk_options = {**user_risk_settings, **(req.risk_options or {})}
+        account_summary = paper_trading_engine.get_account_summary(user_id=user_id)
+        simulated_equity = float(account_summary.get("current_equity") or INITIAL_PAPER_BALANCE)
+
     symbol = req.symbol.upper().replace("/", "").replace("-", "")
     res = ai_consensus_engine.analyze_symbol(
         symbol,
+        simulated_equity=simulated_equity,
         preferred_llm=req.llm_provider,
         primary_timeframe=req.timeframe,
         force_refresh=bool(req.force_fresh),
-        risk_mode=req.risk_mode,
-        risk_options=req.risk_options
+        risk_mode=effective_risk_mode,
+        risk_options=effective_risk_options,
+        user_id=user_id,
     )
     return res
 
@@ -1710,6 +1726,19 @@ def get_chart_candles_endpoint(
     from taikry.indicators.technical import calculate_session_levels
 
     df = market_data_engine.get_candles(clean_sym, timeframe=timeframe, limit=limit)
+    if df is None or df.empty:
+        return {
+            "success": True,
+            "symbol": clean_sym,
+            "timeframe": timeframe,
+            "candles": [],
+            "annotations": {},
+            "metadata": {
+                "provider": "UNAVAILABLE",
+                "freshness_status": "UNAVAILABLE",
+                "price_precision": int(get_symbol_config(clean_sym).get("decimals", 2)),
+            },
+        }
     ind_df = xauusd_chart_engine.compute_technical_indicators(df)
     swings = xauusd_chart_engine.detect_causal_swings(ind_df)
     bos_choch = xauusd_chart_engine.detect_causal_bos_and_choch(ind_df, swings)
@@ -1726,10 +1755,15 @@ def get_chart_candles_endpoint(
             v = row.get(col)
             return float(v) if pd.notna(v) else None
 
+        candle_timestamp = pd.Timestamp(ts_dt)
+        if candle_timestamp.tzinfo is None:
+            candle_timestamp = candle_timestamp.tz_localize("UTC")
+        else:
+            candle_timestamp = candle_timestamp.tz_convert("UTC")
         candles_payload.append({
             "index": int(i),
-            "time": int(ts_dt.timestamp()) if hasattr(ts_dt, "timestamp") else i,
-            "timestamp_utc": ts_dt.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(ts_dt, "strftime") else str(ts_dt),
+            "time": int(candle_timestamp.timestamp()),
+            "timestamp_utc": candle_timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
             "open": float(row["open"]),
             "high": float(row["high"]),
             "low": float(row["low"]),
@@ -1771,11 +1805,32 @@ def get_chart_candles_endpoint(
                 c[k] = v.isoformat()
         return c
 
+    cfg = get_symbol_config(clean_sym)
+    latest_timestamp = ind_df["timestamp"].iloc[-1] if "timestamp" in ind_df.columns else None
+    freshness = check_data_freshness(clean_sym, latest_timestamp, timeframe=timeframe)
+    market_open, market_status_desc = is_market_open(clean_sym)
+    latest_source = ind_df.iloc[-1].get("source", "UNKNOWN")
+
     return {
         "success": True,
         "symbol": clean_sym,
         "timeframe": timeframe,
         "candles": candles_payload,
+        "metadata": {
+            "provider": str(latest_source),
+            "provider_display": cfg.get("provider_display", str(latest_source)),
+            "freshness_status": freshness.get("status", "UNKNOWN"),
+            "candle_age_seconds": round(float(freshness.get("age_minutes") or 0) * 60) if freshness.get("age_minutes") is not None else None,
+            "latest_candle_utc": (
+                pd.Timestamp(latest_timestamp).tz_localize("UTC").isoformat()
+                if latest_timestamp is not None and pd.Timestamp(latest_timestamp).tzinfo is None
+                else pd.Timestamp(latest_timestamp).tz_convert("UTC").isoformat()
+                if latest_timestamp is not None else None
+            ),
+            "market_open": market_open,
+            "market_status_desc": market_status_desc,
+            "price_precision": int(cfg.get("decimals", 2)),
+        },
         "annotations": {
             "swings": [_clean(s) for s in swings],
             "structure_breaks": [_clean(sb) for sb in bos_choch],
@@ -3056,10 +3111,11 @@ def configure_freellmapi_endpoint(payload: FreeLLMAPIConfigureRequest, _: bool =
 
 class RiskEvaluateRequest(BaseModel):
     symbol: str = Field(default="XAUUSD", description="Market symbol")
-    direction: str = Field(default="BUY", description="Direction: BUY or SELL")
+    direction: Literal["BUY", "SELL"] = Field(default="BUY", description="Direction: BUY or SELL")
     entry_price: float = Field(gt=0, description="Entry price")
     stop_loss: float = Field(gt=0, description="Stop loss level")
     take_profit: float = Field(gt=0, description="Take profit target")
+    spread_price: Optional[float] = Field(default=None, ge=0, description="Current spread in price units")
     account_equity: Optional[float] = Field(default=INITIAL_PAPER_BALANCE, gt=0, description="Account balance")
     risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
     risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom parameters")
@@ -3094,19 +3150,24 @@ def evaluate_trade_risk(req: RiskEvaluateRequest):
     reward_dist = abs(req.take_profit - req.entry_price)
     rr_ratio = round(reward_dist / max(0.0001, risk_dist), 2) if risk_dist > 0 else 0.0
 
-    valid_geom = True
-    if req.direction.upper() in {"BUY", "LONG"} and req.stop_loss >= req.entry_price:
-        valid_geom = False
-    elif req.direction.upper() in {"SELL", "SHORT"} and req.stop_loss <= req.entry_price:
-        valid_geom = False
+    if req.direction == "BUY":
+        valid_geom = req.stop_loss < req.entry_price < req.take_profit
+    else:
+        valid_geom = req.stop_loss > req.entry_price > req.take_profit
+    spread_valid = (
+        req.spread_price is None
+        or risk_dist <= 0
+        or req.spread_price / risk_dist <= eff_max_spread
+    )
 
-    approved = valid_geom and rr_ratio >= eff_min_rr
+    approved = valid_geom and spread_valid and rr_ratio >= eff_min_rr
 
     cfg = get_symbol_config(req.symbol)
     contract_size = float(cfg.get("lot_size", 100 if "XAU" in req.symbol.upper() else 100000))
-    risk_amount_usd = req.account_equity * (eff_risk_pct / 100.0)
+    account_equity = float(req.account_equity or INITIAL_PAPER_BALANCE)
+    risk_amount_usd = account_equity * (eff_risk_pct / 100.0)
     raw_lots = risk_amount_usd / (risk_dist * contract_size) if risk_dist > 0 else 0.0
-    recommended_lots = round(min(10.0, max(0.01, raw_lots)), 2) if raw_lots >= 0.01 else 0.0
+    recommended_lots = min(10.0, math.floor(raw_lots * 100) / 100.0) if raw_lots >= 0.01 else 0.0
 
     return {
         "symbol": req.symbol.upper(),
@@ -3120,10 +3181,11 @@ def evaluate_trade_risk(req: RiskEvaluateRequest):
         "min_required_rr": eff_min_rr,
         "is_rr_compliant": rr_ratio >= eff_min_rr,
         "is_geometry_valid": valid_geom,
+        "is_spread_compliant": spread_valid,
         "approved": approved,
         "risk_profile": profile,
         "position_sizing": {
-            "account_equity": req.account_equity,
+            "account_equity": account_equity,
             "risk_percentage": eff_risk_pct,
             "risk_amount_usd": round(risk_amount_usd, 2),
             "recommended_lots": recommended_lots
@@ -3137,6 +3199,7 @@ def evaluate_trade_risk(req: RiskEvaluateRequest):
 
 class CandidateRiskEvaluationRequest(BaseModel):
     symbol: str = Field(default="XAUUSD", description="Market symbol")
+    timeframe: str = Field(default="M15", description="Candle timeframe used for the assessment")
     direction: str = Field(default="BUY", description="Direction: BUY or SELL")
     entry_price: float = Field(gt=0, description="Entry price")
     stop_loss: float = Field(gt=0, description="Stop loss level")
@@ -3144,32 +3207,48 @@ class CandidateRiskEvaluationRequest(BaseModel):
     take_profit_2: Optional[float] = Field(default=None, description="Take profit 2 level")
     spread_price: Optional[float] = Field(default=None, description="Current broker spread in price units")
     account_equity: Optional[float] = Field(default=INITIAL_PAPER_BALANCE, gt=0, description="Account balance")
-    risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_mode: Optional[str] = Field(default=None, description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM; uses saved user setting when omitted")
     custom_risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom risk options")
 
 
 class UpdateRiskSettingsRequest(BaseModel):
-    risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
-    risk_per_trade_percent: Optional[float] = Field(default=0.5, ge=0.1, le=2.0)
-    min_risk_reward_ratio: Optional[float] = Field(default=2.0, ge=1.0, le=5.0)
-    max_daily_loss_percent: Optional[float] = Field(default=2.5, ge=0.5, le=10.0)
-    max_weekly_loss_percent: Optional[float] = Field(default=5.0, ge=1.0, le=20.0)
-    max_drawdown_percent: Optional[float] = Field(default=8.0, ge=2.0, le=25.0)
-    max_simultaneous_positions: Optional[int] = Field(default=3, ge=1, le=10)
-    max_portfolio_risk_percent: Optional[float] = Field(default=5.0, ge=1.0, le=15.0)
-    news_filter_mode: Optional[str] = Field(default="STANDARD", description="STRICT, STANDARD, FLEXIBLE, or OFF")
+    risk_mode: Optional[str] = Field(default=None, description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_per_trade_percent: Optional[float] = Field(default=None, ge=0.1, le=2.0)
+    min_risk_reward_ratio: Optional[float] = Field(default=None, ge=1.0, le=5.0)
+    max_daily_loss_percent: Optional[float] = Field(default=None, ge=0.5, le=10.0)
+    max_weekly_loss_percent: Optional[float] = Field(default=None, ge=1.0, le=20.0)
+    max_monthly_loss_percent: Optional[float] = Field(default=None, ge=1.0, le=30.0)
+    max_drawdown_percent: Optional[float] = Field(default=None, ge=2.0, le=25.0)
+    max_simultaneous_positions: Optional[int] = Field(default=None, ge=1, le=10)
+    max_portfolio_risk_percent: Optional[float] = Field(default=None, ge=1.0, le=15.0)
+    max_correlated_positions: Optional[int] = Field(default=None, ge=1, le=10)
+    news_filter_mode: Optional[str] = Field(default=None, description="STRICT, STANDARD, FLEXIBLE, or OFF")
 
 
 @router.get("/api/v1/risk/overview")
-def get_risk_overview(account_equity: Optional[float] = INITIAL_PAPER_BALANCE):
+def get_risk_overview(
+    account_equity: Optional[float] = None,
+    user: Optional[User] = Depends(get_current_user_optional),
+):
     """
-    Returns global portfolio capital protection metrics, current drawdown,
+    Returns this user's portfolio capital protection metrics, current drawdown,
     and open-position risk utilization.
     """
     from taikry.risk.service import risk_intelligence_service
-    settings = risk_intelligence_service.get_user_risk_settings()
+    user_id = user.id if user else None
+    if account_equity is None:
+        account_equity = paper_trading_engine.get_account_summary(user_id=user_id).get("current_equity", INITIAL_PAPER_BALANCE)
+    settings = risk_intelligence_service.get_user_risk_settings(user_id)
     portfolio = risk_intelligence_service.portfolio_engine.evaluate_portfolio(
-        account_equity=account_equity or INITIAL_PAPER_BALANCE
+        account_equity=account_equity or INITIAL_PAPER_BALANCE,
+        user_id=user_id,
+        max_portfolio_risk_pct=settings.get("max_portfolio_risk_percent", 5.0),
+        max_simultaneous_positions=settings.get("max_simultaneous_positions", 3),
+        max_drawdown_limit_pct=settings.get("max_drawdown_percent", 8.0),
+        max_correlated_positions=settings.get("max_correlated_positions", 2),
+        max_daily_loss_pct=settings.get("max_daily_loss_percent", 2.5),
+        max_weekly_loss_pct=settings.get("max_weekly_loss_percent", 5.0),
+        max_monthly_loss_pct=settings.get("max_monthly_loss_percent", 10.0),
     )
     return {
         "status": "SUCCESS",
@@ -3186,18 +3265,31 @@ def get_portfolio_risk(
     symbol: Optional[str] = None,
     direction: Optional[str] = None,
     risk_pct: Optional[float] = 0.5,
-    equity: Optional[float] = INITIAL_PAPER_BALANCE
+    equity: Optional[float] = None,
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     Audits multi-market portfolio exposure, net currency balance (e.g. net USD),
     asset-class allocations, and cross-asset correlation warnings.
     """
     from taikry.risk.service import risk_intelligence_service
+    user_id = user.id if user else None
+    if equity is None:
+        equity = paper_trading_engine.get_account_summary(user_id=user_id).get("current_equity", INITIAL_PAPER_BALANCE)
+    settings = risk_intelligence_service.get_user_risk_settings(user_id)
     portfolio = risk_intelligence_service.portfolio_engine.evaluate_portfolio(
         proposed_symbol=symbol,
         proposed_direction=direction,
         proposed_risk_pct=risk_pct or 0.5,
-        account_equity=equity or INITIAL_PAPER_BALANCE
+        account_equity=equity or INITIAL_PAPER_BALANCE,
+        user_id=user_id,
+        max_portfolio_risk_pct=settings.get("max_portfolio_risk_percent", 5.0),
+        max_simultaneous_positions=settings.get("max_simultaneous_positions", 3),
+        max_drawdown_limit_pct=settings.get("max_drawdown_percent", 8.0),
+        max_correlated_positions=settings.get("max_correlated_positions", 2),
+        max_daily_loss_pct=settings.get("max_daily_loss_percent", 2.5),
+        max_weekly_loss_pct=settings.get("max_weekly_loss_percent", 5.0),
+        max_monthly_loss_pct=settings.get("max_monthly_loss_percent", 10.0),
     )
     return {
         "status": "SUCCESS",
@@ -3264,7 +3356,10 @@ def get_signal_quality(symbol: str = "XAUUSD", direction: str = "BUY", rr: float
 
 
 @router.post("/api/v1/risk/evaluate-candidate")
-def evaluate_trade_candidate(req: CandidateRiskEvaluationRequest):
+def evaluate_trade_candidate(
+    req: CandidateRiskEvaluationRequest,
+    user: Optional[User] = Depends(get_current_user_optional),
+):
     """
     The unified V3 risk gateway for all trade setups.
     Returns one of: APPROVED, APPROVED_WITH_REDUCED_RISK, WAIT_FOR_CONFIRMATION, or REJECTED.
@@ -3272,7 +3367,7 @@ def evaluate_trade_candidate(req: CandidateRiskEvaluationRequest):
     """
     from taikry.risk.service import risk_intelligence_service
     from taikry.data.providers import market_data_engine
-    df = market_data_engine.get_candles(req.symbol, timeframe="M15", limit=60)
+    df = market_data_engine.get_candles(req.symbol, timeframe=req.timeframe, limit=300)
     result = risk_intelligence_service.evaluate_trade_candidate(
         symbol=req.symbol,
         direction=req.direction,
@@ -3285,6 +3380,8 @@ def evaluate_trade_candidate(req: CandidateRiskEvaluationRequest):
         risk_mode=req.risk_mode,
         custom_risk_options=req.custom_risk_options,
         candle_df=df,
+        timeframe=req.timeframe,
+        user_id=user.id if user else None,
         persist_log=True
     )
     return {
@@ -3294,10 +3391,11 @@ def evaluate_trade_candidate(req: CandidateRiskEvaluationRequest):
 
 
 @router.get("/api/v1/risk/settings")
-def get_risk_settings():
+def get_risk_settings(user: Optional[User] = Depends(get_current_user_optional)):
     """Returns current active risk preferences and capital protection limits."""
     from taikry.risk.service import risk_intelligence_service
-    settings = risk_intelligence_service.get_user_risk_settings()
+    user_id = user.id if user else None
+    settings = risk_intelligence_service.get_user_risk_settings(user_id)
     return {
         "status": "SUCCESS",
         "settings": settings,
@@ -3306,18 +3404,24 @@ def get_risk_settings():
 
 
 @router.put("/api/v1/risk/settings")
-def update_risk_settings(req: UpdateRiskSettingsRequest):
+def update_risk_settings(
+    req: UpdateRiskSettingsRequest,
+    user: User = Depends(get_current_user),
+):
     """Updates user capital protection preferences with safety bounds."""
     from taikry.database.session import SessionLocal
     from taikry.risk.models import UserRiskSettings
     db = SessionLocal()
     try:
-        obj = db.query(UserRiskSettings).filter(UserRiskSettings.user_id == None).first()
+        obj = db.query(UserRiskSettings).filter(UserRiskSettings.user_id == user.id).first()
         if not obj:
-            obj = UserRiskSettings()
+            obj = UserRiskSettings(user_id=user.id)
             db.add(obj)
         if req.risk_mode:
-            obj.risk_mode = req.risk_mode.upper()
+            mode = req.risk_mode.upper()
+            if mode not in RISK_PROFILES:
+                raise HTTPException(status_code=422, detail="Unknown risk profile.")
+            obj.risk_mode = mode
         if req.risk_per_trade_percent is not None:
             obj.risk_per_trade_percent = min(2.0, max(0.1, req.risk_per_trade_percent))
         if req.min_risk_reward_ratio is not None:
@@ -3326,14 +3430,21 @@ def update_risk_settings(req: UpdateRiskSettingsRequest):
             obj.max_daily_loss_percent = req.max_daily_loss_percent
         if req.max_weekly_loss_percent is not None:
             obj.max_weekly_loss_percent = req.max_weekly_loss_percent
+        if req.max_monthly_loss_percent is not None:
+            obj.max_monthly_loss_percent = req.max_monthly_loss_percent
         if req.max_drawdown_percent is not None:
             obj.max_drawdown_percent = req.max_drawdown_percent
         if req.max_simultaneous_positions is not None:
             obj.max_simultaneous_positions = req.max_simultaneous_positions
         if req.max_portfolio_risk_percent is not None:
             obj.max_portfolio_risk_percent = req.max_portfolio_risk_percent
+        if req.max_correlated_positions is not None:
+            obj.max_correlated_positions = req.max_correlated_positions
         if req.news_filter_mode:
-            obj.news_filter_mode = req.news_filter_mode.upper()
+            news_mode = req.news_filter_mode.upper()
+            if news_mode not in {"STRICT", "STANDARD", "FLEXIBLE", "OFF"}:
+                raise HTTPException(status_code=422, detail="Unknown news filter mode.")
+            obj.news_filter_mode = news_mode
         db.commit()
         return {
             "status": "SUCCESS",
@@ -3342,7 +3453,13 @@ def update_risk_settings(req: UpdateRiskSettingsRequest):
                 "risk_mode": obj.risk_mode,
                 "risk_per_trade_percent": obj.risk_per_trade_percent,
                 "min_risk_reward_ratio": obj.min_risk_reward_ratio,
+                "max_daily_loss_percent": obj.max_daily_loss_percent,
+                "max_weekly_loss_percent": obj.max_weekly_loss_percent,
+                "max_monthly_loss_percent": obj.max_monthly_loss_percent,
                 "max_drawdown_percent": obj.max_drawdown_percent,
+                "max_simultaneous_positions": obj.max_simultaneous_positions,
+                "max_portfolio_risk_percent": obj.max_portfolio_risk_percent,
+                "max_correlated_positions": obj.max_correlated_positions,
                 "news_filter_mode": obj.news_filter_mode
             }
         }
@@ -3351,13 +3468,19 @@ def update_risk_settings(req: UpdateRiskSettingsRequest):
 
 
 @router.get("/api/v1/risk/history")
-def get_risk_assessment_history(symbol: Optional[str] = None, limit: int = 20):
+def get_risk_assessment_history(
+    symbol: Optional[str] = None,
+    limit: int = 20,
+    user: Optional[User] = Depends(get_current_user_optional),
+):
     """Retrieves recent persistent audit records of evaluated trade setups."""
     from taikry.database.session import SessionLocal
     from taikry.risk.models import RiskAssessmentLog
     db = SessionLocal()
     try:
         q = db.query(RiskAssessmentLog)
+        if user:
+            q = q.filter(RiskAssessmentLog.user_id == user.id)
         if symbol:
             q = q.filter(RiskAssessmentLog.symbol == symbol.upper())
         logs = q.order_by(RiskAssessmentLog.created_at.desc()).limit(min(100, max(1, limit))).all()
@@ -3383,6 +3506,7 @@ def get_risk_assessment_history(symbol: Optional[str] = None, limit: int = 20):
                     "news_status": l.news_status,
                     "veto_reasons": l.veto_reasons,
                     "advisory_notes": l.advisory_notes,
+                    "validation_details": l.validation_details,
                     "created_at": l.created_at.isoformat() if l.created_at else None
                 }
                 for l in logs

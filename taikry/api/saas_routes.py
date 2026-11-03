@@ -124,6 +124,33 @@ def get_current_user(
     return user
 
 
+
+def get_current_user_optional(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_session_token: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Extracts authenticated user if credentials exist. Returns None if unauthenticated.
+    """
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif x_session_token:
+        token = x_session_token.strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if not token:
+        return None
+
+    try:
+        return authenticate_session(db, token)
+    except Exception:
+        return None
+
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     """Ensures the authenticated user has verified ADMIN privileges."""
     if not is_admin_user(current_user):
@@ -402,21 +429,67 @@ def open_my_paper_trade(
     user: User = Depends(get_current_user),
 ):
     """Open an authenticated user's own simulated paper position."""
+    from taikry.risk.service import risk_intelligence_service
+    from taikry.data.providers import market_data_engine
     from taikry.trading.paper_trading import paper_trading_engine
 
-    result = paper_trading_engine.open_trade(
-        symbol=payload.symbol.strip().upper(),
-        direction=payload.direction.upper(),
+    symbol = payload.symbol.strip().upper()
+    direction = payload.direction.upper()
+    settings = risk_intelligence_service.get_user_risk_settings(user.id)
+    risk_options = None
+    if payload.risk_percentage is not None:
+        risk_options = {
+            "risk_per_trade_percent": min(
+                float(payload.risk_percentage),
+                float(settings.get("risk_per_trade_percent", 0.5)),
+            )
+        }
+    candles = market_data_engine.get_candles(symbol, timeframe="M15", limit=300)
+    account = paper_trading_engine.get_account_summary(user_id=user.id)
+    quote = market_data_engine.get_verified_quote(symbol)
+    spread_price = None
+    if quote:
+        try:
+            bid, ask = float(quote.get("bid")), float(quote.get("ask"))
+            if bid > 0 and ask > bid:
+                spread_price = ask - bid
+        except (TypeError, ValueError):
+            spread_price = None
+    assessment = risk_intelligence_service.evaluate_trade_candidate(
+        symbol=symbol,
+        direction=direction,
         entry_price=payload.entry_price,
         stop_loss=payload.stop_loss,
         take_profit_1=payload.take_profit_1,
         take_profit_2=payload.take_profit_2,
-        risk_percentage=payload.risk_percentage,
+        spread_price=spread_price,
+        account_equity=float(account.get("current_equity") or INITIAL_PAPER_BALANCE),
+        custom_risk_options=risk_options,
+        candle_df=candles,
+        timeframe="M15",
+        user_id=user.id,
+        persist_log=True,
+    )
+    if assessment.decision.value not in {"APPROVED", "APPROVED_WITH_REDUCED_RISK"}:
+        reasons = assessment.veto_reasons or assessment.advisory_notes
+        raise HTTPException(
+            status_code=400,
+            detail="Paper trade blocked by risk review: " + "; ".join(str(reason) for reason in reasons),
+        )
+
+    result = paper_trading_engine.open_trade(
+        symbol=symbol,
+        direction=direction,
+        entry_price=payload.entry_price,
+        stop_loss=payload.stop_loss,
+        take_profit_1=payload.take_profit_1,
+        take_profit_2=payload.take_profit_2,
+        risk_percentage=assessment.sizing.risk_percentage,
         user_id=user.id,
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("reason", "Paper trade could not be opened."))
-    return {"success": True, "paper_trade": result}
+    return {"success": True, "paper_trade": result, "risk_assessment": assessment.dict()}
 
 
 @saas_router.put("/api/v1/me/paper-trades/{trade_id}/journal")

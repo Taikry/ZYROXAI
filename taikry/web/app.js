@@ -1258,6 +1258,7 @@ async function fetchHealthAndPaper() {
 
 function renderMyPaperLedger(pData, signedIn = true) {
   if (signedIn) window.paperTradeCache = pData.trades || [];
+  renderPaperJournalCoach(pData.trades || [], signedIn);
   const acct = pData.account_summary || {};
   const balanceEl = document.getElementById("paper-balance");
   if (balanceEl) balanceEl.innerText = acct.current_balance != null && Number.isFinite(Number(acct.current_balance))
@@ -1300,6 +1301,82 @@ function renderMyPaperLedger(pData, signedIn = true) {
   } else if (tbody) {
     tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No paper trades recorded.</td></tr>`;
   }
+}
+
+function renderPaperJournalCoach(trades, signedIn = true) {
+  const expectancyEl = document.getElementById("paper-journal-expectancy");
+  const profitFactorEl = document.getElementById("paper-journal-profit-factor");
+  const notesEl = document.getElementById("paper-journal-coach-notes");
+  if (!expectancyEl || !profitFactorEl || !notesEl) return;
+  const kh = Boolean(isKhmer);
+  if (!signedIn) {
+    expectancyEl.textContent = "—";
+    profitFactorEl.textContent = "—";
+    notesEl.textContent = kh ? "សូមចូលគណនីដើម្បីបង្ហាញការវិភាគកំណត់ហេតុផ្ទាល់ខ្លួន។" : "Sign in to view your private journal review.";
+    return;
+  }
+
+  const closed = (Array.isArray(trades) ? trades : []).filter(trade => String(trade.status || "").toUpperCase() === "CLOSED");
+  const values = closed.map(trade => Number(trade.pnl || 0)).filter(Number.isFinite);
+  const totalPnL = values.reduce((sum, value) => sum + value, 0);
+  const grossWins = values.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
+  const grossLosses = Math.abs(values.filter(value => value < 0).reduce((sum, value) => sum + value, 0));
+  const rValues = closed
+    .filter(trade => trade.r_multiple !== null && trade.r_multiple !== undefined && trade.r_multiple !== "")
+    .map(trade => Number(trade.r_multiple))
+    .filter(Number.isFinite);
+  const averageR = rValues.length ? rValues.reduce((sum, value) => sum + value, 0) / rValues.length : null;
+  const expectancy = closed.length ? totalPnL / closed.length : null;
+  expectancyEl.textContent = expectancy === null ? "—" : `${expectancy >= 0 ? "+" : "−"}$${Math.abs(expectancy).toFixed(2)} / trade${averageR === null ? "" : ` · ${averageR >= 0 ? "+" : ""}${averageR.toFixed(2)}R`}`;
+  profitFactorEl.textContent = grossLosses > 0 ? (grossWins / grossLosses).toFixed(2) : (grossWins > 0 ? "∞" : "—");
+  notesEl.replaceChildren();
+  if (!closed.length) {
+    notesEl.textContent = kh
+      ? "បិទប្រតិបត្តិការខ្លះ ហើយកត់ស្លាក/អារម្មណ៍ ដើម្បីឲ្យការវិភាគបង្ហាញលំនាំផ្ទាល់ខ្លួន។"
+      : "Close trades and record tags or emotions to reveal your own patterns.";
+    return;
+  }
+
+  const groups = new Map();
+  const addGroup = (kind, label, trade) => {
+    const key = `${kind}:${label}`;
+    if (!groups.has(key)) groups.set(key, { kind, label, count: 0, pnl: 0, wins: 0 });
+    const group = groups.get(key);
+    const pnl = Number(trade.pnl || 0);
+    group.count += 1;
+    group.pnl += Number.isFinite(pnl) ? pnl : 0;
+    if (pnl > 0) group.wins += 1;
+  };
+  closed.forEach(trade => {
+    (Array.isArray(trade.journal_tags) ? trade.journal_tags : []).forEach(tag => addGroup("tag", String(tag).trim(), trade));
+    if (trade.emotion_tag) addGroup("emotion", String(trade.emotion_tag).trim(), trade);
+    if (trade.mistake_tag) addGroup("mistake", String(trade.mistake_tag).trim(), trade);
+  });
+  const observed = [...groups.values()].filter(group => group.count >= 3);
+  const addNote = text => {
+    const item = document.createElement("div");
+    item.textContent = `• ${text}`;
+    notesEl.appendChild(item);
+  };
+  const negative = observed.filter(group => group.pnl < 0).sort((a, b) => a.pnl - b.pnl).slice(0, 2);
+  negative.forEach(group => {
+    const text = `${group.kind}: ${group.label} — ${group.wins}/${group.count} wins, net −$${Math.abs(group.pnl).toFixed(2)}. ${kh ? "ពិនិត្យឡើងវិញមុនធ្វើប្រតិបត្តិការដែលមានលំនាំដូចគ្នា។" : "Review this pattern before repeating it."}`;
+    addNote(text);
+  });
+  const best = observed.filter(group => group.pnl > 0).sort((a, b) => b.pnl - a.pnl)[0];
+  if (best) {
+    addNote(kh
+      ? `លំនាំវិជ្ជមាន៖ ${best.kind} ${best.label} — ចំណេញសុទ្ធ +$${best.pnl.toFixed(2)} ក្នុង ${best.count} ករណី។ រក្សាកំណត់ត្រា និងពិនិត្យបរិបទ។`
+      : `Positive pattern: ${best.kind} ${best.label} — +$${best.pnl.toFixed(2)} across ${best.count} trades. Keep recording context.`);
+  }
+  if (!negative.length && !best) {
+    notesEl.textContent = kh
+      ? "មិនទាន់មានស្លាកណាមួយមានយ៉ាងតិច ៣ ប្រតិបត្តិការដើម្បីសន្និដ្ឋានលំនាំទេ។"
+      : "No journal tag, emotion, or mistake has at least three closed trades yet; keep recording to build a useful pattern.";
+  }
+  const note = document.createElement("small");
+  note.textContent = kh ? "ការសង្កេតពីប្រវត្តិផ្ទាល់ខ្លួន មិនមែនការព្យាករណ៍ចំណេញទេ។" : "Personal-history observations, not profit forecasts.";
+  notesEl.appendChild(note);
 }
 
 function openPaperTradeJournal(tradeId) {
@@ -4581,11 +4658,118 @@ function loadSettingsData() {
   setSelect("setting-language", lang);
   setSelect("setting-density", den);
 
+  loadServerRiskSettings();
+
   if (typeof initAnyRouterUI === "function") {
     initAnyRouterUI();
   }
   if (typeof initFreeLLMAPIUI === "function") {
     initFreeLLMAPIUI();
+  }
+}
+
+async function loadServerRiskSettings() {
+  const feedback = document.getElementById("server-risk-settings-feedback");
+  const history = document.getElementById("server-risk-history");
+  try {
+    const [settingsResponse, historyResponse] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/risk/settings`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/v1/risk/history?limit=8`, { credentials: "include" }),
+    ]);
+    if (settingsResponse.status === 401 || historyResponse.status === 401) {
+      if (feedback) feedback.textContent = "Sign in to sync account risk rules. · សូមចូលគណនីដើម្បីកំណត់ហានិភ័យ។";
+      if (history) history.textContent = "Sign in to view your private risk audit history. · សូមចូលគណនីដើម្បីមើលប្រវត្តិផ្ទាល់ខ្លួន។";
+      return;
+    }
+
+    if (settingsResponse.ok) {
+      const payload = await settingsResponse.json();
+      const settings = payload.settings || {};
+      const values = {
+        "setting-server-risk-mode": settings.risk_mode,
+        "setting-server-risk-percent": settings.risk_per_trade_percent,
+        "setting-server-rr": settings.min_risk_reward_ratio,
+        "setting-server-daily-loss": settings.max_daily_loss_percent,
+        "setting-server-weekly-loss": settings.max_weekly_loss_percent,
+        "setting-server-monthly-loss": settings.max_monthly_loss_percent,
+        "setting-server-drawdown": settings.max_drawdown_percent,
+        "setting-server-open-positions": settings.max_simultaneous_positions,
+        "setting-server-portfolio-risk": settings.max_portfolio_risk_percent,
+        "setting-server-correlated": settings.max_correlated_positions,
+        "setting-server-news-mode": settings.news_filter_mode,
+      };
+      Object.entries(values).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input && value !== undefined && value !== null) input.value = value;
+      });
+      if (feedback) feedback.textContent = "Account risk rules loaded. · បានទាញយកការកំណត់ហានិភ័យគណនី។";
+    }
+
+    if (historyResponse.ok && history) {
+      const payload = await historyResponse.json();
+      const records = payload.records || [];
+      history.replaceChildren();
+      if (!records.length) {
+        history.textContent = "No risk assessments recorded yet. · មិនទាន់មានកំណត់ត្រាវាយតម្លៃហានិភ័យទេ។";
+      } else {
+        records.forEach(record => {
+          const row = document.createElement("div");
+          row.className = "server-risk-history-row";
+          const decision = document.createElement("strong");
+          decision.textContent = `${record.decision || "UNKNOWN"} · ${record.symbol || ""} ${record.direction || ""}`;
+          const details = document.createElement("span");
+          const timestamp = record.created_at ? new Date(record.created_at).toLocaleString() : "";
+          details.textContent = `Quality ${record.quality_score ?? "—"}/100 · ${timestamp}`;
+          row.append(decision, details);
+          history.appendChild(row);
+        });
+      }
+    }
+  } catch (error) {
+    if (feedback) feedback.textContent = "Could not load account risk settings. · មិនអាចទាញយកការកំណត់បានទេ។";
+    if (history) history.textContent = "Risk history is temporarily unavailable.";
+    console.warn("Could not load account risk settings:", error);
+  }
+}
+
+async function saveServerRiskSettings() {
+  const feedback = document.getElementById("server-risk-settings-feedback");
+  const readNumber = id => Number(document.getElementById(id)?.value);
+  const payload = {
+    risk_mode: document.getElementById("setting-server-risk-mode")?.value,
+    risk_per_trade_percent: readNumber("setting-server-risk-percent"),
+    min_risk_reward_ratio: readNumber("setting-server-rr"),
+    max_daily_loss_percent: readNumber("setting-server-daily-loss"),
+    max_weekly_loss_percent: readNumber("setting-server-weekly-loss"),
+    max_monthly_loss_percent: readNumber("setting-server-monthly-loss"),
+    max_drawdown_percent: readNumber("setting-server-drawdown"),
+    max_simultaneous_positions: readNumber("setting-server-open-positions"),
+    max_portfolio_risk_percent: readNumber("setting-server-portfolio-risk"),
+    max_correlated_positions: readNumber("setting-server-correlated"),
+    news_filter_mode: document.getElementById("setting-server-news-mode")?.value,
+  };
+  if (feedback) feedback.textContent = "Saving account risk rules…";
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/risk/settings`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = typeof result.detail === "string" ? result.detail : "Check the values and sign-in status.";
+      throw new Error(detail);
+    }
+    if (feedback) feedback.textContent = "Saved. These limits now apply to your signal risk checks. · បានរក្សាទុក ហើយនឹងប្រើសម្រាប់ការត្រួតពិនិត្យសញ្ញា។";
+    const historyResponse = await fetch(`${API_BASE}/api/v1/risk/history?limit=8`, { credentials: "include" });
+    if (historyResponse.ok) {
+      const records = (await historyResponse.json()).records || [];
+      const history = document.getElementById("server-risk-history");
+      if (history && !records.length) history.textContent = "No risk assessments recorded yet. · មិនទាន់មានកំណត់ត្រាវាយតម្លៃហានិភ័យទេ។";
+    }
+  } catch (error) {
+    if (feedback) feedback.textContent = `${error.message || "Save failed."} · រក្សាទុកមិនបានទេ។`;
   }
 }
 

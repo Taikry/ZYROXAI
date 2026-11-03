@@ -7,6 +7,8 @@ aggregate stop-loss exposure, and drawdown protection across Forex, Metals, and 
 from __future__ import annotations
 
 import logging
+import datetime
+import zoneinfo
 from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 from taikry.database.session import SessionLocal
@@ -103,7 +105,15 @@ class PortfolioIntelligenceEngine:
         proposed_risk_pct: float = RISK_PER_TRADE_PERCENT,
         account_equity: float = INITIAL_PAPER_BALANCE,
         peak_equity: Optional[float] = None,
-        db_session: Optional[Any] = None
+        db_session: Optional[Any] = None,
+        user_id: Optional[int] = None,
+        max_portfolio_risk_pct: Optional[float] = None,
+        max_simultaneous_positions: Optional[int] = None,
+        max_drawdown_limit_pct: Optional[float] = None,
+        max_correlated_positions: Optional[int] = None,
+        max_daily_loss_pct: float = 2.5,
+        max_weekly_loss_pct: float = 5.0,
+        max_monthly_loss_pct: float = 10.0
     ) -> PortfolioExposureSummary:
         """
         Audits active paper trades, calculates currency and asset exposures,
@@ -112,9 +122,18 @@ class PortfolioIntelligenceEngine:
         db = db_session or SessionLocal()
         close_on_exit = db_session is None
         warnings: List[str] = []
+        portfolio_cap = float(max_portfolio_risk_pct or self.max_portfolio_risk_pct)
+        position_cap = int(max_simultaneous_positions or MAX_SIMULTANEOUS_POSITIONS)
+        drawdown_cap = float(max_drawdown_limit_pct or self.max_drawdown_limit_pct)
+        correlated_position_cap = int(max_correlated_positions or self.max_correlated_positions)
 
         try:
-            open_trades = db.query(PaperTrade).filter(PaperTrade.status == "OPEN").all()
+            # user_id=None means the system's unowned paper ledger; never mix user accounts.
+            user_scope = PaperTrade.user_id.is_(None) if user_id is None else PaperTrade.user_id == user_id
+            open_trades = db.query(PaperTrade).filter(
+                PaperTrade.status == "OPEN",
+                user_scope,
+            ).all()
             open_count = len(open_trades)
 
             # 1. Total Allocated Portfolio Risk
@@ -161,12 +180,14 @@ class PortfolioIntelligenceEngine:
                 cls_name = ASSET_CLASS_MAP.get(sym.upper(), "FOREX")
                 correlated_group_counts[cls_name] += 1
 
-            # High pairwise correlation warnings
+            # High pairwise correlation warnings and a configurable hard cap.
+            correlated_open_count = 0
             if proposed_symbol:
                 p_sym = proposed_symbol.upper()
                 for open_t in open_trades:
                     corr = self.get_correlation(p_sym, open_t.symbol)
                     if abs(corr) >= 0.75:
+                        correlated_open_count += 1
                         same_dir = (proposed_direction or "").upper() == str(open_t.direction).upper()
                         if corr > 0 and same_dir:
                             warnings.append(
@@ -176,6 +197,10 @@ class PortfolioIntelligenceEngine:
                             warnings.append(
                                 f"Negative Correlation ({corr:.2f}) with opposing {open_t.symbol} position creates synthetic double-risk."
                             )
+                if correlated_open_count + 1 > correlated_position_cap:
+                    warnings.append(
+                        f"Correlated Position Limit Exceeded: {correlated_open_count + 1} highly correlated positions would exceed the configured limit of {correlated_position_cap}."
+                    )
 
             # Concentration thresholds
             if correlated_group_counts.get("CRYPTO", 0) > 3:
@@ -191,31 +216,79 @@ class PortfolioIntelligenceEngine:
             if peak > 0 and account_equity < peak:
                 drawdown_pct = round(((peak - account_equity) / peak) * 100.0, 2)
 
-            is_drawdown_limit_breached = drawdown_pct >= self.max_drawdown_limit_pct
+            is_drawdown_limit_breached = drawdown_pct >= drawdown_cap
             if is_drawdown_limit_breached:
                 warnings.append(
-                    f"CRITICAL: Account drawdown ({drawdown_pct:.1f}%) has breached the maximum safety threshold ({self.max_drawdown_limit_pct:.1f}%). New approvals blocked."
+                    f"CRITICAL: Account drawdown ({drawdown_pct:.1f}%) has breached the maximum safety threshold ({drawdown_cap:.1f}%). New approvals blocked."
                 )
+
+            # Calculate loss circuit breakers from closed trades in the same user ledger.
+            cambodia_tz = zoneinfo.ZoneInfo("Asia/Phnom_Penh")
+            now_local = datetime.datetime.now(cambodia_tz)
+            day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            week_start = day_start - datetime.timedelta(days=day_start.weekday())
+            month_start = day_start.replace(day=1)
+
+            def as_naive_utc(value: datetime.datetime) -> datetime.datetime:
+                return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+            earliest_period_start = min(day_start, week_start, month_start)
+            closed_trades = db.query(PaperTrade).filter(
+                PaperTrade.status == "CLOSED",
+                user_scope,
+                PaperTrade.exit_time.is_not(None),
+                PaperTrade.exit_time >= as_naive_utc(earliest_period_start),
+            ).order_by(PaperTrade.exit_time.asc()).all()
+
+            def loss_percent(period_start: datetime.datetime) -> float:
+                cutoff = as_naive_utc(period_start)
+                period_trades = [t for t in closed_trades if t.exit_time and t.exit_time >= cutoff]
+                net_pnl = sum(float(t.pnl or 0.0) for t in period_trades)
+                starting_equity = (
+                    float(period_trades[0].balance_before or account_equity)
+                    if period_trades else float(account_equity or INITIAL_PAPER_BALANCE)
+                )
+                if starting_equity <= 0:
+                    return 0.0
+                return round(max(0.0, -net_pnl) / starting_equity * 100.0, 2)
+
+            daily_loss_pct = loss_percent(day_start)
+            weekly_loss_pct = loss_percent(week_start)
+            monthly_loss_pct = loss_percent(month_start)
+            is_loss_limit_breached = (
+                daily_loss_pct >= float(max_daily_loss_pct)
+                or weekly_loss_pct >= float(max_weekly_loss_pct)
+                or monthly_loss_pct >= float(max_monthly_loss_pct)
+            )
+            for label, used, limit in (
+                ("Daily", daily_loss_pct, max_daily_loss_pct),
+                ("Weekly", weekly_loss_pct, max_weekly_loss_pct),
+                ("Monthly", monthly_loss_pct, max_monthly_loss_pct),
+            ):
+                if used >= float(limit):
+                    warnings.append(f"{label} Loss Limit Exceeded: {used:.2f}% used against {float(limit):.2f}%.")
 
             is_capacity_available = (
-                projected_risk <= self.max_portfolio_risk_pct
-                and (open_count + (1 if proposed_symbol else 0)) <= MAX_SIMULTANEOUS_POSITIONS
+                projected_risk <= portfolio_cap
+                and (open_count + (1 if proposed_symbol else 0)) <= position_cap
                 and not is_drawdown_limit_breached
+                and not is_loss_limit_breached
+                and not any("Correlated Position Limit Exceeded" in warning for warning in warnings)
             )
 
-            if not is_capacity_available and projected_risk > self.max_portfolio_risk_pct:
+            if not is_capacity_available and projected_risk > portfolio_cap:
                 warnings.append(
-                    f"Portfolio Risk Cap Exceeded: Projected risk {projected_risk:.1f}% exceeds max {self.max_portfolio_risk_pct:.1f}%."
+                    f"Portfolio Risk Cap Exceeded: Projected risk {projected_risk:.1f}% exceeds max {portfolio_cap:.1f}%."
                 )
-            if (open_count + (1 if proposed_symbol else 0)) > MAX_SIMULTANEOUS_POSITIONS:
+            if (open_count + (1 if proposed_symbol else 0)) > position_cap:
                 warnings.append(
-                    f"Position Count Limit Exceeded: Max {MAX_SIMULTANEOUS_POSITIONS} simultaneous positions allowed."
+                    f"Position Count Limit Exceeded: Max {position_cap} simultaneous positions allowed."
                 )
 
             return PortfolioExposureSummary(
                 total_open_positions=open_count,
                 total_allocated_risk_pct=round(total_allocated_risk, 2),
-                max_portfolio_risk_pct=self.max_portfolio_risk_pct,
+                max_portfolio_risk_pct=portfolio_cap,
                 is_capacity_available=is_capacity_available,
                 net_usd_exposure=round(currency_exposure["USD"], 2),
                 net_crypto_exposure=round(asset_class_exposure["CRYPTO"], 2),
@@ -224,6 +297,10 @@ class PortfolioIntelligenceEngine:
                 correlated_group_counts=dict(correlated_group_counts),
                 drawdown_pct=drawdown_pct,
                 is_drawdown_limit_breached=is_drawdown_limit_breached,
+                daily_loss_pct=daily_loss_pct,
+                weekly_loss_pct=weekly_loss_pct,
+                monthly_loss_pct=monthly_loss_pct,
+                is_loss_limit_breached=is_loss_limit_breached,
                 warnings=warnings
             )
         except Exception as exc:
@@ -231,7 +308,7 @@ class PortfolioIntelligenceEngine:
             return PortfolioExposureSummary(
                 total_open_positions=0,
                 total_allocated_risk_pct=0.0,
-                max_portfolio_risk_pct=self.max_portfolio_risk_pct,
+                max_portfolio_risk_pct=portfolio_cap,
                 is_capacity_available=False,
                 net_usd_exposure=0.0,
                 net_crypto_exposure=0.0,
@@ -240,6 +317,10 @@ class PortfolioIntelligenceEngine:
                 correlated_group_counts={},
                 drawdown_pct=0.0,
                 is_drawdown_limit_breached=False,
+                daily_loss_pct=0.0,
+                weekly_loss_pct=0.0,
+                monthly_loss_pct=0.0,
+                is_loss_limit_breached=True,
                 warnings=["Database portfolio query failed; capital safety lock active."]
             )
         finally:

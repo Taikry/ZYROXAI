@@ -12,6 +12,7 @@ Enforces:
 - Bilingual report production (English & Natural Khmer)
 """
 import datetime
+import logging
 import math
 from typing import Dict, Any, Optional, Callable, List
 import zoneinfo
@@ -31,6 +32,7 @@ except ImportError:
     get_llm_status = lambda: {"status": "UNAVAILABLE"}
 
 _ANALYSIS_CACHE: Dict[str, Any] = {}
+logger = logging.getLogger("taikry.agents.consensus_engine")
 
 
 def _build_candidate_plan(
@@ -107,8 +109,9 @@ class AIConsensusEngine:
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         primary_timeframe: Optional[str] = None,
         requested_timeframes: Optional[List[str]] = None,
-        risk_mode: Optional[str] = "BALANCED",
+        risk_mode: Optional[str] = None,
         risk_options: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Executes complete multi-agent workflow.
@@ -128,6 +131,7 @@ class AIConsensusEngine:
         if trade_style not in {"INTRADAY", "SWING"}:
             raise ValueError("trade_style must be INTRADAY or SWING")
         cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}" + (":SWING" if trade_style == "SWING" else "")
+        cache_key += f":USER:{user_id if user_id is not None else 'SYSTEM'}"
         if primary_timeframe or requested_timeframes:
             tf_key = ",".join(str(tf).strip().upper() for tf in (requested_timeframes or []))
             cache_key += f":CUSTOM:{str(primary_timeframe or '').upper()}:{tf_key}"
@@ -681,6 +685,72 @@ class AIConsensusEngine:
                     risk_out = dict(risk_out)
                     risk_out["decision"] = "REJECT"
                     risk_out["reasons"] = list(risk_out.get("reasons", [])) + review_reasons
+
+        # V3 is the final user-scoped capital and market-risk gate for every
+        # otherwise-approved consensus candidate.
+        if setup_status == "APPROVE":
+            risk_out = dict(risk_out)
+            try:
+                from taikry.risk.service import risk_intelligence_service
+                try:
+                    v3_candles = market_data_engine.get_candles(
+                        symbol, timeframe=setup_timeframe, limit=300
+                    )
+                except Exception:
+                    v3_candles = primary_df
+                if v3_candles is None or v3_candles.empty:
+                    v3_candles = primary_df
+                v3_assessment = risk_intelligence_service.evaluate_trade_candidate(
+                    symbol=symbol,
+                    direction=proposed_vote,
+                    entry_price=float(risk_out["entry_price"]),
+                    stop_loss=float(risk_out["stop_loss"]),
+                    take_profit_1=float(risk_out["take_profit_1"]),
+                    take_profit_2=(float(risk_out["take_profit_2"]) if risk_out.get("take_profit_2") is not None else None),
+                    spread_price=risk_quote_fields.get("spread_price"),
+                    account_equity=float(simulated_equity),
+                    risk_mode=risk_mode,
+                    custom_risk_options=risk_options,
+                    candle_df=v3_candles,
+                    timeframe=setup_timeframe,
+                    structure_info={
+                        "confirmed": bool(
+                            agent2_out.get("structure_confirmed")
+                            or agent2_out.get("bos_confirmed")
+                            or agent2_out.get("break_of_structure_confirmed")
+                        )
+                    },
+                    user_id=user_id,
+                    persist_log=True,
+                )
+                risk_out["risk_v3"] = v3_assessment.dict()
+                v3_decision = v3_assessment.decision.value
+                if v3_decision in {"APPROVED", "APPROVED_WITH_REDUCED_RISK"}:
+                    sizing = v3_assessment.sizing
+                    position_sizing = dict(risk_out.get("position_sizing") or {})
+                    position_sizing.update({
+                        "risk_percent": sizing.risk_percentage,
+                        "risk_amount_dollars": sizing.risk_amount_usd,
+                        "recommended_position_lots": sizing.lot_size,
+                    })
+                    risk_out["position_sizing"] = position_sizing
+                    risk_out["calculated_rr"] = v3_assessment.calculated_rr
+                else:
+                    setup_status = "WAIT" if v3_decision == "WAIT_FOR_CONFIRMATION" else "REJECT"
+                    proposed_dir = "NONE"
+                    risk_out["decision"] = setup_status
+                    outcome_notes = v3_assessment.veto_reasons or v3_assessment.advisory_notes
+                    risk_out["reasons"] = list(risk_out.get("reasons", [])) + list(outcome_notes)
+                    risk_out["advisory_notes"] = list(risk_out.get("advisory_notes", [])) + list(v3_assessment.advisory_notes)
+            except Exception as exc:
+                logger.exception("V3 risk gateway failed for %s", symbol)
+                setup_status = "REJECT"
+                proposed_dir = "NONE"
+                risk_out["decision"] = "REJECT"
+                risk_out["risk_v3"] = {"decision": "UNAVAILABLE", "error_type": type(exc).__name__}
+                risk_out["reasons"] = list(risk_out.get("reasons", [])) + [
+                    "V3 risk gateway was unavailable; the candidate was blocked for safety."
+                ]
 
         if review_reasons and setup_status in {"WAIT", "REJECT"}:
             risk_out = dict(risk_out)

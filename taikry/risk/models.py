@@ -189,6 +189,10 @@ class PortfolioExposureSummary(BaseModel):
     correlated_group_counts: Dict[str, int]
     drawdown_pct: float
     is_drawdown_limit_breached: bool
+    daily_loss_pct: float = 0.0
+    weekly_loss_pct: float = 0.0
+    monthly_loss_pct: float = 0.0
+    is_loss_limit_breached: bool = False
     warnings: List[str]
 
 

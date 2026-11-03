@@ -134,7 +134,7 @@
         </button>
         <button class="top-action-btn btn-schema-studio" id="btn-open-schema-studio" onclick="openSchemaStudio()" title="Open ZYROX Schema Studio & Database Platform">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-          <span style="color:var(--cyan-neon, #06b6d4); font-weight:700;">📐 Schema Studio</span>
+          <span class="btn-schema-studio-label">📐 Schema Studio</span>
         </button>
         <!-- Windows Exness MT5 Bridge Live Status Pill -->
         <div class="bridge-status-pill" id="top-bridge-status-pill" onclick="openMT5BridgeModal()" title="Exness MT5 Windows Bridge: Click to view status & setup guide">
@@ -441,8 +441,8 @@
               </select>
             </label>
             <!-- Risk Intelligence V3 Profile Selector -->
-            <div class="cockpit-risk-row" style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; gap: 6px;">
-              <label class="cockpit-style-control" for="cockpit-risk-profile" style="margin-bottom:0; flex:1;">
+            <div class="cockpit-risk-row">
+              <label class="cockpit-style-control" for="cockpit-risk-profile">
                 <span id="t-cockpit-risk-label">🛡️ Risk Profile</span>
                 <select id="cockpit-risk-profile" onchange="selectCockpitRiskProfile(this.value)">
                   <option value="BALANCED">⚖️ Balanced (1.5% · 1:1.8 R:R)</option>
@@ -451,7 +451,7 @@
                   <option value="CUSTOM">⚙️ Custom Settings</option>
                 </select>
               </label>
-              <span class="adv-badge adv-badge-emerald" id="cockpit-active-risk-pill" style="font-size:10px; padding:4px 8px; white-space:nowrap; align-self:flex-end;">1.5% · 1:1.8</span>
+              <span class="adv-badge adv-badge-emerald cockpit-risk-pill" id="cockpit-active-risk-pill">1.5% · 1:1.8</span>
             </div>
 
             <!-- Primary Action Buttons: Analyze vs Best Setup -->
@@ -1168,6 +1168,14 @@
                 <strong id="paper-win-rate">--</strong>
               </div>
             </div>
+            <section class="paper-journal-coach" aria-labelledby="paper-journal-coach-title">
+              <div class="paper-journal-coach-title" id="paper-journal-coach-title">Journal review · វិភាគកំណត់ហេតុ</div>
+              <div class="paper-journal-coach-metrics">
+                <div><span>Expectancy</span><strong id="paper-journal-expectancy">—</strong></div>
+                <div><span>Profit factor</span><strong id="paper-journal-profit-factor">—</strong></div>
+              </div>
+              <div id="paper-journal-coach-notes" class="paper-journal-coach-notes">Close and review trades to build a personal journal summary.</div>
+            </section>
             <div id="paper-stream-status" class="paper-stream-status" aria-live="polite">Connecting · កំពុងភ្ជាប់</div>
             <div class="metric-label mt-12">Recent Executions:</div>
             <table class="ledger-table">
@@ -2047,6 +2055,30 @@
           </div>
         </div>
 
+        <div class="section-card mt-20" id="server-risk-settings-card">
+          <div class="section-card-title">🛡️ Account Risk Limits · ដែនកំណត់ហានិភ័យគណនី</div>
+          <p class="settings-help">Saved account rules are applied to signal analysis and the final risk gate. Sign in to load or save them.</p>
+          <div class="settings-form-grid">
+            <div class="settings-field"><label class="settings-label" for="setting-server-risk-mode">Risk profile</label><select id="setting-server-risk-mode" class="settings-select"><option value="CONSERVATIVE">Conservative</option><option value="BALANCED">Balanced</option><option value="AGGRESSIVE">Aggressive</option><option value="CUSTOM">Custom</option></select></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-risk-percent">Risk per trade (%)</label><input id="setting-server-risk-percent" class="settings-select" type="number" min="0.1" max="2" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-rr">Minimum risk:reward</label><input id="setting-server-rr" class="settings-select" type="number" min="1" max="5" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-daily-loss">Daily loss limit (%)</label><input id="setting-server-daily-loss" class="settings-select" type="number" min="0.5" max="10" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-weekly-loss">Weekly loss limit (%)</label><input id="setting-server-weekly-loss" class="settings-select" type="number" min="1" max="20" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-monthly-loss">Monthly loss limit (%)</label><input id="setting-server-monthly-loss" class="settings-select" type="number" min="1" max="30" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-drawdown">Maximum drawdown (%)</label><input id="setting-server-drawdown" class="settings-select" type="number" min="2" max="25" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-open-positions">Maximum open positions</label><input id="setting-server-open-positions" class="settings-select" type="number" min="1" max="10" step="1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-portfolio-risk">Maximum total portfolio risk (%)</label><input id="setting-server-portfolio-risk" class="settings-select" type="number" min="1" max="15" step="0.1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-correlated">Maximum correlated positions</label><input id="setting-server-correlated" class="settings-select" type="number" min="1" max="10" step="1"></div>
+            <div class="settings-field"><label class="settings-label" for="setting-server-news-mode">News protection</label><select id="setting-server-news-mode" class="settings-select"><option value="STRICT">Strict</option><option value="STANDARD">Standard</option><option value="FLEXIBLE">Flexible</option><option value="OFF">Off</option></select></div>
+          </div>
+          <div class="flex-row gap-10 align-center mt-15">
+            <button class="btn btn-outline btn-sm" type="button" onclick="saveServerRiskSettings()">Save account risk rules · រក្សាទុក</button>
+            <span class="settings-help" id="server-risk-settings-feedback" aria-live="polite"></span>
+          </div>
+          <div class="section-card-title mt-20">Recent risk decisions · ការសម្រេចហានិភ័យថ្មីៗ</div>
+          <div id="server-risk-history" class="settings-help">Sign in to view your private risk audit history.</div>
+        </div>
+
         <!-- ANYROUTER INFERENCE GATEWAY & MODEL DISCOVERY -->
         <div class="section-card mt-20" id="card-anyrouter-discovery">
           <div class="section-card-title flex-between">
@@ -2585,9 +2617,9 @@
                 <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">🔗 Generate a New Pairing Link</button>
               </div>
               <div id="saas-telegram-token-display" class="telegram-pairing-box hidden-initially">
-                <div class="telegram-pairing-title">Secure 15-Minute One-Time Pairing Link:</div>
+                <label for="saas-telegram-link-url" class="telegram-pairing-title" id="saas-telegram-pairing-label">Secure 15-Minute One-Time Pairing Link:</label>
                 <div class="flex-gap-8">
-                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field telegram-link-input">
+                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field telegram-link-input" placeholder="https://t.me/..." title="Secure One-Time Telegram Pairing Link" aria-labelledby="saas-telegram-pairing-label">
                   <button class="btn btn-outline btn-xs" onclick="copyTelegramLink()">📋 Copy</button>
                   <a id="saas-telegram-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-xs">🚀 Open Bot</a>
                 </div>

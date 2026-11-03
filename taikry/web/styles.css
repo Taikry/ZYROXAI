@@ -536,6 +536,20 @@ body.khmer-mode {
   font-size: 14px;
 }
 
+.paper-journal-coach {
+  margin: 8px 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(0, 217, 154, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 217, 154, 0.035);
+}
+
+.paper-journal-coach-title { color: var(--text-primary); font-size: 11px; font-weight: 700; }
+.paper-journal-coach-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.paper-journal-coach-metrics > div { display: flex; flex-direction: column; gap: 3px; color: var(--text-muted); font-size: 9px; }
+.paper-journal-coach-metrics strong { color: var(--text-primary); font-size: 12px; }
+.paper-journal-coach-notes { display: grid; gap: 5px; margin-top: 8px; color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+
 .paper-stream-status { margin: 2px 0 10px; color: var(--accent-green); font-size: 10px; }
 
 .paper-journal-open {
@@ -2289,6 +2303,32 @@ body.theme-solar-gold {
   border-radius: 8px;
   font: inherit;
 }
+
+.cockpit-risk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 6px;
+}
+
+.cockpit-risk-row .cockpit-style-control {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.cockpit-risk-row .cockpit-risk-pill {
+  font-size: 10px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.btn-schema-studio-label {
+  color: var(--cyan-neon, #06b6d4);
+  font-weight: 700;
+}
+
 
 .cockpit-action-row {
   display: grid;
@@ -5874,6 +5914,102 @@ html, body {
   flex-wrap: wrap;
 }
 
+.taikry-session-clock-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 5px 10px;
+  background: linear-gradient(90deg, rgba(10, 16, 28, 0.98), rgba(11, 20, 33, 0.94));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.session-clock-heading {
+  min-width: 112px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.session-clock-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1;
+}
+
+.session-clock-card {
+  display: grid;
+  grid-template-columns: minmax(75px, 1fr) auto auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.session-clock-name {
+  overflow: hidden;
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-clock-time {
+  color: #f8fafc;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-clock-date {
+  display: none;
+  color: #64748b;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.session-clock-status {
+  grid-column: 1 / -1;
+  color: #94a3b8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.session-clock-card.is-open {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.055);
+}
+
+.session-clock-card.is-open .session-clock-status { color: #34d399; }
+.session-clock-card.is-closed .session-clock-status { color: #94a3b8; }
+
+@media (min-width: 1100px) {
+  .session-clock-date { display: block; }
+  .session-clock-status { grid-column: auto; }
+}
+
+@media (max-width: 640px) {
+  .taikry-session-clock-bar { gap: 6px; padding: 4px 6px; }
+  .session-clock-heading { min-width: 62px; max-width: 62px; font-size: 8px; }
+  .session-clock-grid { gap: 3px; }
+  .session-clock-card { grid-template-columns: 1fr; justify-items: center; row-gap: 2px; padding: 4px 3px; }
+  .session-clock-name { max-width: 100%; font-size: 8px; }
+  .session-clock-time { font-size: 10px; }
+  .session-clock-status { grid-column: auto; font-size: 7px; }
+}
+
 .pro-toolbar-left, .pro-toolbar-center, .pro-toolbar-right {
   display: flex;
   align-items: center;
@@ -8529,6 +8665,25 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
 .settings-help {
   font-size: 11px;
   color: var(--zyrox-text-muted);
+}
+
+.server-risk-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--zyrox-border);
+}
+
+.server-risk-history-row strong {
+  color: var(--zyrox-text);
+  font-size: 12px;
+}
+
+.server-risk-history-row span {
+  color: var(--zyrox-text-muted);
+  font-size: 11px;
 }
 
 .btn-primary-institutional {

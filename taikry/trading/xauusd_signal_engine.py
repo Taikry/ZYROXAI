@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from taikry.config import (
-    DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO,
+    DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO, INITIAL_PAPER_BALANCE,
     get_symbol_config, MAX_DAILY_XAUUSD_SIGNALS,
 )
 from taikry.database.session import SessionLocal
@@ -1180,6 +1180,63 @@ class XAUUSDSignalEngine:
                 "status": "INSUFFICIENT_RR"
             }
 
+        # Run the same V3 risk gateway used by authenticated analysis before
+        # recording or delivering a Telegram signal.
+        try:
+            from taikry.risk.service import risk_intelligence_service
+            try:
+                v3_candles = market_data_engine.get_candles(
+                    canonical_symbol, timeframe=setup_timeframe, limit=300
+                )
+            except Exception:
+                v3_candles = primary_df
+            if v3_candles is None or v3_candles.empty:
+                v3_candles = primary_df
+            from taikry.trading.paper_trading import paper_trading_engine
+            account_equity = paper_trading_engine.get_account_summary(user_id=None).get("current_equity")
+            v3_assessment = risk_intelligence_service.evaluate_trade_candidate(
+                symbol=canonical_symbol,
+                direction=decision,
+                entry_price=float(entry),
+                stop_loss=float(sl),
+                take_profit_1=float(tp1),
+                take_profit_2=float(tp2) if tp2 is not None else None,
+                spread_price=spread_price,
+                account_equity=float(account_equity or INITIAL_PAPER_BALANCE),
+                candle_df=v3_candles,
+                timeframe=setup_timeframe,
+                structure_info={
+                    "confirmed": bool(
+                        agent_outputs.get("ict_smc_analyst", {}).get("structure_confirmed")
+                        or agent_outputs.get("ict_smc_analyst", {}).get("bos_confirmed")
+                        or agent_outputs.get("ict_smc_analyst", {}).get("break_of_structure_confirmed")
+                    )
+                },
+                user_id=None,
+                persist_log=True,
+            )
+            consensus["risk_v3"] = v3_assessment.dict()
+            agent_outputs["risk_v3"] = v3_assessment.dict()
+            if v3_assessment.decision.value not in {"APPROVED", "APPROVED_WITH_REDUCED_RISK"}:
+                v3_notes = v3_assessment.veto_reasons or v3_assessment.advisory_notes
+                return {
+                    "success": False,
+                    "decision": "WAIT" if v3_assessment.decision.value == "WAIT_FOR_CONFIRMATION" else "NO TRADE",
+                    "rejection_reason": "; ".join(str(note) for note in v3_notes) or "V3 risk gateway rejected the candidate.",
+                    "canonical_symbol": canonical_symbol,
+                    "risk_v3": v3_assessment.dict(),
+                    "status": "REJECTED_V3_RISK",
+                }
+        except Exception as exc:
+            logger.exception("V3 risk gateway failed for XAUUSD signal generation")
+            return {
+                "success": False,
+                "error": "V3 risk gateway was unavailable; the XAUUSD signal was blocked for safety.",
+                "risk_gate_error_type": type(exc).__name__,
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_RISK_GATE_UNAVAILABLE",
+            }
+
         # Step 8: Deduplication Check
         is_dup, dup_msg = self.check_duplicate_signal(decision, entry, sl)
         if is_dup:
@@ -1312,6 +1369,7 @@ class XAUUSDSignalEngine:
                 "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,
                 "supporting_evidence": consensus["supporting_evidence"],
+                "risk_v3": consensus.get("risk_v3"),
                 "invalidation_conditions_en": invalidation_en,
                 "invalidation_conditions_kh": invalidation_kh,
                 "agent_run_summary": self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)),

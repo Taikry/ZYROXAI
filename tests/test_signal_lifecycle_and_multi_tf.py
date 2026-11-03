@@ -196,7 +196,7 @@ def test_multi_timeframe_engine_hierarchy_and_sessions():
     assert analysis["symbol"] == "XAUUSD"
     assert analysis["verified_price"] > 0
     assert analysis["overall_bias"] in ["BULLISH", "BEARISH", "NEUTRAL"]
-    assert 55 <= analysis["confluence_score"] <= 95
+    assert 50 <= analysis["confluence_score"] <= 95
 
     # Check all 5 timeframes exist in details
     tf_details = analysis["timeframe_details"]

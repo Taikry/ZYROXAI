@@ -65,9 +65,9 @@ class RiskIntelligenceService:
             close_db = True
         try:
             settings_obj = None
-            if user_id:
+            if user_id is not None:
                 settings_obj = db.query(UserRiskSettings).filter(UserRiskSettings.user_id == user_id).first()
-            if not settings_obj:
+            else:
                 settings_obj = db.query(UserRiskSettings).filter(UserRiskSettings.user_id == None).first()
 
             if settings_obj:
@@ -84,7 +84,17 @@ class RiskIntelligenceService:
                     "max_correlated_positions": int(settings_obj.max_correlated_positions),
                     "news_filter_mode": settings_obj.news_filter_mode,
                 }
-            return get_risk_profile("BALANCED")
+            defaults = dict(get_risk_profile("BALANCED"))
+            defaults.update({
+                "max_daily_loss_percent": 2.5,
+                "max_weekly_loss_percent": 5.0,
+                "max_monthly_loss_percent": 10.0,
+                "max_drawdown_percent": 8.0,
+                "max_simultaneous_positions": 3,
+                "max_portfolio_risk_percent": 5.0,
+                "max_correlated_positions": 2,
+            })
+            return defaults
         except Exception as exc:
             logger.warning(f"Could not load UserRiskSettings: {exc}")
             return get_risk_profile("BALANCED")
@@ -105,6 +115,7 @@ class RiskIntelligenceService:
         risk_mode: Optional[str] = None,
         custom_risk_options: Optional[Dict[str, Any]] = None,
         candle_df: Optional[Any] = None,
+        timeframe: str = "M15",
         structure_info: Optional[Dict[str, Any]] = None,
         user_id: Optional[int] = None,
         persist_log: bool = True
@@ -149,11 +160,15 @@ class RiskIntelligenceService:
                 veto_reasons.append(f"Invalid geometry: BUY Stop Loss ({stop_loss}) must be below Entry ({entry_price}).")
             if take_profit_1 <= entry_price:
                 veto_reasons.append(f"Invalid geometry: BUY Take Profit ({take_profit_1}) must be above Entry ({entry_price}).")
+            if take_profit_2 is not None and take_profit_2 <= take_profit_1:
+                veto_reasons.append("Invalid geometry: BUY Take Profit 2 must be above Take Profit 1.")
         elif direction_norm in {"SELL", "SHORT"}:
             if stop_loss <= entry_price:
                 veto_reasons.append(f"Invalid geometry: SELL Stop Loss ({stop_loss}) must be above Entry ({entry_price}).")
             if take_profit_1 >= entry_price:
                 veto_reasons.append(f"Invalid geometry: SELL Take Profit ({take_profit_1}) must be below Entry ({entry_price}).")
+            if take_profit_2 is not None and take_profit_2 >= take_profit_1:
+                veto_reasons.append("Invalid geometry: SELL Take Profit 2 must be below Take Profit 1.")
 
         # 3. Risk-to-Reward Ratio Check
         rr_val = round(reward_dist / max(0.0001, risk_dist), 2) if risk_dist > 0 else 0.0
@@ -194,27 +209,113 @@ class RiskIntelligenceService:
             proposed_symbol=symbol,
             proposed_direction=direction_norm,
             proposed_risk_pct=risk_pct,
-            account_equity=account_equity
+            account_equity=account_equity,
+            user_id=user_id,
+            max_portfolio_risk_pct=user_settings.get("max_portfolio_risk_percent", 5.0),
+            max_simultaneous_positions=user_settings.get("max_simultaneous_positions", 3),
+            max_drawdown_limit_pct=user_settings.get("max_drawdown_percent", 8.0),
+            max_correlated_positions=user_settings.get("max_correlated_positions", 2),
+            max_daily_loss_pct=user_settings.get("max_daily_loss_percent", 2.5),
+            max_weekly_loss_pct=user_settings.get("max_weekly_loss_percent", 5.0),
+            max_monthly_loss_pct=user_settings.get("max_monthly_loss_percent", 10.0),
         )
         if not portfolio_res.is_capacity_available:
-            for w in portfolio_res.warnings:
-                if "Drawdown" in w or "Cap Exceeded" in w or "Limit Exceeded" in w:
-                    veto_reasons.append(w)
-                else:
-                    advisory_notes.append(w)
+            capacity_blockers = [
+                warning for warning in portfolio_res.warnings
+                if any(marker in warning for marker in (
+                    "Drawdown", "Cap Exceeded", "Limit Exceeded", "capital safety lock", "Database portfolio query failed"
+                ))
+            ]
+            veto_reasons.extend(capacity_blockers or [
+                "Portfolio capacity could not be verified; the candidate was blocked for capital safety."
+            ])
+            advisory_notes.extend(warning for warning in portfolio_res.warnings if warning not in capacity_blockers)
+
+        # Derive chart factors from the supplied candle snapshot; never assume fresh data
+        # or aligned momentum when the source snapshot does not prove it.
+        enriched_candles = candle_df
+        latest_values: Dict[str, Any] = {}
+        data_fresh = False
+        try:
+            if candle_df is None or getattr(candle_df, "empty", True):
+                from taikry.data.providers import market_data_engine
+                candle_df = market_data_engine.get_candles(symbol, timeframe=timeframe, limit=60)
+
+            if candle_df is not None and not candle_df.empty:
+                from taikry.indicators.chart_engine import xauusd_chart_engine
+                from taikry.data.validator import check_data_freshness
+
+                enriched_candles = xauusd_chart_engine.compute_technical_indicators(candle_df)
+                latest = enriched_candles.iloc[-1]
+                latest_values = latest.to_dict()
+                timestamp = latest.get("timestamp")
+                freshness = check_data_freshness(symbol, timestamp, timeframe=timeframe)
+                data_fresh = bool(freshness.get("fresh"))
+            else:
+                data_fresh = True
+        except Exception as exc:
+            logger.info("Could not derive complete risk evidence for %s: %s", symbol, exc)
+
+        if not data_fresh:
+            veto_reasons.append("Market data is stale, unavailable, or missing a verifiable timestamp.")
+
+        close_value = latest_values.get("close")
+        ema_20 = latest_values.get("ema_20")
+        ema_50 = latest_values.get("ema_50")
+        ema_200 = latest_values.get("ema_200")
+        macd_hist = latest_values.get("macd_hist")
+        rsi_value = latest_values.get("rsi_14")
+        atr_value = latest_values.get("atr_14")
+
+        def finite_number(value: Any) -> Optional[float]:
+            try:
+                number = float(value)
+                return number if math.isfinite(number) else None
+            except (TypeError, ValueError):
+                return None
+
+        close_num = finite_number(close_value)
+        ema20_num = finite_number(ema_20)
+        ema50_num = finite_number(ema_50)
+        ema200_num = finite_number(ema_200)
+        macd_num = finite_number(macd_hist)
+        rsi_num = finite_number(rsi_value)
+        atr_num = finite_number(atr_value)
+        is_buy = direction_norm in {"BUY", "LONG"}
+        if close_num is not None and ema50_num is not None:
+            trend_aligned = close_num >= ema50_num and (ema200_num is None or ema50_num >= ema200_num) if is_buy else close_num <= ema50_num and (ema200_num is None or ema50_num <= ema200_num)
+        elif close_num is not None and ema20_num is not None:
+            trend_aligned = close_num >= ema20_num if is_buy else close_num <= ema20_num
+        else:
+            trend_aligned = False
+        momentum_aligned = (
+            macd_num is not None and rsi_num is not None
+            and ((macd_num >= 0 and rsi_num >= 50) if is_buy else (macd_num <= 0 and rsi_num <= 50))
+        )
+        structure_confirmed = bool(
+            structure_info and (
+                structure_info.get("confirmed")
+                or structure_info.get("structure_confirmed")
+                or structure_info.get("bos_confirmed")
+            )
+        )
+        entry_quality_ok = bool(
+            close_num is not None and atr_num is not None and atr_num > 0
+            and abs(float(entry_price) - close_num) <= 1.5 * atr_num
+        )
 
         # 8. Signal Quality Scoring
         quality_res = self.quality_scorer.calculate_score(
             symbol=symbol,
             direction=direction_norm,
             rr_ratio=rr_val,
-            trend_aligned="TREND" in regime_res.regime.value or "BREAKOUT" in regime_res.regime.value,
-            structure_confirmed=len(veto_reasons) == 0,
-            momentum_aligned=True,
+            trend_aligned=trend_aligned,
+            structure_confirmed=structure_confirmed,
+            momentum_aligned=momentum_aligned,
             volatility_ok=regime_res.regime != MarketRegimeType.HIGH_VOLATILITY,
-            entry_quality_ok=len(veto_reasons) == 0,
-            news_clear=not news_res.is_blackout,
-            data_fresh=True
+            entry_quality_ok=entry_quality_ok,
+            news_clear=news_res.news_status == "CLEAR",
+            data_fresh=data_fresh
         )
 
         # 9. Sizing and Decision Resolution
@@ -241,7 +342,12 @@ class RiskIntelligenceService:
 
         risk_amount_usd = round(account_equity * (applied_risk_pct / 100.0), 2)
         raw_lots = risk_amount_usd / (risk_dist * contract_size) if (risk_dist > 0 and contract_size > 0) else 0.01
-        recommended_lots = round(min(10.0, max(0.01, math.floor(raw_lots * 100) / 100.0)), 2) if raw_lots >= 0.01 else 0.01
+        if raw_lots < 0.01:
+            veto_reasons.append("Minimum supported position size would exceed the configured risk limit.")
+            decision = RiskDecision.REJECTED
+            recommended_lots = 0.0
+        else:
+            recommended_lots = round(min(10.0, math.floor(raw_lots * 100) / 100.0), 2)
 
         sizing = SizingCalculation(
             account_equity=account_equity,
@@ -312,6 +418,13 @@ class RiskIntelligenceService:
                         "adx": regime_res.adx_value,
                         "hurst": regime_res.hurst_exponent,
                         "is_reduced_risk": is_reduced,
+                        "data_fresh": data_fresh,
+                        "candle_count": len(candle_df) if candle_df is not None else 0,
+                        "timeframe": timeframe,
+                        "latest_candle_utc": str(latest_values.get("timestamp")) if latest_values else None,
+                        "trend_aligned": trend_aligned,
+                        "momentum_aligned": momentum_aligned,
+                        "structure_confirmed": structure_confirmed,
                     }
                 )
                 db.add(log_entry)
