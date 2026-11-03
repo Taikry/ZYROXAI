@@ -28,7 +28,9 @@ from taikry.config import (
     RISK_PER_TRADE_PERCENT,
     INITIAL_PAPER_BALANCE,
     get_symbol_config,
-    LOCAL_TIMEZONE
+    LOCAL_TIMEZONE,
+    get_risk_profile,
+    RISK_PROFILES
 )
 from taikry.ai.anyrouter_client import anyrouter_client, budget_manager
 from taikry.indicators.technical import compute_technical_indicators, extract_technical_summary
@@ -472,8 +474,24 @@ class RiskGuardian:
         macro_output: MacroNewsOutput,
         account_equity: float = INITIAL_PAPER_BALANCE,
         spread_points: Optional[float] = None,
-        spread_price: Optional[float] = None
+        spread_price: Optional[float] = None,
+        risk_mode: Optional[str] = None,
+        risk_options: Optional[Dict[str, Any]] = None,
+        min_risk_reward_ratio: Optional[float] = None,
+        risk_per_trade_percent: Optional[float] = None,
+        max_spread_pct: Optional[float] = None,
     ) -> RiskGuardianOutput:
+        custom_overrides = dict(risk_options or {})
+        if min_risk_reward_ratio is not None:
+            custom_overrides["min_risk_reward_ratio"] = min_risk_reward_ratio
+        if risk_per_trade_percent is not None:
+            custom_overrides["risk_per_trade_percent"] = risk_per_trade_percent
+        if max_spread_pct is not None:
+            custom_overrides["max_spread_pct"] = max_spread_pct
+        active_profile = get_risk_profile(risk_mode, custom_overrides)
+        eff_min_rr = float(active_profile.get("min_risk_reward_ratio", MIN_RISK_REWARD_RATIO))
+        eff_risk_pct = float(active_profile.get("risk_per_trade_percent", RISK_PER_TRADE_PERCENT))
+        eff_max_spread = float(active_profile.get("max_spread_pct", 0.20))
         t0 = time.time()
         veto_reasons = []
 
@@ -528,7 +546,7 @@ class RiskGuardian:
             if swing_high > current_price:
                 take_profit = round(swing_high, 3)
             else:
-                take_profit = round(current_price + (risk_dist * MIN_RISK_REWARD_RATIO), 3)
+                take_profit = round(current_price + (risk_dist * eff_min_rr), 3)
 
             rr_ratio = round((take_profit - current_price) / max(0.0001, risk_dist), 2)
 
@@ -547,7 +565,7 @@ class RiskGuardian:
             if swing_low > 0 and swing_low < current_price:
                 take_profit = round(swing_low, 3)
             else:
-                take_profit = round(current_price - (risk_dist * MIN_RISK_REWARD_RATIO), 3)
+                take_profit = round(current_price - (risk_dist * eff_min_rr), 3)
 
             rr_ratio = round((current_price - take_profit) / max(0.0001, risk_dist), 2)
 
@@ -562,8 +580,8 @@ class RiskGuardian:
             veto_reasons.append("Direction is neutral or undefined.")
 
         # 3. Minimum R:R Gating (configured floor)
-        if direction in ("BUY", "SELL") and rr_ratio < MIN_RISK_REWARD_RATIO:
-            veto_reasons.append(f"Calculated R:R {rr_ratio}:1 fails institutional minimum {MIN_RISK_REWARD_RATIO}:1.")
+        if direction in ("BUY", "SELL") and rr_ratio < eff_min_rr:
+            veto_reasons.append(f"Calculated R:R {rr_ratio}:1 fails institutional minimum {eff_min_rr}:1.")
 
         # 4. Spread Tolerance Check. Points are for display; compare the raw
         # bid/ask difference in quote-price units with the stop distance.
@@ -581,8 +599,8 @@ class RiskGuardian:
             spread_price = 0.0
         if not math.isfinite(spread_price) or spread_price <= 0:
             veto_reasons.append("Verified bid/ask spread is unavailable; execution cost cannot be checked.")
-        elif risk_dist > 0 and (spread_price / risk_dist) > 0.20:
-            veto_reasons.append(f"Spread cost ({spread_price}) exceeds 20% of stop distance ({round(risk_dist, 3)}).")
+        elif risk_dist > 0 and (spread_price / risk_dist) > eff_max_spread:
+            veto_reasons.append(f"Spread cost ({spread_price}) exceeds {int(eff_max_spread*100)}% of stop distance ({round(risk_dist, 3)}).")
         try:
             spread_points = float(spread_points) if spread_points is not None else None
         except (TypeError, ValueError):
@@ -591,7 +609,7 @@ class RiskGuardian:
             spread_points = None
 
         # 5. Position Sizing (configured maximum risk)
-        risk_amount_usd = round(account_equity * (RISK_PER_TRADE_PERCENT / 100.0), 2)
+        risk_amount_usd = round(account_equity * (eff_risk_pct / 100.0), 2)
         lot_size = 0.01
         if risk_dist > 0:
             contract_size = float(cfg.get("lot_size", 100 if "XAU" in symbol else 100000))
@@ -616,8 +634,8 @@ class RiskGuardian:
             stop_loss=round(stop_loss, 3),
             take_profit=round(take_profit, 3),
             risk_reward_ratio=rr_ratio,
-            min_required_rr=MIN_RISK_REWARD_RATIO,
-            max_risk_percent=RISK_PER_TRADE_PERCENT,
+            min_required_rr=eff_min_rr,
+            max_risk_percent=eff_risk_pct,
             account_equity=account_equity,
             risk_amount_usd=risk_amount_usd,
             recommended_lot_size=lot_size,

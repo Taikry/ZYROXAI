@@ -20,7 +20,9 @@ from taikry.config import (
     RISK_PER_TRADE_PERCENT,
     INITIAL_PAPER_BALANCE,
     MAX_SIMULTANEOUS_POSITIONS,
-    get_symbol_config
+    get_symbol_config,
+    get_risk_profile,
+    RISK_PROFILES
 )
 from taikry.data.validator import check_data_freshness, is_market_open
 from taikry.data.economic_calendar import economic_calendar_provider
@@ -46,15 +48,42 @@ class RiskValidatorAgent:
         spread_price: Optional[float] = None,
         candidate_levels: Optional[Dict[str, Any]] = None,
         bid_price: Optional[float] = None,
-        ask_price: Optional[float] = None
+        ask_price: Optional[float] = None,
+        risk_mode: Optional[str] = None,
+        risk_options: Optional[Dict[str, Any]] = None,
+        min_risk_reward_ratio: Optional[float] = None,
+        risk_per_trade_percent: Optional[float] = None,
+        max_spread_pct: Optional[float] = None,
+        news_filter_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Runs independent risk assessment.
-        Returns strict institutional verdict.
+        Returns strict institutional verdict adaptive to selected Risk Profile.
         """
+        custom_overrides = dict(risk_options or {})
+        if min_risk_reward_ratio is not None:
+            custom_overrides["min_risk_reward_ratio"] = min_risk_reward_ratio
+        if risk_per_trade_percent is not None:
+            custom_overrides["risk_per_trade_percent"] = risk_per_trade_percent
+        if max_spread_pct is not None:
+            custom_overrides["max_spread_pct"] = max_spread_pct
+        if news_filter_mode is not None:
+            custom_overrides["news_filter_mode"] = news_filter_mode
+        active_profile = get_risk_profile(risk_mode, custom_overrides)
+        eff_min_rr = float(active_profile.get("min_risk_reward_ratio", MIN_RISK_REWARD_RATIO))
+        eff_risk_pct = float(active_profile.get("risk_per_trade_percent", RISK_PER_TRADE_PERCENT))
+        eff_max_spread = float(active_profile.get("max_spread_pct", 0.20))
+        eff_news_mode = str(active_profile.get("news_filter_mode", "STANDARD")).upper()
+
         rejection_reasons = []
         warning_notes = []
-        validation_checks = {}
+        validation_checks = {
+            "risk_profile": active_profile,
+            "min_required_rr": eff_min_rr,
+            "max_risk_percent": eff_risk_pct,
+            "max_spread_pct": eff_max_spread,
+            "news_filter_mode": eff_news_mode
+        }
 
         try:
             verified_price = float(verified_price)
@@ -119,12 +148,19 @@ class RiskValidatorAgent:
         blackout = economic_calendar_provider.check_news_blackout(symbol)
         validation_checks["news_blackout_active"] = blackout.get("is_blackout", False)
         validation_checks["calendar_status"] = blackout.get("status", "UNKNOWN")
-        if blackout["is_blackout"]:
-            rejection_reasons.append(blackout["advisory_en"])
-            warning_notes.append(blackout["advisory_kh"])
-        elif blackout.get("status") == "UNAVAILABLE":
-            rejection_reasons.append(blackout["advisory_en"])
-            warning_notes.append(blackout["advisory_kh"])
+        if eff_news_mode != "OFF":
+            if blackout.get("is_blackout"):
+                if eff_news_mode == "FLEXIBLE":
+                    warning_notes.append(f"Flexible scalp mode: {blackout.get('advisory_en')}")
+                else:
+                    rejection_reasons.append(blackout["advisory_en"])
+                    warning_notes.append(blackout["advisory_kh"])
+            elif blackout.get("status") == "UNAVAILABLE":
+                if eff_news_mode == "FLEXIBLE":
+                    warning_notes.append("Calendar feed unavailable: proceeding under scalp risk limits.")
+                else:
+                    rejection_reasons.append(blackout["advisory_en"])
+                    warning_notes.append(blackout["advisory_kh"])
 
         # 2. Maximum Simultaneous Position Count Check
         validation_checks["open_positions_count"] = open_positions_count
@@ -236,10 +272,10 @@ class RiskValidatorAgent:
                 if levels_valid:
                     risk = sl - entry
                     if not tp1 or tp1 >= entry:
-                        tp1 = round(entry - (risk * MIN_RISK_REWARD_RATIO), dec)
+                        tp1 = round(entry - (risk * eff_min_rr), dec)
                     reward_tp1 = entry - tp1
                     if not tp2 or tp2 >= tp1:
-                        tp2 = round(entry - (risk * max(MIN_RISK_REWARD_RATIO + 1.0, MIN_RISK_REWARD_RATIO * 1.5)), dec)
+                        tp2 = round(entry - (risk * max(eff_min_rr + 0.5, eff_min_rr * 1.5)), dec)
                 else:
                     sl = tp1 = tp2 = None
                     risk = reward_tp1 = 0.0
@@ -254,10 +290,10 @@ class RiskValidatorAgent:
                 if levels_valid:
                     risk = entry - sl
                     if not tp1 or tp1 <= entry:
-                        tp1 = round(entry + (risk * MIN_RISK_REWARD_RATIO), dec)
+                        tp1 = round(entry + (risk * eff_min_rr), dec)
                     reward_tp1 = tp1 - entry
                     if not tp2 or tp2 <= tp1:
-                        tp2 = round(entry + (risk * max(MIN_RISK_REWARD_RATIO + 1.0, MIN_RISK_REWARD_RATIO * 1.5)), dec)
+                        tp2 = round(entry + (risk * max(eff_min_rr + 0.5, eff_min_rr * 1.5)), dec)
                 else:
                     sl = tp1 = tp2 = None
                     risk = reward_tp1 = 0.0
@@ -265,23 +301,23 @@ class RiskValidatorAgent:
         if risk > 0 and reward_tp1 > 0:
             rr_ratio = round(reward_tp1 / risk, 2)
             validation_checks["calculated_rr"] = f"1:{rr_ratio}"
-            # Enforce the configured minimum Risk-to-Reward Ratio
-            if rr_ratio < MIN_RISK_REWARD_RATIO:
+            # Enforce the selected Risk-to-Reward Ratio floor
+            if rr_ratio < eff_min_rr:
                 rejection_reasons.append(
-                    f"Insufficient Risk-to-Reward: Calculated R:R is 1:{rr_ratio}, which fails the strict institutional minimum of 1:{MIN_RISK_REWARD_RATIO}."
+                    f"Insufficient Risk-to-Reward: Calculated R:R is 1:{rr_ratio}, which fails the {active_profile['name']} minimum of 1:{eff_min_rr}."
                 )
         else:
             rr_ratio = 0.0
             rejection_reasons.append("Missing valid Stop Loss or Take Profit targets.")
 
-        if spread_price is not None and risk > 0 and (spread_price / risk) > 0.20:
+        if spread_price is not None and risk > 0 and (spread_price / risk) > eff_max_spread:
             rejection_reasons.append(
-                f"Verified spread ({spread_price:g}) exceeds 20% of stop distance ({risk:g}); setup rejected."
+                f"Verified spread ({spread_price:g}) exceeds {int(eff_max_spread * 100)}% of stop distance ({risk:g}); setup rejected under {active_profile['name']} profile."
             )
 
         # 5. Position sizing from configured risk of simulated equity
         cfg = get_symbol_config(symbol)
-        max_risk_dollars = simulated_equity * (RISK_PER_TRADE_PERCENT / 100.0)
+        max_risk_dollars = simulated_equity * (eff_risk_pct / 100.0)
         validation_checks["simulated_equity"] = simulated_equity
         validation_checks["max_risk_dollars"] = max_risk_dollars
 
@@ -315,7 +351,7 @@ class RiskValidatorAgent:
         else:
             decision = "APPROVE"
             reasons = [
-                f"Setup validated: Direction {proposed_dir}, verified R:R 1:{rr_ratio} >= 1:{MIN_RISK_REWARD_RATIO}, Risk capped at {RISK_PER_TRADE_PERCENT}% equity (${max_risk_dollars})."
+                f"Setup validated: Direction {proposed_dir}, verified R:R 1:{rr_ratio} >= 1:{eff_min_rr}, Risk capped at {eff_risk_pct}% equity (${max_risk_dollars}) under {active_profile['name']} profile."
             ]
 
         return {
@@ -328,8 +364,9 @@ class RiskValidatorAgent:
             "take_profit_1": tp1,
             "take_profit_2": tp2,
             "calculated_rr": f"1:{rr_ratio}",
+            "risk_profile": active_profile,
             "position_sizing": {
-                "risk_percent": RISK_PER_TRADE_PERCENT,
+                "risk_percent": eff_risk_pct,
                 "risk_amount_dollars": max_risk_dollars,
                 "recommended_lots": validation_checks.get("recommended_position_lots", 0.0)
             },

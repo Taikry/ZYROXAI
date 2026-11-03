@@ -179,6 +179,113 @@ MAX_SIMULTANEOUS_POSITIONS = int(os.getenv("MAX_SIMULTANEOUS_POSITIONS", "3"))
 SLIPPAGE_PIPS = float(os.getenv("SLIPPAGE_PIPS", "1.0"))
 COMMISSION_PER_LOT = float(os.getenv("COMMISSION_PER_LOT", "7.0")) # $7 per standard round-turn lot
 
+# =====================================================================
+# Selectable Risk Profiles & Adaptive Analysis Options
+# =====================================================================
+RISK_PROFILES: Dict[str, Dict[str, Any]] = {
+    "CONSERVATIVE": {
+        "id": "CONSERVATIVE",
+        "name": "Conservative",
+        "name_kh": "ប្រុងប្រយ័ត្នខ្ពស់",
+        "badge": "🛡️ Conservative",
+        "badge_kh": "🛡️ ប្រុងប្រយ័ត្នខ្ពស់",
+        "risk_per_trade_percent": 0.25,
+        "min_risk_reward_ratio": 2.5,
+        "min_ai_score": 85,
+        "max_spread_pct": 0.10,
+        "news_filter_mode": "STRICT",
+        "directional_share_threshold": 0.65,
+        "description": "Maximum capital preservation. Requires 1:2.5+ R:R, 85%+ AI consensus score, and strict news lockout.",
+        "description_kh": "ការពារដើមទុនជាចម្បង។ ទាមទារ R:R យ៉ាងតិច 1:2.5 ពិន្ទុ AI 85% ឡើង និងផ្អាកជួញដូរពេលមានព័ត៌មានធំៗ។"
+    },
+    "BALANCED": {
+        "id": "BALANCED",
+        "name": "Balanced",
+        "name_kh": "តុល្យភាពស្ដង់ដារ",
+        "badge": "⚖️ Balanced",
+        "badge_kh": "⚖️ តុល្យភាពស្ដង់ដារ",
+        "risk_per_trade_percent": 0.50,
+        "min_risk_reward_ratio": 2.0,
+        "min_ai_score": 75,
+        "max_spread_pct": 0.20,
+        "news_filter_mode": "STANDARD",
+        "directional_share_threshold": 0.55,
+        "description": "Standard institutional parameters. 1:2.0+ R:R, 75%+ AI score, 20% spread buffer.",
+        "description_kh": "ការកំណត់ស្ដង់ដារស្ថាប័ន។ R:R 1:2.0 ឡើង ពិន្ទុ AI 75% ឡើង និងកម្រិត Spread 20% នៃ Stop Loss។"
+    },
+    "AGGRESSIVE": {
+        "id": "AGGRESSIVE",
+        "name": "Aggressive / Scalp",
+        "name_kh": "សកម្ម / ស្វែងរកឱកាសច្រើន (Scalp)",
+        "badge": "🚀 Aggressive / Scalp",
+        "badge_kh": "🚀 សកម្ម / ឱកាសច្រើន",
+        "risk_per_trade_percent": 1.00,
+        "min_risk_reward_ratio": 1.5,
+        "min_ai_score": 65,
+        "max_spread_pct": 0.25,
+        "news_filter_mode": "FLEXIBLE",
+        "directional_share_threshold": 0.50,
+        "description": "Dynamic scalp & momentum mode. Lower 1:1.5 R:R floor and 65%+ score to capture more intraday opportunities.",
+        "description_kh": "របៀប Scalp និងចាប់យកឱកាសលឿន។ R:R 1:1.5 និងពិន្ទុ AI 65% ដើម្បីចាប់យកឱកាសបានច្រើនឡើង។"
+    },
+    "CUSTOM": {
+        "id": "CUSTOM",
+        "name": "Custom Tuning",
+        "name_kh": "កំណត់តាមបំណង",
+        "badge": "⚙️ Custom",
+        "badge_kh": "⚙️ កំណត់តាមបំណង",
+        "risk_per_trade_percent": 0.50,
+        "min_risk_reward_ratio": 2.0,
+        "min_ai_score": 70,
+        "max_spread_pct": 0.20,
+        "news_filter_mode": "STANDARD",
+        "directional_share_threshold": 0.55,
+        "description": "Trader-defined custom risk limits and thresholds.",
+        "description_kh": "ការកំណត់កម្រិតហានិភ័យ និង R:R ដោយផ្ទាល់តាមចិត្តអ្នកជួញដូរ។"
+    }
+}
+
+def get_risk_profile(mode: Optional[str] = None, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    norm_mode = str(mode or "BALANCED").strip().upper()
+    if norm_mode not in RISK_PROFILES:
+        norm_mode = "BALANCED"
+    profile = dict(RISK_PROFILES[norm_mode])
+    if overrides and isinstance(overrides, dict):
+        if "risk_per_trade_percent" in overrides:
+            try:
+                val = float(overrides["risk_per_trade_percent"])
+                if 0.05 <= val <= MAX_RISK_PER_TRADE_PERCENT:
+                    profile["risk_per_trade_percent"] = val
+            except (TypeError, ValueError):
+                pass
+        if "min_risk_reward_ratio" in overrides:
+            try:
+                val = float(overrides["min_risk_reward_ratio"])
+                if 1.0 <= val <= 10.0:
+                    profile["min_risk_reward_ratio"] = val
+            except (TypeError, ValueError):
+                pass
+        if "min_ai_score" in overrides:
+            try:
+                val = int(overrides["min_ai_score"])
+                if 50 <= val <= 95:
+                    profile["min_ai_score"] = val
+            except (TypeError, ValueError):
+                pass
+        if "max_spread_pct" in overrides:
+            try:
+                val = float(overrides["max_spread_pct"])
+                if 0.05 <= val <= 0.50:
+                    profile["max_spread_pct"] = val
+            except (TypeError, ValueError):
+                pass
+        if "news_filter_mode" in overrides:
+            nmode = str(overrides["news_filter_mode"]).strip().upper()
+            if nmode in {"STRICT", "STANDARD", "FLEXIBLE", "OFF"}:
+                profile["news_filter_mode"] = nmode
+    return profile
+
+
 # Market Watchlist Specification
 # Priority 1: XAUUSD (Gold)
 PRIMARY_SYMBOL = "XAUUSD"

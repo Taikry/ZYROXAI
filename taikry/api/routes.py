@@ -28,7 +28,9 @@ from taikry.config import (
     MIN_RISK_REWARD_RATIO,
     RISK_PER_TRADE_PERCENT,
     get_symbol_config,
-    XAUUSD_PRICE_REFERENCE
+    XAUUSD_PRICE_REFERENCE,
+    RISK_PROFILES,
+    get_risk_profile
 )
 from taikry.database.session import SessionLocal
 from taikry.database.models import PaperTrade, BacktestJob, ConsensusReport
@@ -53,6 +55,8 @@ class AnalyzeRequest(BaseModel):
     timeframe: Optional[str] = Field(default="M15", description="Primary execution timeframe")
     force_fresh: Optional[bool] = Field(default=False, description="Bypass cache")
     llm_provider: Optional[str] = Field(default="quant", description="LLM provider: quant, auto, claude, openai, gemini, manus")
+    risk_mode: Optional[str] = Field(default="BALANCED", description="Risk Profile: CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom risk parameters overriding profile defaults")
 
 class ChatHistoryMessage(BaseModel):
     role: Literal["user", "assistant"] = Field(description="Conversation role: user or assistant")
@@ -234,7 +238,14 @@ def run_market_analysis(
             db.close()
 
     symbol = req.symbol.upper().replace("/", "").replace("-", "")
-    res = ai_consensus_engine.analyze_symbol(symbol, preferred_llm=req.llm_provider)
+    res = ai_consensus_engine.analyze_symbol(
+        symbol,
+        preferred_llm=req.llm_provider,
+        primary_timeframe=req.timeframe,
+        force_refresh=bool(req.force_fresh),
+        risk_mode=req.risk_mode,
+        risk_options=req.risk_options
+    )
     return res
 
 
@@ -3042,3 +3053,340 @@ def configure_freellmapi_endpoint(payload: FreeLLMAPIConfigureRequest, _: bool =
         "message": "FreeLLMAPI configuration updated successfully.",
         "status": freellmapi_client.get_status()
     }
+
+class RiskEvaluateRequest(BaseModel):
+    symbol: str = Field(default="XAUUSD", description="Market symbol")
+    direction: str = Field(default="BUY", description="Direction: BUY or SELL")
+    entry_price: float = Field(gt=0, description="Entry price")
+    stop_loss: float = Field(gt=0, description="Stop loss level")
+    take_profit: float = Field(gt=0, description="Take profit target")
+    account_equity: Optional[float] = Field(default=INITIAL_PAPER_BALANCE, gt=0, description="Account balance")
+    risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom parameters")
+
+
+@router.get("/api/v1/risk/profiles")
+def get_available_risk_profiles():
+    """
+    Returns the complete matrix of selectable Risk Profiles (Conservative, Balanced, Aggressive, Custom)
+    with their associated R:R floors, max risk percentages, news filters, and localized descriptions.
+    """
+    return {
+        "status": "SUCCESS",
+        "default_profile": "BALANCED",
+        "profiles": RISK_PROFILES,
+        "max_system_risk_percent": MAX_RISK_PER_TRADE_PERCENT
+    }
+
+
+@router.post("/api/v1/risk/evaluate")
+def evaluate_trade_risk(req: RiskEvaluateRequest):
+    """
+    Evaluates risk metrics, position lot sizing, and R:R conformance for any proposed trade
+    against the user's selected Risk Profile.
+    """
+    profile = get_risk_profile(req.risk_mode, req.risk_options)
+    eff_min_rr = profile["min_risk_reward_ratio"]
+    eff_risk_pct = profile["risk_per_trade_percent"]
+    eff_max_spread = profile["max_spread_pct"]
+
+    risk_dist = abs(req.entry_price - req.stop_loss)
+    reward_dist = abs(req.take_profit - req.entry_price)
+    rr_ratio = round(reward_dist / max(0.0001, risk_dist), 2) if risk_dist > 0 else 0.0
+
+    valid_geom = True
+    if req.direction.upper() in {"BUY", "LONG"} and req.stop_loss >= req.entry_price:
+        valid_geom = False
+    elif req.direction.upper() in {"SELL", "SHORT"} and req.stop_loss <= req.entry_price:
+        valid_geom = False
+
+    approved = valid_geom and rr_ratio >= eff_min_rr
+
+    cfg = get_symbol_config(req.symbol)
+    contract_size = float(cfg.get("lot_size", 100 if "XAU" in req.symbol.upper() else 100000))
+    risk_amount_usd = req.account_equity * (eff_risk_pct / 100.0)
+    raw_lots = risk_amount_usd / (risk_dist * contract_size) if risk_dist > 0 else 0.0
+    recommended_lots = round(min(10.0, max(0.01, raw_lots)), 2) if raw_lots >= 0.01 else 0.0
+
+    return {
+        "symbol": req.symbol.upper(),
+        "direction": req.direction.upper(),
+        "entry_price": req.entry_price,
+        "stop_loss": req.stop_loss,
+        "take_profit": req.take_profit,
+        "risk_distance": round(risk_dist, 4),
+        "reward_distance": round(reward_dist, 4),
+        "calculated_rr": f"1:{rr_ratio}",
+        "min_required_rr": eff_min_rr,
+        "is_rr_compliant": rr_ratio >= eff_min_rr,
+        "is_geometry_valid": valid_geom,
+        "approved": approved,
+        "risk_profile": profile,
+        "position_sizing": {
+            "account_equity": req.account_equity,
+            "risk_percentage": eff_risk_pct,
+            "risk_amount_usd": round(risk_amount_usd, 2),
+            "recommended_lots": recommended_lots
+        }
+    }
+
+
+# =============================================================================
+# ZYROX AI ADVANCED RISK INTELLIGENCE V3 REST APIS
+# =============================================================================
+
+class CandidateRiskEvaluationRequest(BaseModel):
+    symbol: str = Field(default="XAUUSD", description="Market symbol")
+    direction: str = Field(default="BUY", description="Direction: BUY or SELL")
+    entry_price: float = Field(gt=0, description="Entry price")
+    stop_loss: float = Field(gt=0, description="Stop loss level")
+    take_profit_1: float = Field(gt=0, description="Take profit 1 level")
+    take_profit_2: Optional[float] = Field(default=None, description="Take profit 2 level")
+    spread_price: Optional[float] = Field(default=None, description="Current broker spread in price units")
+    account_equity: Optional[float] = Field(default=INITIAL_PAPER_BALANCE, gt=0, description="Account balance")
+    risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    custom_risk_options: Optional[Dict[str, Any]] = Field(default=None, description="Custom risk options")
+
+
+class UpdateRiskSettingsRequest(BaseModel):
+    risk_mode: Optional[str] = Field(default="BALANCED", description="CONSERVATIVE, BALANCED, AGGRESSIVE, or CUSTOM")
+    risk_per_trade_percent: Optional[float] = Field(default=0.5, ge=0.1, le=2.0)
+    min_risk_reward_ratio: Optional[float] = Field(default=2.0, ge=1.0, le=5.0)
+    max_daily_loss_percent: Optional[float] = Field(default=2.5, ge=0.5, le=10.0)
+    max_weekly_loss_percent: Optional[float] = Field(default=5.0, ge=1.0, le=20.0)
+    max_drawdown_percent: Optional[float] = Field(default=8.0, ge=2.0, le=25.0)
+    max_simultaneous_positions: Optional[int] = Field(default=3, ge=1, le=10)
+    max_portfolio_risk_percent: Optional[float] = Field(default=5.0, ge=1.0, le=15.0)
+    news_filter_mode: Optional[str] = Field(default="STANDARD", description="STRICT, STANDARD, FLEXIBLE, or OFF")
+
+
+@router.get("/api/v1/risk/overview")
+def get_risk_overview(account_equity: Optional[float] = INITIAL_PAPER_BALANCE):
+    """
+    Returns global portfolio capital protection metrics, current drawdown,
+    and open-position risk utilization.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    settings = risk_intelligence_service.get_user_risk_settings()
+    portfolio = risk_intelligence_service.portfolio_engine.evaluate_portfolio(
+        account_equity=account_equity or INITIAL_PAPER_BALANCE
+    )
+    return {
+        "status": "SUCCESS",
+        "account_equity": account_equity,
+        "settings": settings,
+        "portfolio": portfolio.dict(),
+        "is_circuit_breaker_active": portfolio.is_drawdown_limit_breached,
+        "timestamp_utc": datetime.datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/api/v1/risk/portfolio")
+def get_portfolio_risk(
+    symbol: Optional[str] = None,
+    direction: Optional[str] = None,
+    risk_pct: Optional[float] = 0.5,
+    equity: Optional[float] = INITIAL_PAPER_BALANCE
+):
+    """
+    Audits multi-market portfolio exposure, net currency balance (e.g. net USD),
+    asset-class allocations, and cross-asset correlation warnings.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    portfolio = risk_intelligence_service.portfolio_engine.evaluate_portfolio(
+        proposed_symbol=symbol,
+        proposed_direction=direction,
+        proposed_risk_pct=risk_pct or 0.5,
+        account_equity=equity or INITIAL_PAPER_BALANCE
+    )
+    return {
+        "status": "SUCCESS",
+        "portfolio": portfolio.dict()
+    }
+
+
+@router.get("/api/v1/risk/regime")
+def get_market_regime(symbol: str = "XAUUSD", timeframe: str = "M15"):
+    """
+    Classifies market conditions into one of 8 canonical regimes:
+    STRONG_TREND, WEAK_TREND, RANGE, HIGH_VOLATILITY, LOW_VOLATILITY,
+    BREAKOUT, REVERSAL, or UNCERTAIN with quantitative metrics and evidence.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    from taikry.data.providers import market_data_engine
+    df = market_data_engine.get_candles(symbol, timeframe=timeframe, limit=60)
+    regime = risk_intelligence_service.regime_engine.classify_regime(symbol, df)
+    return {
+        "status": "SUCCESS",
+        "symbol": symbol.upper(),
+        "timeframe": timeframe.upper(),
+        "regime": regime.dict()
+    }
+
+
+@router.get("/api/v1/risk/news")
+def get_news_risk(symbol: str = "XAUUSD", filter_mode: str = "STANDARD"):
+    """
+    Evaluates calendar-aware news risk, pre/post event protection windows,
+    and returns approaching high-impact macro releases.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    assessment = risk_intelligence_service.news_engine.evaluate_news_risk(
+        symbol=symbol,
+        filter_mode=filter_mode
+    )
+    return {
+        "status": "SUCCESS",
+        "symbol": symbol.upper(),
+        "filter_mode": filter_mode.upper(),
+        "news_assessment": assessment.dict()
+    }
+
+
+@router.get("/api/v1/risk/quality")
+def get_signal_quality(symbol: str = "XAUUSD", direction: str = "BUY", rr: float = 2.0):
+    """
+    Computes an explainable 0–100 setup quality score from 8 validated structural
+    and quantitative factors.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    quality = risk_intelligence_service.quality_scorer.calculate_score(
+        symbol=symbol,
+        direction=direction,
+        rr_ratio=rr
+    )
+    return {
+        "status": "SUCCESS",
+        "symbol": symbol.upper(),
+        "direction": direction.upper(),
+        "quality_score": quality.dict()
+    }
+
+
+@router.post("/api/v1/risk/evaluate-candidate")
+def evaluate_trade_candidate(req: CandidateRiskEvaluationRequest):
+    """
+    The unified V3 risk gateway for all trade setups.
+    Returns one of: APPROVED, APPROVED_WITH_REDUCED_RISK, WAIT_FOR_CONFIRMATION, or REJECTED.
+    Logs every evaluation into PostgreSQL / SQLite risk_assessment_logs.
+    """
+    from taikry.risk.service import risk_intelligence_service
+    from taikry.data.providers import market_data_engine
+    df = market_data_engine.get_candles(req.symbol, timeframe="M15", limit=60)
+    result = risk_intelligence_service.evaluate_trade_candidate(
+        symbol=req.symbol,
+        direction=req.direction,
+        entry_price=req.entry_price,
+        stop_loss=req.stop_loss,
+        take_profit_1=req.take_profit_1,
+        take_profit_2=req.take_profit_2,
+        spread_price=req.spread_price,
+        account_equity=req.account_equity or INITIAL_PAPER_BALANCE,
+        risk_mode=req.risk_mode,
+        custom_risk_options=req.custom_risk_options,
+        candle_df=df,
+        persist_log=True
+    )
+    return {
+        "status": "SUCCESS",
+        "assessment": result.dict()
+    }
+
+
+@router.get("/api/v1/risk/settings")
+def get_risk_settings():
+    """Returns current active risk preferences and capital protection limits."""
+    from taikry.risk.service import risk_intelligence_service
+    settings = risk_intelligence_service.get_user_risk_settings()
+    return {
+        "status": "SUCCESS",
+        "settings": settings,
+        "available_profiles": RISK_PROFILES
+    }
+
+
+@router.put("/api/v1/risk/settings")
+def update_risk_settings(req: UpdateRiskSettingsRequest):
+    """Updates user capital protection preferences with safety bounds."""
+    from taikry.database.session import SessionLocal
+    from taikry.risk.models import UserRiskSettings
+    db = SessionLocal()
+    try:
+        obj = db.query(UserRiskSettings).filter(UserRiskSettings.user_id == None).first()
+        if not obj:
+            obj = UserRiskSettings()
+            db.add(obj)
+        if req.risk_mode:
+            obj.risk_mode = req.risk_mode.upper()
+        if req.risk_per_trade_percent is not None:
+            obj.risk_per_trade_percent = min(2.0, max(0.1, req.risk_per_trade_percent))
+        if req.min_risk_reward_ratio is not None:
+            obj.min_risk_reward_ratio = max(1.0, req.min_risk_reward_ratio)
+        if req.max_daily_loss_percent is not None:
+            obj.max_daily_loss_percent = req.max_daily_loss_percent
+        if req.max_weekly_loss_percent is not None:
+            obj.max_weekly_loss_percent = req.max_weekly_loss_percent
+        if req.max_drawdown_percent is not None:
+            obj.max_drawdown_percent = req.max_drawdown_percent
+        if req.max_simultaneous_positions is not None:
+            obj.max_simultaneous_positions = req.max_simultaneous_positions
+        if req.max_portfolio_risk_percent is not None:
+            obj.max_portfolio_risk_percent = req.max_portfolio_risk_percent
+        if req.news_filter_mode:
+            obj.news_filter_mode = req.news_filter_mode.upper()
+        db.commit()
+        return {
+            "status": "SUCCESS",
+            "message": "Risk settings updated successfully.",
+            "settings": {
+                "risk_mode": obj.risk_mode,
+                "risk_per_trade_percent": obj.risk_per_trade_percent,
+                "min_risk_reward_ratio": obj.min_risk_reward_ratio,
+                "max_drawdown_percent": obj.max_drawdown_percent,
+                "news_filter_mode": obj.news_filter_mode
+            }
+        }
+    finally:
+        db.close()
+
+
+@router.get("/api/v1/risk/history")
+def get_risk_assessment_history(symbol: Optional[str] = None, limit: int = 20):
+    """Retrieves recent persistent audit records of evaluated trade setups."""
+    from taikry.database.session import SessionLocal
+    from taikry.risk.models import RiskAssessmentLog
+    db = SessionLocal()
+    try:
+        q = db.query(RiskAssessmentLog)
+        if symbol:
+            q = q.filter(RiskAssessmentLog.symbol == symbol.upper())
+        logs = q.order_by(RiskAssessmentLog.created_at.desc()).limit(min(100, max(1, limit))).all()
+        return {
+            "status": "SUCCESS",
+            "count": len(logs),
+            "records": [
+                {
+                    "assessment_id": l.assessment_id,
+                    "symbol": l.symbol,
+                    "direction": l.direction,
+                    "entry_price": l.entry_price,
+                    "stop_loss": l.stop_loss,
+                    "take_profit_1": l.take_profit_1,
+                    "calculated_rr": l.calculated_rr,
+                    "decision": l.decision,
+                    "risk_mode": l.risk_mode,
+                    "risk_percentage": l.risk_percentage,
+                    "risk_amount_usd": l.risk_amount_usd,
+                    "recommended_lots": l.recommended_lots,
+                    "quality_score": l.quality_score,
+                    "market_regime": l.market_regime,
+                    "news_status": l.news_status,
+                    "veto_reasons": l.veto_reasons,
+                    "advisory_notes": l.advisory_notes,
+                    "created_at": l.created_at.isoformat() if l.created_at else None
+                }
+                for l in logs
+            ]
+        }
+    finally:
+        db.close()

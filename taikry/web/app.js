@@ -14,6 +14,8 @@ let isKhmer = false;
 let latestAnalysisData = null;
 let latestBestSetups = [];
 let currentCockpitTradeStyle = "INTRADAY";
+let currentRiskProfile = localStorage.getItem("zyrox_risk_profile") || "BALANCED";
+let customRiskOptions = null;
 let currentXauusdCatalyst = null;
 let cachedMacroEvents = [];
 let macroCountdownInterval = null;
@@ -2814,6 +2816,36 @@ async function runCockpitBestSetup() {
     buttonBusyState?.restore();
   }
 }
+
+function selectCockpitRiskProfile(profile) {
+  const valid = ["CONSERVATIVE", "BALANCED", "AGGRESSIVE", "CUSTOM"];
+  currentRiskProfile = valid.includes(profile) ? profile : "BALANCED";
+  localStorage.setItem("zyrox_risk_profile", currentRiskProfile);
+  updateRiskProfileDisplay();
+}
+
+function updateRiskProfileDisplay() {
+  const select = document.getElementById("cockpit-risk-profile");
+  if (select && select.value !== currentRiskProfile) {
+    select.value = currentRiskProfile;
+  }
+  const pill = document.getElementById("cockpit-active-risk-pill");
+  const badge = document.getElementById("adv-risk-badge");
+  const specs = {
+    "CONSERVATIVE": { label: "0.8% · 1:2.2", desc: isKhmer ? "អភិរក្សនិយម · 0.8% ហានិភ័យ" : "Conservative · Max 0.8% Risk" },
+    "BALANCED": { label: "1.5% · 1:1.8", desc: isKhmer ? "តុល្យភាព · 1.5% ហានិភ័យ" : "Balanced · Max 1.5% Risk" },
+    "AGGRESSIVE": { label: "2.5% · 1:1.5", desc: isKhmer ? "សកម្មខ្លាំង · 2.5% ហានិភ័យ" : "Aggressive · Max 2.5% Risk" },
+    "CUSTOM": { label: "Custom", desc: isKhmer ? "កំណត់ដោយខ្លួនឯង" : "Custom Settings" }
+  };
+  const s = specs[currentRiskProfile] || specs["BALANCED"];
+  if (pill) pill.innerText = s.label;
+  if (badge) badge.innerText = s.desc;
+  const label = document.getElementById("t-cockpit-risk-label");
+  if (label) label.innerText = isKhmer ? "🛡️ កម្រិតហានិភ័យ" : "🛡️ Risk Profile";
+}
+
+window.selectCockpitRiskProfile = selectCockpitRiskProfile;
+window.updateRiskProfileDisplay = updateRiskProfileDisplay;
 
 function selectCockpitTradeStyle(style) {
   const normalized = String(style || "INTRADAY").toUpperCase();

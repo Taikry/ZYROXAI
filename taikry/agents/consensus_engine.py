@@ -107,6 +107,8 @@ class AIConsensusEngine:
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         primary_timeframe: Optional[str] = None,
         requested_timeframes: Optional[List[str]] = None,
+        risk_mode: Optional[str] = "BALANCED",
+        risk_options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Executes complete multi-agent workflow.
@@ -129,6 +131,14 @@ class AIConsensusEngine:
         if primary_timeframe or requested_timeframes:
             tf_key = ",".join(str(tf).strip().upper() for tf in (requested_timeframes or []))
             cache_key += f":CUSTOM:{str(primary_timeframe or '').upper()}:{tf_key}"
+        if risk_mode:
+            cache_key += f":RISK:{str(risk_mode).upper()}"
+        if risk_options:
+            cache_key += f":ROPT:{hash(str(sorted(risk_options.items())))}"
+        from taikry.config import get_risk_profile
+        active_risk_profile = get_risk_profile(risk_mode, risk_options)
+        min_ai_score_threshold = int(active_risk_profile.get("min_ai_score", 75))
+        directional_share_floor = float(active_risk_profile.get("directional_share_threshold", 0.55))
         now_ts = t_start
         if not force_refresh and cache_key in _ANALYSIS_CACHE:
             c_time, c_data = _ANALYSIS_CACHE[cache_key]
@@ -480,6 +490,8 @@ class AIConsensusEngine:
                     agent3_report=agent3_out,
                     simulated_equity=simulated_equity,
                     open_positions_count=open_positions_count,
+                    risk_mode=risk_mode,
+                    risk_options=risk_options,
                     **risk_quote_fields
                 )
             else:
@@ -492,6 +504,8 @@ class AIConsensusEngine:
                     agent3_report=agent3_out,
                     simulated_equity=simulated_equity,
                     open_positions_count=open_positions_count,
+                    risk_mode=risk_mode,
+                    risk_options=risk_options,
                     **risk_quote_fields
                 )
             risk_out = _track_report("risk_validator", risk_out)
@@ -586,13 +600,13 @@ class AIConsensusEngine:
             review_reasons.append("A required technical, structure, or macro report is unavailable.")
         if material_conflict:
             review_reasons.append("Material bullish and bearish vote conflict; wait for clearer confluence.")
-        if setup_status == "APPROVE" and (consensus_direction == "NONE" or proposed_vote != consensus_direction or directional_share < 0.55):
+        if setup_status == "APPROVE" and (consensus_direction == "NONE" or proposed_vote != consensus_direction or directional_share < directional_share_floor):
             review_reasons.append("The independent risk direction does not have sufficient eight-agent consensus support.")
             setup_status = "WAIT"
         if review_reasons and setup_status == "APPROVE":
             setup_status = "REJECT" if any("unavailable" in reason.lower() or "data quality" in reason.lower() for reason in review_reasons) else "WAIT"
-        if setup_status == "APPROVE" and ai_score < 80:
-            review_reasons.append("Weighted eight-agent support is below the 80/100 dispatch threshold.")
+        if setup_status == "APPROVE" and ai_score < min_ai_score_threshold:
+            review_reasons.append(f"Weighted eight-agent support ({ai_score}/100) is below the {active_risk_profile['name']} threshold ({min_ai_score_threshold}/100).")
             setup_status = "WAIT"
 
         # Required feeds and quorum veto any approval before a candidate is exposed.
@@ -604,7 +618,7 @@ class AIConsensusEngine:
         # Candidate-stage specialists are only run for an approved, sufficiently
         # scored plan. Portfolio and execution reviewers can veto; the critic is advisory.
         candidate_review_reports = {}
-        if setup_status == "APPROVE" and 80 <= ai_score <= 95:
+        if setup_status == "APPROVE" and min_ai_score_threshold <= ai_score <= 98:
             from taikry.agents.registry import agent_registry
             from taikry.config import COMMISSION_PER_LOT, get_symbol_config
             counter_ad = agent_registry.get_adapter("counter_analysis_agent")
@@ -930,6 +944,7 @@ class AIConsensusEngine:
             "take_profit_2": tp2,
             "candidate_plan": candidate_plan,
             "risk_reward_ratio": rr_str,
+            "risk_profile": active_risk_profile,
             "invalidation_rules": agent1_out.get("invalidation_level") or agent2_out.get("invalidation_level"),
             "smart_analysis": smart_analysis,
             "agent_run_summary": agent_run_summary,

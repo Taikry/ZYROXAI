@@ -440,6 +440,19 @@
                 <option value="SWING">Swing · H4 / D1 / W1</option>
               </select>
             </label>
+            <!-- Risk Intelligence V3 Profile Selector -->
+            <div class="cockpit-risk-row" style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; gap: 6px;">
+              <label class="cockpit-style-control" for="cockpit-risk-profile" style="margin-bottom:0; flex:1;">
+                <span id="t-cockpit-risk-label">🛡️ Risk Profile</span>
+                <select id="cockpit-risk-profile" onchange="selectCockpitRiskProfile(this.value)">
+                  <option value="BALANCED">⚖️ Balanced (1.5% · 1:1.8 R:R)</option>
+                  <option value="CONSERVATIVE">🛡️ Conservative (0.8% · 1:2.2 R:R)</option>
+                  <option value="AGGRESSIVE">⚡ Aggressive (2.5% · 1:1.5 R:R)</option>
+                  <option value="CUSTOM">⚙️ Custom Settings</option>
+                </select>
+              </label>
+              <span class="adv-badge adv-badge-emerald" id="cockpit-active-risk-pill" style="font-size:10px; padding:4px 8px; white-space:nowrap; align-self:flex-end;">1.5% · 1:1.8</span>
+            </div>
 
             <!-- Primary Action Buttons: Analyze vs Best Setup -->
             <div class="cockpit-action-row">
@@ -492,8 +505,8 @@
                     </select>
                   </div>
                   <div class="adv-item">
-                    <span class="adv-label">Risk Floor:</span>
-                    <span class="adv-badge adv-badge-emerald">Configured Minimum R:R</span>
+                    <span class="adv-label" id="t-adv-risk-options">Risk Profile Options:</span>
+                    <span class="adv-badge adv-badge-emerald" id="adv-risk-badge">Balanced Mode · Max 1.5%</span>
                   </div>
                 </div>
               </div>
