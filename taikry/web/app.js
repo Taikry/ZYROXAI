@@ -683,6 +683,7 @@ async function triggerScan() {
       body: JSON.stringify({
         symbol: currentSymbol,
         timeframe: tfParam,
+        force_fresh: true,
         llm_provider: currentLLMProvider
       })
     });
@@ -742,6 +743,11 @@ async function triggerScan() {
 
     // Update Pro Analysis Cockpit Plan Card
     updateCockpitPlanCard(data);
+
+    // Active AI Chart Trade Signal Overlay
+    if (window.taikryChart && typeof window.taikryChart.setActiveTradeSignal === "function") {
+      window.taikryChart.setActiveTradeSignal(data);
+    }
 
     updateReportView(data);
     return data;
@@ -2938,6 +2944,9 @@ function selectCockpitBestSetup(symbol) {
   selectSymbol(symbol, asset?.tv || `OANDA:${symbol}`, false);
   latestAnalysisData = candidate;
   updateCockpitPlanCard(candidate);
+  if (window.taikryChart && typeof window.taikryChart.setActiveTradeSignal === "function") {
+    window.taikryChart.setActiveTradeSignal(candidate);
+  }
   renderCockpitChips();
 }
 
@@ -2980,31 +2989,54 @@ function renderCockpitBestSetups(data) {
     const priceLabel = Number.isFinite(price) && price > 0
       ? price.toLocaleString(undefined, { maximumFractionDigits: price > 100 ? 2 : 5 })
       : "N/A";
-    const candidate = item.candidate_plan;
-    const direction = String(candidate?.direction || item.proposed_direction || "NONE").toUpperCase();
+
+    // Extract Plan & Levels (Cascade: Root -> candidate_plan -> agent_4_risk)
+    const candidate = item.candidate_plan || item.agents?.agent_4_risk;
+    const rawDir = String(item.candidate_plan?.direction || item.proposed_direction || item.agents?.agent_4_risk?.proposed_direction || item.market_bias || "NONE").toUpperCase();
+    const isBuy = rawDir.includes("BUY") || rawDir.includes("LONG") || rawDir.includes("BULLISH");
+    const isSell = rawDir.includes("SELL") || rawDir.includes("SHORT") || rawDir.includes("BEARISH");
+    const sidePill = isBuy
+      ? `<span class="cockpit-side-badge badge-buy">🟢 BUY</span>`
+      : (isSell ? `<span class="cockpit-side-badge badge-sell">🔴 SELL</span>` : `<span class="cockpit-side-badge badge-neutral">⚡ ${rawDir}</span>`);
+
+    const entryVal = item.entry_price ?? candidate?.entry_price;
+    const slVal = item.stop_loss ?? candidate?.stop_loss;
+    const tp1Val = item.take_profit_1 ?? candidate?.take_profit_1;
+    const tp2Val = item.take_profit_2 ?? candidate?.take_profit_2;
+    const rrVal = item.risk_reward_ratio || candidate?.risk_reward_ratio || candidate?.calculated_rr || "R:R N/A";
+
+    const hasLevels = [entryVal, slVal, tp1Val].every(v => Number.isFinite(Number(v)) && Number(v) > 0);
+    const planClass = isBuy ? "plan-buy" : (isSell ? "plan-sell" : "");
+
+    const planLabel = hasLevels
+      ? `<div class="cockpit-setup-levels-bar ${planClass}">
+          <div class="level-cell"><small>ENTRY</small><b>${escapeHtml(String(entryVal))}</b></div>
+          <div class="level-cell level-sl"><small>SL</small><b>${escapeHtml(String(slVal))}</b></div>
+          <div class="level-cell level-tp"><small>TP1</small><b>${escapeHtml(String(tp1Val))}</b></div>
+          ${tp2Val != null ? `<div class="level-cell level-tp2"><small>TP2</small><b>${escapeHtml(String(tp2Val))}</b></div>` : ""}
+          <div class="level-cell level-rr"><small>R:R</small><b>${escapeHtml(String(rrVal))}</b></div>
+        </div>`
+      : "";
+
     const reason = String(item.reason_summary || item.error || (isKhmer ? "មិនមានមូលហេតុបន្ថែម។" : "No additional risk note."));
     const source = String(item.price_source || "");
-    const candidateReady = candidate?.status === "ANALYSIS_ONLY" && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
-    const displayPlan = candidateReady ? candidate : item;
-    const planLabel = (approved || candidateReady) && displayPlan.entry_price != null && displayPlan.stop_loss != null && displayPlan.take_profit_1 != null
-      ? `<div class="cockpit-setup-plan">${candidateReady ? (isKhmer ? "មើលប៉ុណ្ណោះ" : "ANALYSIS ONLY") : (isKhmer ? "ចូល" : "Entry")} ${escapeHtml(String(displayPlan.entry_price))} · SL ${escapeHtml(String(displayPlan.stop_loss))} · TP1 ${escapeHtml(String(displayPlan.take_profit_1))}${displayPlan.take_profit_2 != null ? ` · TP2 ${escapeHtml(String(displayPlan.take_profit_2))}` : ""} · ${escapeHtml(String(displayPlan.risk_reward_ratio || item.risk_reward_ratio || "R:R N/A"))}</div>`
-      : "";
     const ageSeconds = Number(item.analysis_age_seconds);
     const ageLabel = Number.isFinite(ageSeconds)
       ? (ageSeconds < 60 ? (isKhmer ? "ទើបស្កេន" : "just scanned") : `${Math.floor(ageSeconds / 60)}m ${isKhmer ? "មុន" : "ago"}`)
       : (isKhmer ? "មិនស្គាល់អាយុទិន្នន័យ" : "age unknown");
     const statusClass = approved ? "approved" : (status === "UNAVAILABLE" ? "unavailable" : "blocked");
+
     return `
       <article class="cockpit-setup-option ${statusClass}">
         <div class="cockpit-setup-option-head">
           <div class="cockpit-setup-symbol">${getAssetRealLogoHTML(symbol)} <b>${escapeHtml(symbol)}</b> <span>#${index + 1}</span></div>
-          <span class="cockpit-setup-status">${escapeHtml(statusLabel)}</span>
+          <div class="cockpit-setup-badges">${sidePill} <span class="cockpit-setup-status">${escapeHtml(statusLabel)}</span></div>
         </div>
         <div class="cockpit-setup-option-meta">
           <span>${isKhmer ? "ទិសដៅ" : "Bias"}: ${escapeHtml(String(item.market_bias || "N/A"))}</span>
-          <span>${isKhmer ? "ផែនការ" : "Side"}: ${escapeHtml(direction)}</span>
           <span>${isKhmer ? "ពិន្ទុ" : "Score"}: ${escapeHtml(scoreLabel)}</span>
           <span>${isKhmer ? "តម្លៃ" : "Price"}: ${escapeHtml(priceLabel)}</span>
+          <span>${isKhmer ? "R:R" : "Risk/Reward"}: ${escapeHtml(String(rrVal))}</span>
         </div>
         ${planLabel}
         <p class="cockpit-setup-reason">${escapeHtml(reason)}</p>
@@ -3160,37 +3192,51 @@ function updateCockpitPlanCard(data) {
   const statusApproved = data.setup_status === "APPROVE";
   const scanUnavailable = ["UNAVAILABLE", "ERROR"].includes(String(data.setup_status || "").toUpperCase());
   const vPrice = Number(data.verified_price);
-  const candidate = data.candidate_plan;
-  const candidateDirection = String(candidate?.direction || "").toUpperCase();
-  const hasCandidatePlan = !statusApproved && candidate?.status === "ANALYSIS_ONLY"
-    && ["LONG", "SHORT"].includes(candidateDirection)
-    && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
-  const entryPrice = Number(statusApproved ? data.entry_price : (hasCandidatePlan ? candidate.entry_price : data.entry_price));
+
+  // Cascade plan & levels: Root -> candidate_plan -> agent_4_risk
+  const candidate = data.candidate_plan || data.agents?.agent_4_risk;
+  const rawDirection = String(data.proposed_direction || candidate?.direction || candidate?.proposed_direction || data.market_bias || "").toUpperCase();
+  const isBuy = rawDirection.includes("BUY") || rawDirection.includes("LONG") || rawDirection.includes("BULLISH");
+  const isSell = rawDirection.includes("SELL") || rawDirection.includes("SHORT") || rawDirection.includes("BEARISH");
+  const action = statusApproved && isBuy ? "BUY" : (statusApproved && isSell ? "SELL" : (isBuy ? "BUY" : (isSell ? "SELL" : "WAIT")));
+
+  const rawEntry = Number(data.entry_price);
+  const candEntry = Number(candidate?.entry_price);
+  const entryPrice = Number.isFinite(rawEntry) && rawEntry > 0 ? rawEntry : (Number.isFinite(candEntry) && candEntry > 0 ? candEntry : null);
+
+  const rawSL = Number(data.stop_loss);
+  const candSL = Number(candidate?.stop_loss);
+  const stopLoss = Number.isFinite(rawSL) && rawSL > 0 ? rawSL : (Number.isFinite(candSL) && candSL > 0 ? candSL : null);
+
+  const rawTP = Number(data.take_profit_1);
+  const candTP = Number(candidate?.take_profit_1);
+  const takeProfit = Number.isFinite(rawTP) && rawTP > 0 ? rawTP : (Number.isFinite(candTP) && candTP > 0 ? candTP : null);
+
+  const rrRatio = data.risk_reward_ratio || candidate?.risk_reward_ratio || candidate?.calculated_rr || "R:R N/A";
+
   const referencePrice = Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : vPrice;
   const decimals = currentSymbol.includes("JPY") ? 3 : (currentSymbol.includes("USDT") && referencePrice > 500 ? 2 : (referencePrice > 100 ? 2 : 4));
-  const rawDirection = String(data.proposed_direction || "").toUpperCase();
-  const action = statusApproved && ["BUY", "SELL"].includes(rawDirection)
-    ? rawDirection
-    : (statusApproved && rawDirection === "LONG" ? "BUY" : (statusApproved && rawDirection === "SHORT" ? "SELL" : "WAIT"));
-  const stopLoss = Number(statusApproved ? data.stop_loss : (hasCandidatePlan ? candidate.stop_loss : data.stop_loss));
-  const takeProfit = Number(statusApproved ? data.take_profit_1 : (hasCandidatePlan ? candidate.take_profit_1 : data.take_profit_1));
-  const approved = statusApproved && action !== "WAIT"
-    && [entryPrice, stopLoss, takeProfit].every(value => Number.isFinite(value) && value > 0)
-    && (action === "BUY" ? stopLoss < entryPrice && entryPrice < takeProfit : stopLoss > entryPrice && entryPrice > takeProfit);
-  const hasEntry = approved && Number.isFinite(entryPrice) && entryPrice > 0;
+  const hasEntry = Number.isFinite(entryPrice) && entryPrice > 0;
   const rangeLow = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
   const rangeHigh = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
+  const approved = statusApproved && hasEntry;
 
   if (planCard) {
-    planCard.className = `cockpit-plan-card ${action === 'BUY' ? 'plan-buy' : (action === 'SELL' ? 'plan-sell' : '')}`;
+    planCard.className = `cockpit-plan-card ${isBuy ? 'plan-buy' : (isSell ? 'plan-sell' : '')}`;
   }
 
   if (titleBadge) {
-    titleBadge.innerText = approved && action !== "WAIT"
-      ? `PLAN · ${action} ${Number(rangeLow).toLocaleString()}`
-      : (hasCandidatePlan
-        ? `${isKhmer ? "រង់ចាំ · មើលប៉ុណ្ណោះ" : "WAIT · ANALYSIS ONLY"} · ${candidateDirection}`
-        : (scanUnavailable ? (isKhmer ? "ស្កេនបរាជ័យ" : "SCAN FAILED") : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`));
+    if (statusApproved && hasEntry) {
+      titleBadge.innerText = `PLAN · ${isBuy ? '🟢 BUY' : (isSell ? '🔴 SELL' : 'TRADE')} ${Number(rangeLow).toLocaleString()}`;
+    } else if (hasEntry && isBuy) {
+      titleBadge.innerText = `SETUP · 🟢 BUY ${Number(rangeLow).toLocaleString()} · ${isKhmer ? "រង់ចាំការអនុម័ត" : "AWAITING APPROVAL"}`;
+    } else if (hasEntry && isSell) {
+      titleBadge.innerText = `SETUP · 🔴 SELL ${Number(rangeLow).toLocaleString()} · ${isKhmer ? "រង់ចាំការអនុម័ត" : "AWAITING APPROVAL"}`;
+    } else if (scanUnavailable) {
+      titleBadge.innerText = isKhmer ? "ស្កេនបរាជ័យ" : "SCAN FAILED";
+    } else {
+      titleBadge.innerText = `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`;
+    }
   }
 
   const scoreBadge = document.getElementById("plan-score-badge");
@@ -3269,9 +3315,16 @@ function updateCockpitPlanCard(data) {
   if (toastText) {
     if (approved) {
       toastText.innerText = `⚡ Approved setup loaded. Review its levels before recording a paper trade.`;
+    } else if (hasEntry) {
+      toastText.innerText = `⚡ Preview setup loaded (${isBuy ? 'BUY' : 'SELL'}). Review levels on chart.`;
     } else {
       toastText.innerText = `No approved setup is available from this scan.`;
     }
+  }
+
+  // Active AI Chart Trade Signal Overlay
+  if (window.taikryChart && typeof window.taikryChart.setActiveTradeSignal === "function") {
+    window.taikryChart.setActiveTradeSignal(data);
   }
 
 }

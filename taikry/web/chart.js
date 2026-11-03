@@ -211,6 +211,12 @@
       this._isSyncingRange = false;
       this.sessionClockTimer = null;
       this.sessionClockContainer = null;
+      this.activeTradeSignal = null;
+    }
+
+    setActiveTradeSignal(signal) {
+      this.activeTradeSignal = signal;
+      this.scheduleOverlayRepaint();
     }
 
     // -------------------------------------------------------------------------
@@ -1700,6 +1706,135 @@
             `;
           }
         });
+      }
+
+      // 6. ACTIVE TRADE SIGNAL OVERLAY (ENTRY, SL, TP1, TP2, R:R RISK/REWARD BOX)
+      if (this.indicatorSettings.trade_signals && this.activeTradeSignal) {
+        const sig = this.activeTradeSignal;
+        const sigSym = String(sig.symbol || "").toUpperCase();
+        const curSym = String(this.currentSymbol || "").toUpperCase();
+
+        if (!sigSym || sigSym === curSym) {
+          const rawDir = String(sig.proposed_direction || sig.direction || sig.candidate_plan?.direction || "").toUpperCase();
+          const isBuy = rawDir === "BUY" || rawDir === "LONG" || rawDir === "BULLISH";
+          const isSell = rawDir === "SELL" || rawDir === "SHORT" || rawDir === "BEARISH";
+          const side = isBuy ? "BUY" : (isSell ? "SELL" : "SETUP");
+
+          const entry = Number(sig.entry_price ?? sig.candidate_plan?.entry_price);
+          const sl = Number(sig.stop_loss ?? sig.candidate_plan?.stop_loss);
+          const tp1 = Number(sig.take_profit_1 ?? sig.candidate_plan?.take_profit_1);
+          const tp2 = Number(sig.take_profit_2 ?? sig.candidate_plan?.take_profit_2);
+          const rr = sig.risk_reward_ratio || sig.candidate_plan?.risk_reward_ratio || "";
+          const score = Number(sig.ai_score ?? sig.confidence_score ?? sig.candidate_plan?.confidence);
+          const status = String(sig.setup_status || (sig.candidate_plan ? "ANALYSIS ONLY" : "ACTIVE")).toUpperCase();
+
+          if (Number.isFinite(entry) && entry > 0 && Number.isFinite(sl) && sl > 0) {
+            const yEntry = priceToY(entry);
+            const ySL = priceToY(sl);
+            const yTP1 = Number.isFinite(tp1) && tp1 > 0 ? priceToY(tp1) : null;
+            const yTP2 = Number.isFinite(tp2) && tp2 > 0 ? priceToY(tp2) : null;
+
+            if (yEntry !== null && ySL !== null) {
+              const startIdx = Math.max(0, this.candlesData.length - 28);
+              const startCandle = this.candlesData[startIdx];
+              let boxX1 = startCandle ? timeToX(startCandle.time) : null;
+              if (boxX1 === null || isNaN(boxX1) || boxX1 < 0) {
+                boxX1 = Math.max(20, paneWidth * 0.45);
+              }
+              const boxX2 = Math.max(boxX1 + 100, paneWidth - 8);
+              const boxW = Math.max(80, boxX2 - boxX1);
+
+              // 1. Shaded Risk Zone Box (between Entry and SL)
+              const riskTop = Math.min(yEntry, ySL);
+              const riskH = Math.abs(yEntry - ySL);
+              if (riskH > 1) {
+                svgElements += `
+                  <rect x="${boxX1}" y="${riskTop}" width="${boxW}" height="${riskH}" fill="rgba(244, 63, 94, 0.12)" stroke="rgba(244, 63, 94, 0.35)" stroke-dasharray="3,3" stroke-width="1" rx="3" />
+                  <text x="${boxX1 + 8}" y="${riskTop + Math.min(14, riskH - 2)}" fill="#f43f5e" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="700">
+                    🛡️ RISK ZONE (SL: ${this.formatPrice(sl)})
+                  </text>
+                `;
+              }
+
+              // 2. Shaded Profit Target Zone Box (between Entry and TP1)
+              if (yTP1 !== null) {
+                const profitTop = Math.min(yEntry, yTP1);
+                const profitH = Math.abs(yEntry - yTP1);
+                if (profitH > 1) {
+                  svgElements += `
+                    <rect x="${boxX1}" y="${profitTop}" width="${boxW}" height="${profitH}" fill="rgba(16, 185, 129, 0.12)" stroke="rgba(16, 185, 129, 0.35)" stroke-dasharray="3,3" stroke-width="1" rx="3" />
+                    <text x="${boxX1 + 8}" y="${profitTop + Math.min(14, profitH - 2)}" fill="#10b981" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="700">
+                      🎯 PROFIT ZONE (TP1: ${this.formatPrice(tp1)}${rr ? ` · R:R ${rr}` : ''})
+                    </text>
+                  `;
+                }
+              }
+
+              // Tag positioning on right side
+              const tagW = 160;
+              const tagX = Math.max(10, paneWidth - tagW - 12);
+
+              // 3. Entry Line (Cyan dashed)
+              const entryColor = "#38bdf8";
+              svgElements += `
+                <line x1="0" y1="${yEntry}" x2="${paneWidth}" y2="${yEntry}" stroke="${entryColor}" stroke-width="1.8" stroke-dasharray="6,4" opacity="0.95" />
+                <rect x="${tagX}" y="${yEntry - 10}" width="${tagW}" height="20" fill="#061325" stroke="${entryColor}" stroke-width="1.2" rx="4" />
+                <text x="${tagX + 8}" y="${yEntry + 4}" fill="${entryColor}" font-size="9.5" font-family="'JetBrains Mono', monospace" font-weight="bold">
+                  ▶ ${side} ENTRY: ${this.formatPrice(entry)}
+                </text>
+              `;
+
+              // 4. Stop Loss Line (Red dashed)
+              const slColor = "#f43f5e";
+              svgElements += `
+                <line x1="0" y1="${ySL}" x2="${paneWidth}" y2="${ySL}" stroke="${slColor}" stroke-width="1.8" stroke-dasharray="6,4" opacity="0.95" />
+                <rect x="${tagX}" y="${ySL - 10}" width="${tagW}" height="20" fill="#200a12" stroke="${slColor}" stroke-width="1.2" rx="4" />
+                <text x="${tagX + 8}" y="${ySL + 4}" fill="${slColor}" font-size="9.5" font-family="'JetBrains Mono', monospace" font-weight="bold">
+                  ✕ STOP LOSS: ${this.formatPrice(sl)}
+                </text>
+              `;
+
+              // 5. Take Profit 1 Line (Emerald dashed)
+              if (yTP1 !== null) {
+                const tpColor = "#10b981";
+                svgElements += `
+                  <line x1="0" y1="${yTP1}" x2="${paneWidth}" y2="${yTP1}" stroke="${tpColor}" stroke-width="1.8" stroke-dasharray="6,4" opacity="0.95" />
+                  <rect x="${tagX}" y="${yTP1 - 10}" width="${tagW}" height="20" fill="#042014" stroke="${tpColor}" stroke-width="1.2" rx="4" />
+                  <text x="${tagX + 8}" y="${yTP1 + 4}" fill="${tpColor}" font-size="9.5" font-family="'JetBrains Mono', monospace" font-weight="bold">
+                    ★ TP1: ${this.formatPrice(tp1)}
+                  </text>
+                `;
+              }
+
+              // 6. Take Profit 2 Line (Gold dashed)
+              if (yTP2 !== null) {
+                const tp2Color = "#eab308";
+                svgElements += `
+                  <line x1="0" y1="${yTP2}" x2="${paneWidth}" y2="${yTP2}" stroke="${tp2Color}" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.85" />
+                  <rect x="${tagX}" y="${yTP2 - 10}" width="${tagW}" height="20" fill="#241a04" stroke="${tp2Color}" stroke-width="1.2" rx="4" />
+                  <text x="${tagX + 8}" y="${yTP2 + 4}" fill="${tp2Color}" font-size="9.5" font-family="'JetBrains Mono', monospace" font-weight="bold">
+                    ★★ TP2: ${this.formatPrice(tp2)}
+                  </text>
+                `;
+              }
+
+              // 7. Floating HUD Badge on Top-Right of Main Pane
+              const badgeColor = isBuy ? "#10b981" : (isSell ? "#f43f5e" : "#38bdf8");
+              const badgeBg = isBuy ? "rgba(16, 185, 129, 0.15)" : (isSell ? "rgba(244, 63, 94, 0.15)" : "rgba(56, 189, 248, 0.15)");
+              const scoreText = Number.isFinite(score) ? ` | AI: ${Math.round(score)}%` : "";
+              const rrText = rr ? ` | R:R: ${rr}` : "";
+              svgElements += `
+                <g class="chart-active-setup-badge" opacity="0.95">
+                  <rect x="14" y="14" width="260" height="28" fill="#090d16" stroke="${badgeColor}" stroke-width="1.2" rx="6" />
+                  <rect x="15" y="15" width="258" height="26" fill="${badgeBg}" rx="5" />
+                  <text x="24" y="32" fill="${badgeColor}" font-size="11" font-family="'Inter', sans-serif" font-weight="800">
+                    ${isBuy ? '🟢' : (isSell ? '🔴' : '⚡')} ${side} [${status}]${scoreText}${rrText}
+                  </text>
+                </g>
+              `;
+            }
+          }
+        }
       }
 
       this.overlaySvg.innerHTML = svgElements;
