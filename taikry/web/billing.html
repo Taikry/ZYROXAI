@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#050a08">
   <title>ZYROX AI — Plans & Billing</title>
   <script src="/dashboard/ui-kit.js?v=2.6.0" defer></script>
   <style>
@@ -70,7 +69,8 @@
     .metric { padding:13px; border:1px solid var(--line); background:#09120d; border-radius:11px; }
     .metric span { display:block; color:var(--muted); font-size:11px; }
     .metric strong { display:block; margin-top:4px; font-size:22px; }
-    #toast { position:fixed; right:20px; bottom:20px; max-width:min(440px,calc(100vw - 40px)); border:1px solid #315343; background:#101c15; color:var(--text); border-radius:12px; padding:13px 16px; box-shadow:0 12px 32px #0008; display:none; z-index:20; }
+    #toast { position:fixed; right:20px; bottom:20px; max-width:min(440px,calc(100vw - 40px)); border:1px solid #315343; background:#101c15; color:var(--text); border-radius:12px; padding:13px 16px; box-shadow:0 12px 32px #0008; z-index:20; }
+    #toast[hidden] { display:none !important; }
     #toast.error { border-color:#8a3b3b; color:#ffd0d0; }
     footer { border-top:1px solid var(--line); margin-top:48px; padding-top:20px; color:var(--muted); font-size:12px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     @media(max-width:760px) { .shell{padding:16px 14px 48px}.bar{align-items:flex-start}.brand small{display:none}.account-grid{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.hero{padding-top:34px}.bar-actions .button{padding:8px 10px;font-size:12px} }
@@ -109,6 +109,13 @@
     @keyframes khqr-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
     @keyframes zyrox-fade{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
     .khqr-btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .signal-flow-note{margin-top:12px}
+    #subscription-summary{margin-top:15px}
+    #subscription-controls{margin-top:14px}
+    .admin-transactions-heading{margin-top:24px}
+    #admin-transactions{margin-top:12px}
+    #khqr-modal-plan{font-size:20px;margin:0 0 4px}
+    .is-hidden{display:none !important}
   </style>
 </head>
 <body>
@@ -143,7 +150,7 @@
     <section class="section" id="pricing">
       <div class="section-head"><div><h2 data-i18n="plans_title">Subscription plans</h2><p data-i18n="plans_subtitle">One-time checkout. No automatic recurring card charges.</p></div><div><span class="small provider-status" id="payment-provider-status" role="status" aria-live="polite">Checking ABA PayWay…</span> <span class="small" id="plan-load-state"></span></div></div>
       <div class="grid" id="plan-grid"><div class="empty" data-i18n="loading">Loading plans…</div></div>
-      <p class="small" style="margin-top:12px">Signal flow: your active plan must include Telegram alerts, your Telegram account must be linked, and “Real-time Trading Signals” must be enabled in your account preferences. Alerts are sent only for validated setups; XAUUSD has a global limit of 4 signals per day and some days may have none. / លំហូរសញ្ញា៖ ត្រូវមានគម្រោងសកម្មដែលអនុញ្ញាត Telegram alerts ភ្ជាប់គណនី Telegram និងបើក “Real-time Trading Signals” ក្នុងចំណូលចិត្តគណនី។ ផ្ញើតែ setup ដែលបានផ្ទៀងផ្ទាត់ប៉ុណ្ណោះ។ XAUUSD កំណត់សរុបអតិបរមា ៤ សញ្ញាក្នុងមួយថ្ងៃ ហើយថ្ងៃខ្លះអាចគ្មានសញ្ញា។</p>
+      <p class="small signal-flow-note">Signal flow: your active plan must include Telegram alerts, your Telegram account must be linked, and “Real-time Trading Signals” must be enabled in your account preferences. Alerts are sent only for validated setups; XAUUSD has a global limit of 4 signals per day and some days may have none. / លំហូរសញ្ញា៖ ត្រូវមានគម្រោងសកម្មដែលអនុញ្ញាត Telegram alerts ភ្ជាប់គណនី Telegram និងបើក “Real-time Trading Signals” ក្នុងចំណូលចិត្តគណនី។ ផ្ញើតែ setup ដែលបានផ្ទៀងផ្ទាត់ប៉ុណ្ណោះ។ XAUUSD កំណត់សរុបអតិបរមា ៤ សញ្ញាក្នុងមួយថ្ងៃ ហើយថ្ងៃខ្លះអាចគ្មានសញ្ញា។</p>
     </section>
 
     <section class="section">
@@ -154,13 +161,13 @@
     <section class="section" id="my-subscription">
       <div class="section-head"><div><h2 data-i18n="account_title">My subscription</h2><p data-i18n="account_subtitle">Your access state comes from the server-side entitlement record.</p></div><a href="/?auth=signin" id="signin-link" hidden data-i18n="signin">Sign in</a></div>
       <div class="account-grid">
-        <article class="card"><h3 data-i18n="current_access">Current access</h3><div id="subscription-summary" class="empty" style="margin-top:15px" data-i18n="signin_prompt">Sign in to view your subscription and invoices.</div><div id="subscription-controls" style="margin-top:14px" hidden><button class="button" id="cancel-subscription" data-i18n="cancel">Cancel at period end</button><p class="small" data-i18n="cancel_note">Access remains available until the current paid period expires. No payment provider cancellation is reported.</p></div></article>
+        <article class="card"><h3 data-i18n="current_access">Current access</h3><div id="subscription-summary" class="empty" data-i18n="signin_prompt">Sign in to view your subscription and invoices.</div><div id="subscription-controls" hidden><button class="button" id="cancel-subscription" data-i18n="cancel">Cancel at period end</button><p class="small" data-i18n="cancel_note">Access remains available until the current paid period expires. No payment provider cancellation is reported.</p></div></article>
         <article class="card"><div class="section-head"><div><h3 data-i18n="invoice_history">Invoice history</h3></div></div><div id="invoice-list" class="empty" data-i18n="signin_prompt">Sign in to view your subscription and invoices.</div></article>
       </div>
     </section>
 
     <section class="section" id="admin-payments" hidden>
-      <article class="card admin-card"><div class="section-head"><div><h2 data-i18n="admin_title">Payment administration</h2><p data-i18n="admin_subtitle">Visible to authorized administrators only.</p></div></div><div id="admin-metrics" class="admin-metrics"></div><h3 style="margin-top:24px" data-i18n="transactions">Recent payment transactions</h3><div id="admin-transactions" style="margin-top:12px"></div></article>
+      <article class="card admin-card"><div class="section-head"><div><h2 data-i18n="admin_title">Payment administration</h2><p data-i18n="admin_subtitle">Visible to authorized administrators only.</p></div></div><div id="admin-metrics" class="admin-metrics"></div><h3 class="admin-transactions-heading" data-i18n="transactions">Recent payment transactions</h3><div id="admin-transactions"></div></article>
     </section>
 
     <footer><span>ZYROX AI · <span data-i18n="footer_note">Payments are verified server-side. A browser redirect alone never activates access.</span></span><a href="/dashboard/" data-i18n="back">Back to dashboard</a></footer>
@@ -174,7 +181,7 @@
         <button type="button" class="khqr-close-btn" id="khqr-close-btn" aria-label="Close">&times;</button>
       </div>
       <div>
-        <h2 id="khqr-modal-plan" style="font-size:20px;margin:0 0 4px">Plan Name</h2>
+        <h2 id="khqr-modal-plan">Plan Name</h2>
         <div class="khqr-plan-title" data-i18n="scan_khqr_guide">Scan with Bakong or any Cambodia bank app</div>
       </div>
       <div class="khqr-qr-wrap">
@@ -200,7 +207,7 @@
     </div>
   </div>
 
-  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
   <script>
     const copy = {
       en: { terminal:"Terminal", eyebrow:"Plans & billing", hero_title:"Choose your trading edge.", hero_lead:"Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.", provider_title:"Bakong Open API (KHQR) status", provider_body:"Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.", expiration_title:"Your access period is ending soon", plans_title:"Subscription plans", plans_subtitle:"One-time checkout. No automatic recurring card charges.", loading:"Loading plans…", compare_title:"Plan comparison", compare_subtitle:"Feature limits are enforced by ZYROX AI on the server.", account_title:"My subscription", account_subtitle:"Your access state comes from the server-side entitlement record.", current_access:"Current access", signin:"Sign in", signin_prompt:"Sign in to view your subscription and invoices.", invoice_history:"Invoice history", cancel:"Cancel at period end", cancel_note:"Access remains available until the current paid period expires. No payment provider cancellation is reported.", admin_title:"Payment administration", admin_subtitle:"Visible to authorized administrators only.", transactions:"Recent payment transactions", footer_note:"Payments are verified server-side. A browser redirect alone never activates access.", back:"Back to dashboard", month:"month", year:"year", checkout:"Continue to secure checkout", unavailable:"Checkout is not ready", ai_scans:"Daily AI scans", deep_analysis:"Deep analyses / day", watchlists:"Watchlists", backtesting:"Backtesting", telegram:"Telegram alerts", debate:"Agent debate", yes:"Included", no:"Not included", no_plans:"No paid plans are currently available.", plan_error:"Plans could not be loaded.", subscription_error:"Subscription status could not be loaded.", access_status:"Status", expires:"Access ends", auto_renew:"Automatic renewal", off:"Off", trial:"Trial", none:"None", verify:"Check status", cancel_done:"Cancellation scheduled through period end.", cancel_error:"Cancellation could not be scheduled.", pending:"Payment pending verification", paid:"Payment verified", failed:"Payment failed", review:"Payment needs review", revenue:"Verified revenue", pending_invoices:"Pending invoices", successful:"Successful payments", failed_payments:"Failed payments", active_subs:"Active subscriptions", expiring:"Expiring in 7 days", not_supported:"Refund API not enabled", reference:"Reference", amount:"Amount", status:"Status", date:"Date", invoice:"Invoice", empty_invoices:"No invoices yet.", signin_required:"Please sign in to continue.", checkout_error:"Secure checkout is not ready. No invoice was created.", copied:"Reference copied", scan_khqr_guide:"Scan with Bakong or any Cambodia banking app", amount_to_pay:"Total Amount", bill_number:"Bill Ref:", bakong_account:"Account:", expires_in:"Valid for:", listening_payment:"Auto-checking Bakong payment...", open_bakong_app:"📱 Open App", verify_now:"🔄 Verify Now" },
@@ -244,7 +251,7 @@
     let isCheckoutPending = false;
     const verifyingInvoices = new Set();
     const t = key => (copy[language] && copy[language][key]) || copy.en[key] || key;
-    function toast(message, error=false) { const node=document.getElementById("toast"); node.textContent=message; node.className=error?"error":""; node.style.display="block"; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>node.style.display="none",4200); }
+    function toast(message, error=false) { const node=document.getElementById("toast"); node.textContent=message; node.className=error?"error":""; node.hidden=false; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>{ node.hidden=true; },4200); }
     function setLanguage(next) { language=next; localStorage.setItem("zyrox-billing-lang",language); document.documentElement.lang=language==="kh"?"km":"en"; document.querySelectorAll("[data-i18n]").forEach(n=>{const value=copy[language][n.dataset.i18n]; if(value)n.textContent=value;}); document.getElementById("lang-toggle").textContent=language==="en"?"ភាសាខ្មែរ":"English"; if(paymentStatusChecked)renderPaymentStatus(); renderPlanCount(); if(currentPlans.length){renderPlans(currentPlans);renderComparison(currentPlans);} }
     document.getElementById("lang-toggle").addEventListener("click",()=>setLanguage(language==="en"?"kh":"en"));
     function node(tag, cls, text) { const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el; }
@@ -463,7 +470,7 @@
         }
         if(!data.invoice?.id||!data.checkout?.url)throw new Error(t("checkout_error"));
         sessionStorage.setItem("zyroxPendingInvoiceId",String(data.invoice.id));
-        const form=document.createElement("form");form.method="POST";form.enctype="multipart/form-data";form.action=data.checkout.url;form.style.display="none";
+        const form=document.createElement("form");form.method="POST";form.enctype="multipart/form-data";form.action=data.checkout.url;form.hidden=true;form.className="is-hidden";
         Object.entries(data.checkout.fields||{}).forEach(([name,value])=>{const input=document.createElement("input");input.type="hidden";input.name=name;input.value=String(value??"");form.append(input);});document.body.append(form);form.submit();
       }catch(error){toast(error.message||t("checkout_error"),true);busyState?.restore();isCheckoutPending=false;}
     }
