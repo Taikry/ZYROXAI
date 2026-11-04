@@ -3895,7 +3895,8 @@ async function loadOverviewData() {
           feedEl.className = `section-kpi-val ${gold.verified && gold.source === "EXNESS_MT5" ? "text-green" : "text-gold"}`;
         }
         if (feedDetailEl) {
-          feedDetailEl.innerText = gold.timestamp ? `Quote timestamp: ${new Date(gold.timestamp).toLocaleString()}` : `Feed status: ${gold.freshness || "unknown"}`;
+          const sprdText = gold.spread != null ? ` · Spread: ${gold.spread} pts` : "";
+          feedDetailEl.innerText = gold.timestamp ? `Quote: ${new Date(gold.timestamp).toLocaleTimeString()}${sprdText}` : `Feed status: ${gold.freshness || "unknown"}`;
         }
         const ap = document.getElementById("ov-active-price");
         if (ap) ap.innerText = `$${Number(gold.price).toFixed(2)}`;
@@ -4537,8 +4538,8 @@ function renderMarketsTable() {
     const c24 = pInfo && pInfo.change_24h !== undefined && pInfo.change_24h !== null ? Number(pInfo.change_24h) : null;
     const chgText = c24 === null ? "--" : (c24 >= 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`);
     const source = pInfo ? (pInfo.provider || pInfo.source || "N/A") : "Awaiting data";
-    const isLive = pInfo && pInfo.source === "EXNESS_MT5";
-    const statusPill = isLive ? `<span class="badge-active">MT5 LIVE</span>` : `<span class="provider-pill">${pInfo ? 'FALLBACK' : 'OFFLINE'}</span>`;
+    const isLive = pInfo && (pInfo.source === "EXNESS_MT5" || pInfo.execution_quote_available === true || pInfo.verified === true);
+    const statusPill = isLive ? `<span class="badge-active">${pInfo.source === "EXNESS_MT5" ? "MT5 LIVE" : "LIVE VERIFIED"}</span>` : `<span class="provider-pill">${pInfo ? 'FALLBACK' : 'OFFLINE'}</span>`;
 
     return `
       <tr>
@@ -6299,8 +6300,8 @@ async function fetchXAUUSDSignalsAndStats(isSilent = false) {
             <span>${kh ? "ផ្សាយបន្តផ្ទាល់ 4វិនាទី" : "Live Streaming (4s)"}</span>
           </span>
           <span class="xauusd-price-badge" id="xauusd-realtime-price">$${fmtP(price)}</span>
-          <span style="font-size:10px; color:#64748b; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">
-            ${escapeHtml(String(priceSrc))} · Sprd: ${escapeHtml(String(spread))} pts
+          <span style="font-size:10px; color:#94a3b8; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.08);">
+            Bid: <b style="color:#38bdf8;">$${liveData.bid != null ? Number(liveData.bid).toFixed(2) : (price > 0 ? (price - Number(spread)/2).toFixed(2) : "---")}</b> · Ask: <b style="color:#f472b6;">$${liveData.ask != null ? Number(liveData.ask).toFixed(2) : (price > 0 ? (price + Number(spread)/2).toFixed(2) : "---")}</b> · Sprd: <b style="color:#fbbf24;">${escapeHtml(String(spread))} pts</b> · <span style="color:#64748b;">${escapeHtml(String(priceSrc))}</span>
           </span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">

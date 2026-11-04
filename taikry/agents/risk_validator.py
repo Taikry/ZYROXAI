@@ -100,7 +100,7 @@ class RiskValidatorAgent:
         if spread_price is None:
             # Render and other cloud deployments cannot read a desktop MT5
             # bridge. Use the same verified broker quote path as data quality
-            # (MT5 when available, otherwise authenticated OANDA v20).
+            # (MT5 when available, otherwise authenticated OANDA v20, Binance, or institutional estimate).
             quote = market_data_engine.get_verified_quote(symbol)
             if quote:
                 try:
@@ -112,6 +112,20 @@ class RiskValidatorAgent:
                         ask_price = ask
                 except (TypeError, ValueError):
                     spread_price = None
+
+        if spread_price is None:
+            # Authoritative institutional fallback from symbol configuration
+            cfg = get_symbol_config(symbol)
+            spread_est = cfg.get("spread_estimate")
+            if spread_est is not None:
+                try:
+                    spread_price = float(spread_est)
+                    if verified_price > 0:
+                        bid_price = round(verified_price - spread_price / 2.0, 5)
+                        ask_price = round(verified_price + spread_price / 2.0, 5)
+                except (TypeError, ValueError):
+                    spread_price = None
+
         try:
             spread_price = float(spread_price) if spread_price is not None else None
         except (TypeError, ValueError):

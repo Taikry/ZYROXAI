@@ -85,10 +85,20 @@ class MarketDataQualityAgent:
                     f"Authentic broker quote verified via Windows MT5 ({broker_name}). "
                     f"Bid: {bid:.{decimals}f}, Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
                 )
-            else:
+            elif "OANDA" in quote_source.upper():
                 evidence.append(
                     f"Authenticated OANDA v20 quote verified. Bid: {bid:.{decimals}f}, "
                     f"Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
+                )
+            elif "BINANCE" in quote_source.upper():
+                evidence.append(
+                    f"Authentic Binance Spot quote verified. Bid: {bid:.{decimals}f}, "
+                    f"Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
+                )
+            else:
+                evidence.append(
+                    f"Institutional verified quote active ({broker_name}). "
+                    f"Bid: {bid:.{decimals}f}, Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
                 )
         else:
             bid = ask = None
