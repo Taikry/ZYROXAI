@@ -121,9 +121,14 @@ circuit_breaker = FeedCircuitBreaker()
 
 def generate_synthetic_candles(symbol: str, timeframe: str = "M15", limit: int = 150) -> pd.DataFrame:
     """
-    Generates clearly labeled demo candles from a previously observed provider price.
-    This function is not used as an automatic market-data fallback.
+    DEPRECATED & DISABLED: ZYROX AI operates strictly on authentic provider market data.
+    Synthetic or simulated candles are forbidden in production.
     """
+    logger.warning("generate_synthetic_candles called for %s:%s, but synthetic data generation is strictly disabled.", symbol, timeframe)
+    return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "source"])
+
+def _deprecated_generate_synthetic_candles_unused(symbol: str, timeframe: str = "M15", limit: int = 150) -> pd.DataFrame:
+    """Unused legacy generator preserved for archival reference only."""
     cfg = get_symbol_config(symbol)
     sym = symbol.upper()
     base = REFERENCE_BASE_PRICES.get(sym)

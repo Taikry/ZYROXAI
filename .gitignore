@@ -48,6 +48,7 @@ taikry_market.db
 .pytest_cache/
 .coverage
 htmlcov/
+scratch/
 
 # Archives
 *.rar

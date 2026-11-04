@@ -6833,10 +6833,10 @@ async function loadVipSubscribers() {
 }
 
 async function submitGrantVip() {
-  const userId = document.getElementById("grant-user-id")?.value?.trim();
-  const username = document.getElementById("grant-username")?.value?.trim() || null;
-  const tier = document.getElementById("grant-tier")?.value || "PRO";
-  const duration = parseInt(document.getElementById("grant-duration")?.value || "30", 10);
+  const userId = (document.getElementById("admin-grant-user-id") || document.getElementById("grant-user-id"))?.value?.trim();
+  const username = (document.getElementById("admin-grant-username") || document.getElementById("grant-username"))?.value?.trim() || null;
+  const tier = (document.getElementById("admin-grant-tier") || document.getElementById("grant-tier"))?.value || "PRO";
+  const duration = parseInt((document.getElementById("admin-grant-duration") || document.getElementById("grant-duration"))?.value || "30", 10);
 
   if (!userId) {
     alert("Please enter a valid Telegram User ID (e.g. 849201948)!");
@@ -6859,8 +6859,8 @@ async function submitGrantVip() {
     });
     const data = await res.json();
     if (data.status === "SUCCESS") {
-      const banner = document.getElementById("grant-result-banner");
-      const linkEl = document.getElementById("grant-result-link");
+      const banner = document.getElementById("admin-grant-result-banner") || document.getElementById("grant-result-banner");
+      const linkEl = document.getElementById("admin-grant-result-link") || document.getElementById("grant-result-link");
       if (banner && linkEl) {
         linkEl.textContent = data.subscription.invite_link || "N/A";
         banner.style.display = "flex";
@@ -6875,9 +6875,11 @@ async function submitGrantVip() {
     alert(`❌ Error granting VIP: ${err.message}`);
   }
 }
+window.submitAdminGrantVip = submitGrantVip;
+async function submitAdminGrantVip() { return submitGrantVip(); }
 
 function copyVipLink() {
-  const linkEl = document.getElementById("grant-result-link");
+  const linkEl = document.getElementById("admin-grant-result-link") || document.getElementById("grant-result-link");
   if (linkEl && linkEl.textContent) {
     navigator.clipboard.writeText(linkEl.textContent).then(() => {
       alert("📋 VIP Invite Link copied to clipboard!");
@@ -6886,6 +6888,8 @@ function copyVipLink() {
     });
   }
 }
+window.copyAdminVipLink = copyVipLink;
+function copyAdminVipLink() { return copyVipLink(); }
 
 async function revokeVipSubscriber(userId) {
   if (!confirm(`Are you sure you want to revoke VIP access for user ${userId}?\nThis will evict the member from the VIP channel and invalidate their invite link.`)) {
