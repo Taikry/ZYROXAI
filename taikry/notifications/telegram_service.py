@@ -2674,18 +2674,73 @@ Use <code>/vip</code> only for the separate legacy VIP Channel membership."""
             parts = data.split(":")
             method = parts[2]
             tier_code = parts[3] if len(parts) > 3 else "PRO"
-            from taikry.subscriptions.vip_manager import vip_subscription_manager
-            text = vip_subscription_manager.build_payment_message(method, tier_code)
-            buttons = {
-                "inline_keyboard": [
-                    [{"text": "⬅️ ត្រឡប់ក្រោយ (Back)", "callback_data": f"sub:tier:{tier_code}"}]
-                ]
-            }
+            from taikry.subscriptions.vip_manager import vip_subscription_manager, SUBSCRIPTION_TIERS
+            from taikry.saas.bakong_service import bakong_service
+
+            if method == "bakong" and bakong_service.is_configured():
+                tier_info = SUBSCRIPTION_TIERS.get(tier_code.upper(), SUBSCRIPTION_TIERS.get("PRO", {}))
+                amount = float(tier_info.get("price_usd", 29.0))
+                khqr = bakong_service.create_khqr_payload(
+                    amount=amount,
+                    currency="USD",
+                    bill_number=f"TG-{user_id}-{tier_code}"
+                )
+                text = f"""🇰🇭 <b>ទូទាត់តាម Bakong KHQR (NBC Open API)</b>\n━━━━━━━━━━━━━━━━━━━━\n🎯 <b>គម្រោង / Plan:</b> {tier_code}\n💰 <b>ចំនួនទឹកប្រាក់ / Amount:</b> <b>${amount:.2f} USD</b>\n🧾 <b>លេខយោងវិក្កយបត្រ:</b> <code>{khqr['bill_number']}</code>\n👤 <b>គណនីទទួល:</b> <code>{khqr['account_id']}</code>\n\n📱 <b>របៀបទូទាត់:</b>\n1. ចុចប៊ូតុង "📱 បើកក្នុង Bakong App" ខាងក្រោម ឬថតអេក្រង់ KHQR\n2. ផ្ទេរប្រាក់ក្នុងកម្មវិធី Bakong ឬកម្មវិធីធនាគារណាមួយ (ABA, ACLEDA, Wing, etc.)\n3. បន្ទាប់ពីផ្ទេររួច សូមចុចប៊ូតុង "🔄 ពិនិត្យការទូទាត់ / Verify" ដើម្បីបើកសិទ្ធិ VIP ភ្លាមៗ!"""
+                buttons = {
+                    "inline_keyboard": [
+                        [{"text": "📱 បើកក្នុង Bakong App", "url": khqr["deeplink_web"]}],
+                        [{"text": "🔄 ពិនិត្យការទូទាត់ / Verify Payment", "callback_data": f"sub:verify:bakong:{khqr['md5_hash']}:{tier_code}"}],
+                        [{"text": "⬅️ ត្រឡប់ក្រោយ (Back)", "callback_data": f"sub:tier:{tier_code}"}]
+                    ]
+                }
+            else:
+                text = vip_subscription_manager.build_payment_message(method, tier_code)
+                buttons = {
+                    "inline_keyboard": [
+                        [{"text": "⬅️ ត្រឡប់ក្រោយ (Back)", "callback_data": f"sub:tier:{tier_code}"}]
+                    ]
+                }
             if message_id:
                 self.edit_message_text(text, chat_id, message_id, reply_markup=buttons)
             else:
                 self.send_message(text, chat_id=chat_id, reply_markup=buttons)
             return {"status": "SUCCESS", "action": "sub_pay", "method": method, "tier": tier_code}
+
+        elif data.startswith("sub:verify:bakong:"):
+            parts = data.split(":")
+            md5_hash = parts[3]
+            tier_code = parts[4] if len(parts) > 4 else "PRO"
+            from taikry.subscriptions.vip_manager import vip_subscription_manager, SUBSCRIPTION_TIERS
+            from taikry.saas.bakong_service import bakong_service
+
+            is_paid, msg, tx_data = bakong_service.check_transaction_by_md5(md5_hash)
+            if is_paid:
+                tier_info = SUBSCRIPTION_TIERS.get(tier_code.upper(), SUBSCRIPTION_TIERS.get("PRO", {}))
+                amount = float(tier_info.get("price_usd", 29.0))
+                vip_subscription_manager.grant_subscription(
+                    user_id=user_id,
+                    tier=tier_code,
+                    duration_days=tier_info.get("duration_days", 30),
+                    payment_ref=md5_hash,
+                    payment_amount=amount,
+                    notes=f"Auto-verified via Bakong Open API (hash: {tx_data.get('hash', '') if tx_data else ''})"
+                )
+                if callback_query_id:
+                    self.answer_callback_query(callback_query_id, text="🎉 ការទូទាត់ជោគជ័យ! សមាជិកភាព VIP ត្រូវបានបើកដំណើរការ!", show_alert=True)
+                success_text, buttons = vip_subscription_manager.build_user_status_message(user_id)
+                if message_id:
+                    self.edit_message_text(success_text, chat_id, message_id, reply_markup=buttons)
+                else:
+                    self.send_message(success_text, chat_id=chat_id, reply_markup=buttons)
+                return {"status": "SUCCESS", "action": "sub_verified", "tier": tier_code}
+            else:
+                if callback_query_id:
+                    self.answer_callback_query(
+                        callback_query_id,
+                        text="⏳ មិនទាន់ឃើញការទូទាត់ពី Bakong Open API ទេ។ សូមផ្ទេរប្រាក់ក្នុង App ជាមុនសិន។",
+                        show_alert=True
+                    )
+                return {"status": "PENDING", "action": "sub_verify_pending", "message": msg}
 
         elif data.startswith("sub:submitproof:"):
             tier_code = data.split(":")[2]

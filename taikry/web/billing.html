@@ -88,6 +88,27 @@
     .payment-state-success{border-color:#10b98188;background:#10b98118;color:#d1fae5;animation:zyrox-success-in .28s ease-out}
     @keyframes zyrox-spin{to{transform:rotate(360deg)}} @keyframes zyrox-shimmer{to{background-position:-220% 0}} @keyframes zyrox-success-in{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){.zyrox-spinner{animation:none}.zyrox-card-skeleton-mark,.zyrox-skeleton-line{animation:none}.payment-state-success{animation:none}}
+
+    /* Bakong KHQR Modal */
+    .khqr-modal-overlay{position:fixed;inset:0;background:#030706d9;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;animation:zyrox-fade .2s ease-out}
+    .khqr-modal-card{width:100%;max-width:440px;background:linear-gradient(165deg,#0c1a13,#070d0a);border:1px solid #1f4733;border-radius:24px;box-shadow:0 24px 64px #000000d0;padding:24px;position:relative;display:grid;gap:16px;text-align:center}
+    .khqr-header{display:flex;align-items:center;justify-content:space-between}
+    .khqr-brand-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#e11d481a;border:1px solid #e11d484d;border-radius:999px;color:#fb7185;font-size:12px;font-weight:700}
+    .khqr-close-btn{background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:4px 8px;border-radius:8px;line-height:1}
+    .khqr-close-btn:hover{color:var(--text);background:#ffffff12}
+    .khqr-qr-wrap{background:#ffffff;padding:16px;border-radius:18px;display:inline-block;margin:0 auto;box-shadow:0 8px 24px #0000004d;max-width:240px}
+    .khqr-qr-wrap img{display:block;width:100%;height:auto;border-radius:8px}
+    .khqr-amount-box{background:#112219;border:1px solid #204934;border-radius:14px;padding:12px}
+    .khqr-amount{font-size:28px;font-weight:800;color:#10b981}
+    .khqr-plan-title{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+    .khqr-details{display:grid;gap:6px;font-size:12px;color:var(--muted);text-align:left;background:#08130e;padding:12px;border-radius:12px;border:1px solid #163324}
+    .khqr-details div{display:flex;justify-content:space-between;gap:8px}
+    .khqr-details strong{color:var(--text);font-family:monospace}
+    .khqr-status-pill{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:8px 14px;background:#10b98114;border:1px solid #10b9813d;border-radius:10px;color:#86efac;font-size:12px;font-weight:600}
+    .khqr-pulse-dot{width:8px;height:8px;border-radius:50%;background:#10b981;animation:khqr-pulse 1.4s infinite}
+    @keyframes khqr-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+    @keyframes zyrox-fade{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+    .khqr-btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   </style>
 </head>
 <body>
@@ -144,34 +165,69 @@
 
     <footer><span>ZYROX AI · <span data-i18n="footer_note">Payments are verified server-side. A browser redirect alone never activates access.</span></span><a href="/dashboard/" data-i18n="back">Back to dashboard</a></footer>
   </main>
+
+  <!-- Bakong KHQR Modal -->
+  <div id="khqr-modal" class="khqr-modal-overlay" hidden>
+    <div class="khqr-modal-card">
+      <div class="khqr-header">
+        <span class="khqr-brand-tag">🇰🇭 KHQR · Bakong</span>
+        <button type="button" class="khqr-close-btn" id="khqr-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div>
+        <h2 id="khqr-modal-plan" style="font-size:20px;margin:0 0 4px">Plan Name</h2>
+        <div class="khqr-plan-title" data-i18n="scan_khqr_guide">Scan with Bakong or any Cambodia bank app</div>
+      </div>
+      <div class="khqr-qr-wrap">
+        <img id="khqr-qr-image" src="" alt="Bakong KHQR Code" />
+      </div>
+      <div class="khqr-amount-box">
+        <span class="khqr-plan-title" data-i18n="amount_to_pay">Total Amount</span>
+        <div class="khqr-amount" id="khqr-modal-amount">$0.00 USD</div>
+      </div>
+      <div class="khqr-details">
+        <div><span data-i18n="bill_number">Bill Ref:</span> <strong id="khqr-modal-bill">ZYROX-INV</strong></div>
+        <div><span data-i18n="bakong_account">Account:</span> <strong id="khqr-modal-account">account@bakong</strong></div>
+        <div><span data-i18n="expires_in">Valid for:</span> <strong id="khqr-modal-timer">15:00</strong></div>
+      </div>
+      <div class="khqr-status-pill">
+        <span class="khqr-pulse-dot"></span>
+        <span id="khqr-modal-status-text" data-i18n="listening_payment">Auto-checking Bakong payment...</span>
+      </div>
+      <div class="khqr-btn-row">
+        <a class="button" id="khqr-deeplink-btn" href="#" target="_blank" data-i18n="open_bakong_app">📱 Open App</a>
+        <button type="button" class="button primary" id="khqr-manual-verify-btn" data-i18n="verify_now">🔄 Verify Now</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <script>
     const copy = {
-      en: { terminal:"Terminal", eyebrow:"Plans & billing", hero_title:"Choose your trading edge.", hero_lead:"Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.", provider_title:"ABA PayWay sandbox setup is pending", provider_body:"Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.", expiration_title:"Your access period is ending soon", plans_title:"Subscription plans", plans_subtitle:"One-time checkout. No automatic recurring card charges.", loading:"Loading plans…", compare_title:"Plan comparison", compare_subtitle:"Feature limits are enforced by ZYROX AI on the server.", account_title:"My subscription", account_subtitle:"Your access state comes from the server-side entitlement record.", current_access:"Current access", signin:"Sign in", signin_prompt:"Sign in to view your subscription and invoices.", invoice_history:"Invoice history", cancel:"Cancel at period end", cancel_note:"Access remains available until the current paid period expires. No payment provider cancellation is reported.", admin_title:"Payment administration", admin_subtitle:"Visible to authorized administrators only.", transactions:"Recent payment transactions", footer_note:"Payments are verified server-side. A browser redirect alone never activates access.", back:"Back to dashboard", month:"month", year:"year", checkout:"Continue to secure checkout", unavailable:"Checkout is not ready", ai_scans:"Daily AI scans", deep_analysis:"Deep analyses / day", watchlists:"Watchlists", backtesting:"Backtesting", telegram:"Telegram alerts", debate:"Agent debate", yes:"Included", no:"Not included", no_plans:"No paid plans are currently available.", plan_error:"Plans could not be loaded.", subscription_error:"Subscription status could not be loaded.", access_status:"Status", expires:"Access ends", auto_renew:"Automatic renewal", off:"Off", trial:"Trial", none:"None", verify:"Check status", cancel_done:"Cancellation scheduled through period end.", cancel_error:"Cancellation could not be scheduled.", pending:"Payment pending verification", paid:"Payment verified", failed:"Payment failed", review:"Payment needs review", revenue:"Verified revenue", pending_invoices:"Pending invoices", successful:"Successful payments", failed_payments:"Failed payments", active_subs:"Active subscriptions", expiring:"Expiring in 7 days", not_supported:"Refund API not enabled", reference:"Reference", amount:"Amount", status:"Status", date:"Date", invoice:"Invoice", empty_invoices:"No invoices yet.", signin_required:"Please sign in to continue.", checkout_error:"Secure checkout is not ready. No invoice was created.", copied:"Reference copied" },
-      kh: { terminal:"ផ្ទាំងជួញដូរ", eyebrow:"គម្រោង និងការទូទាត់", hero_title:"ជ្រើសរើសអត្ថប្រយោជន៍សម្រាប់ការជួញដូរ។", hero_lead:"ប្រៀបធៀបគម្រោង ZYROX AI ពិនិត្យស្ថានភាពជាវ និងគ្រប់គ្រងវិក្កយបត្រនៅកន្លែងតែមួយ។", provider_title:"ការរៀបចំ ABA PayWay sandbox កំពុងរង់ចាំ", provider_body:"ការទូទាត់នឹងបើកបន្ទាប់ពីផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា និងការកំណត់ merchant រួច។ សារនេះមិនបង្កើតវិក្កយបត្រ ឬសមាជិកភាពទេ។", expiration_title:"សិទ្ធិប្រើប្រាស់របស់អ្នកជិតផុតកំណត់", plans_title:"គម្រោងជាវ", plans_subtitle:"ទូទាត់ម្តង។ មិនមានការដកប្រាក់កាតដោយស្វ័យប្រវត្តិទេ។", loading:"កំពុងផ្ទុកគម្រោង…", compare_title:"ប្រៀបធៀបគម្រោង", compare_subtitle:"កម្រិតមុខងារត្រូវបានត្រួតពិនិត្យដោយ server របស់ ZYROX AI។", account_title:"សមាជិកភាពរបស់ខ្ញុំ", account_subtitle:"ស្ថានភាពសិទ្ធិប្រើប្រាស់មកពីកំណត់ត្រាសមាជិកភាពនៅ server។", current_access:"សិទ្ធិបច្ចុប្បន្ន", signin:"ចូលគណនី", signin_prompt:"ចូលគណនីដើម្បីមើលសមាជិកភាព និងវិក្កយបត្រ។", invoice_history:"ប្រវត្តិវិក្កយបត្រ", cancel:"បញ្ឈប់នៅចុងរយៈពេល", cancel_note:"សិទ្ធិប្រើប្រាស់នៅតែមានរហូតដល់ផុតរយៈពេលដែលបានបង់។ មិនមានការអះអាងថាបានបញ្ឈប់ការទូទាត់នៅ provider ទេ។", admin_title:"ការគ្រប់គ្រងការទូទាត់", admin_subtitle:"បង្ហាញតែអ្នកគ្រប់គ្រងដែលមានសិទ្ធិ។", transactions:"ប្រតិបត្តិការទូទាត់ថ្មីៗ", footer_note:"ការទូទាត់ត្រូវបានផ្ទៀងផ្ទាត់នៅ server។ ការបញ្ជូនត្រឡប់តាម browser មិនបើកសិទ្ធិដោយខ្លួនឯងទេ។", back:"ត្រឡប់ទៅផ្ទាំង", month:"ខែ", year:"ឆ្នាំ", checkout:"បន្តទៅការទូទាត់សុវត្ថិភាព", unavailable:"ការទូទាត់មិនទាន់រួចរាល់", ai_scans:"ការវិភាគ AI ប្រចាំថ្ងៃ", deep_analysis:"ការវិភាគស៊ីជម្រៅ / ថ្ងៃ", watchlists:"បញ្ជីតាមដាន", backtesting:"សាកល្បងយុទ្ធសាស្ត្រ", telegram:"ការជូនដំណឹង Telegram", debate:"ការពិភាក្សារបស់ agent", yes:"មាន", no:"មិនមាន", no_plans:"មិនមានគម្រោងបង់ប្រាក់នៅពេលនេះទេ។", plan_error:"មិនអាចផ្ទុកគម្រោងបានទេ។", subscription_error:"មិនអាចផ្ទុកស្ថានភាពសមាជិកភាពបានទេ។", access_status:"ស្ថានភាព", expires:"សិទ្ធិផុតកំណត់", auto_renew:"បន្តដោយស្វ័យប្រវត្តិ", off:"បិទ", trial:"សាកល្បង", none:"គ្មាន", verify:"ពិនិត្យស្ថានភាព", cancel_done:"បានកំណត់ឱ្យបញ្ឈប់នៅចុងរយៈពេល។", cancel_error:"មិនអាចកំណត់ការបញ្ឈប់បានទេ។", pending:"កំពុងផ្ទៀងផ្ទាត់ការទូទាត់", paid:"បានផ្ទៀងផ្ទាត់ការទូទាត់", failed:"ការទូទាត់បរាជ័យ", review:"ការទូទាត់ត្រូវការពិនិត្យ", revenue:"ចំណូលដែលបានផ្ទៀងផ្ទាត់", pending_invoices:"វិក្កយបត្ររង់ចាំ", successful:"ការទូទាត់ជោគជ័យ", failed_payments:"ការទូទាត់បរាជ័យ", active_subs:"សមាជិកភាពសកម្ម", expiring:"ផុតកំណត់ក្នុង ៧ ថ្ងៃ", not_supported:"មិនទាន់បើក API សងប្រាក់ទេ", reference:"លេខយោង", amount:"ចំនួនទឹកប្រាក់", status:"ស្ថានភាព", date:"កាលបរិច្ឆេទ", invoice:"វិក្កយបត្រ", empty_invoices:"មិនទាន់មានវិក្កយបត្រទេ។", signin_required:"សូមចូលគណនីដើម្បីបន្ត។", checkout_error:"ការទូទាត់សុវត្ថិភាពមិនទាន់រួចរាល់ទេ។ មិនបានបង្កើតវិក្កយបត្រទេ.", copied:"បានចម្លងលេខយោង" }
+      en: { terminal:"Terminal", eyebrow:"Plans & billing", hero_title:"Choose your trading edge.", hero_lead:"Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.", provider_title:"Bakong Open API (KHQR) status", provider_body:"Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.", expiration_title:"Your access period is ending soon", plans_title:"Subscription plans", plans_subtitle:"One-time checkout. No automatic recurring card charges.", loading:"Loading plans…", compare_title:"Plan comparison", compare_subtitle:"Feature limits are enforced by ZYROX AI on the server.", account_title:"My subscription", account_subtitle:"Your access state comes from the server-side entitlement record.", current_access:"Current access", signin:"Sign in", signin_prompt:"Sign in to view your subscription and invoices.", invoice_history:"Invoice history", cancel:"Cancel at period end", cancel_note:"Access remains available until the current paid period expires. No payment provider cancellation is reported.", admin_title:"Payment administration", admin_subtitle:"Visible to authorized administrators only.", transactions:"Recent payment transactions", footer_note:"Payments are verified server-side. A browser redirect alone never activates access.", back:"Back to dashboard", month:"month", year:"year", checkout:"Continue to secure checkout", unavailable:"Checkout is not ready", ai_scans:"Daily AI scans", deep_analysis:"Deep analyses / day", watchlists:"Watchlists", backtesting:"Backtesting", telegram:"Telegram alerts", debate:"Agent debate", yes:"Included", no:"Not included", no_plans:"No paid plans are currently available.", plan_error:"Plans could not be loaded.", subscription_error:"Subscription status could not be loaded.", access_status:"Status", expires:"Access ends", auto_renew:"Automatic renewal", off:"Off", trial:"Trial", none:"None", verify:"Check status", cancel_done:"Cancellation scheduled through period end.", cancel_error:"Cancellation could not be scheduled.", pending:"Payment pending verification", paid:"Payment verified", failed:"Payment failed", review:"Payment needs review", revenue:"Verified revenue", pending_invoices:"Pending invoices", successful:"Successful payments", failed_payments:"Failed payments", active_subs:"Active subscriptions", expiring:"Expiring in 7 days", not_supported:"Refund API not enabled", reference:"Reference", amount:"Amount", status:"Status", date:"Date", invoice:"Invoice", empty_invoices:"No invoices yet.", signin_required:"Please sign in to continue.", checkout_error:"Secure checkout is not ready. No invoice was created.", copied:"Reference copied", scan_khqr_guide:"Scan with Bakong or any Cambodia banking app", amount_to_pay:"Total Amount", bill_number:"Bill Ref:", bakong_account:"Account:", expires_in:"Valid for:", listening_payment:"Auto-checking Bakong payment...", open_bakong_app:"📱 Open App", verify_now:"🔄 Verify Now" },
+      kh: { terminal:"ផ្ទាំងជួញដូរ", eyebrow:"គម្រោង និងការទូទាត់", hero_title:"ជ្រើសរើសអត្ថប្រយោជន៍សម្រាប់ការជួញដូរ។", hero_lead:"ប្រៀបធៀបគម្រោង ZYROX AI ពិនិត្យស្ថានភាពជាវ និងគ្រប់គ្រងវិក្កយបត្រនៅកន្លែងតែមួយ។", provider_title:"ស្ថានភាព Bakong Open API (KHQR)", provider_body:"ការទូទាត់នឹងបើកបន្ទាប់ពីផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា និងការកំណត់ merchant រួច។ សារនេះមិនបង្កើតវិក្កយបត្រ ឬសមាជិកភាពទេ។", expiration_title:"សិទ្ធិប្រើប្រាស់របស់អ្នកជិតផុតកំណត់", plans_title:"គម្រោងជាវ", plans_subtitle:"ទូទាត់ម្តង។ មិនមានការដកប្រាក់កាតដោយស្វ័យប្រវត្តិទេ។", loading:"កំពុងផ្ទុកគម្រោង…", compare_title:"ប្រៀបធៀបគម្រោង", compare_subtitle:"កម្រិតមុខងារត្រូវបានត្រួតពិនិត្យដោយ server របស់ ZYROX AI។", account_title:"សមាជិកភាពរបស់ខ្ញុំ", account_subtitle:"ស្ថានភាពសិទ្ធិប្រើប្រាស់មកពីកំណត់ត្រាសមាជិកភាពនៅ server។", current_access:"សិទ្ធិបច្ចុប្បន្ន", signin:"ចូលគណនី", signin_prompt:"ចូលគណនីដើម្បីមើលសមាជិកភាព និងវិក្កយបត្រ។", invoice_history:"ប្រវត្តិវិក្កយបត្រ", cancel:"បញ្ឈប់នៅចុងរយៈពេល", cancel_note:"សិទ្ធិប្រើប្រាស់នៅតែមានរហូតដល់ផុតរយៈពេលដែលបានបង់។ មិនមានការអះអាងថាបានបញ្ឈប់ការទូទាត់នៅ provider ទេ។", admin_title:"ការគ្រប់គ្រងការទូទាត់", admin_subtitle:"បង្ហាញតែអ្នកគ្រប់គ្រងដែលមានសិទ្ធិ។", transactions:"ប្រតិបត្តិការទូទាត់ថ្មីៗ", footer_note:"ការទូទាត់ត្រូវបានផ្ទៀងផ្ទាត់នៅ server។ ការបញ្ជូនត្រឡប់តាម browser មិនបើកសិទ្ធិដោយខ្លួនឯងទេ។", back:"ត្រឡប់ទៅផ្ទាំង", month:"ខែ", year:"ឆ្នាំ", checkout:"បន្តទៅការទូទាត់សុវត្ថិភាព", unavailable:"ការទូទាត់មិនទាន់រួចរាល់", ai_scans:"ការវិភាគ AI ប្រចាំថ្ងៃ", deep_analysis:"ការវិភាគស៊ីជម្រៅ / ថ្ងៃ", watchlists:"បញ្ជីតាមដាន", backtesting:"សាកល្បងយុទ្ធសាស្ត្រ", telegram:"ការជូនដំណឹង Telegram", debate:"ការពិភាក្សារបស់ agent", yes:"មាន", no:"មិនមាន", no_plans:"មិនមានគម្រោងបង់ប្រាក់នៅពេលនេះទេ។", plan_error:"មិនអាចផ្ទុកគម្រោងបានទេ។", subscription_error:"មិនអាចផ្ទុកស្ថានភាពសមាជិកភាពបានទេ។", access_status:"ស្ថានភាព", expires:"សិទ្ធិផុតកំណត់", auto_renew:"បន្តដោយស្វ័យប្រវត្តិ", off:"បិទ", trial:"សាកល្បង", none:"គ្មាន", verify:"ពិនិត្យស្ថានភាព", cancel_done:"បានកំណត់ឱ្យបញ្ឈប់នៅចុងរយៈពេល។", cancel_error:"មិនអាចកំណត់ការបញ្ឈប់បានទេ។", pending:"កំពុងផ្ទៀងផ្ទាត់ការទូទាត់", paid:"បានផ្ទៀងផ្ទាត់ការទូទាត់", failed:"ការទូទាត់បរាជ័យ", review:"ការទូទាត់ត្រូវការពិនិត្យ", revenue:"ចំណូលដែលបានផ្ទៀងផ្ទាត់", pending_invoices:"វិក្កយបត្ររង់ចាំ", successful:"ការទូទាត់ជោគជ័យ", failed_payments:"ការទូទាត់បរាជ័យ", active_subs:"សមាជិកភាពសកម្ម", expiring:"ផុតកំណត់ក្នុង ៧ ថ្ងៃ", not_supported:"មិនទាន់បើក API សងប្រាក់ទេ", reference:"លេខយោង", amount:"ចំនួនទឹកប្រាក់", status:"ស្ថានភាព", date:"កាលបរិច្ឆេទ", invoice:"វិក្កយបត្រ", empty_invoices:"មិនទាន់មានវិក្កយបត្រទេ។", signin_required:"សូមចូលគណនីដើម្បីបន្ត។", checkout_error:"ការទូទាត់សុវត្ថិភាពមិនទាន់រួចរាល់ទេ។ មិនបានបង្កើតវិក្កយបត្រទេ.", copied:"បានចម្លងលេខយោង", scan_khqr_guide:"ស្កេនតាម Bakong ឬគ្រប់កម្មវិធីធនាគារក្នុងប្រទេសកម្ពុជា", amount_to_pay:"ចំនួនទឹកប្រាក់សរុប", bill_number:"លេខយោងវិក្កយបត្រ:", bakong_account:"គណនីទទួល:", expires_in:"សុពលភាពនៅសល់:", listening_payment:"កំពុងរង់ចាំការទូទាត់ពី Bakong Open API...", open_bakong_app:"📱 បើកកម្មវិធី", verify_now:"🔄 ពិនិត្យឥឡូវនេះ" }
     };
     const providerCopy = {
       en: {
-        unverified: "ABA PayWay · status could not be checked",
-        setupSandbox: "ABA PayWay · SANDBOX · setup required",
-        setupProduction: "ABA PayWay · PRODUCTION · setup required",
-        configuredSandbox: "ABA PayWay · SANDBOX · credentials configured",
-        configuredProduction: "ABA PayWay · PRODUCTION · credentials configured",
-        missingDetail: "Plans are available to review, but checkout is disabled until required ABA merchant settings are configured on the server.",
-        unavailableDetail: "The payment status endpoint could not be reached. Plans remain visible and checkout is disabled.",
-        readyDetail: "Required ABA settings are present for this environment. Provider payment approval is still verified server-side.",
-        title: "ABA PayWay status"
+        unverified: "Bakong Open API · status could not be checked",
+        setupSandbox: "Bakong Open API · SANDBOX · setup required",
+        setupProduction: "Bakong Open API · PRODUCTION · setup required",
+        configuredSandbox: "Bakong Open API (KHQR) · SANDBOX · Online",
+        configuredProduction: "Bakong Open API (KHQR) · Live · Online",
+        missingDetail: "Plans are available to review. Set BAKONG_API_TOKEN and BAKONG_ACCOUNT_ID to activate instant KHQR checkout.",
+        unavailableDetail: "The payment status endpoint could not be reached. Plans remain visible.",
+        readyDetail: "Bakong Open API (KHQR) is online. Scan with Bakong or any Cambodian bank app to instantly activate your subscription.",
+        title: "Bakong Open API (KHQR) status"
       },
       kh: {
-        unverified: "ABA PayWay · មិនអាចពិនិត្យស្ថានភាពបាន",
-        setupSandbox: "ABA PayWay · SANDBOX · ត្រូវការកំណត់បន្ថែម",
-        setupProduction: "ABA PayWay · PRODUCTION · ត្រូវការកំណត់បន្ថែម",
-        configuredSandbox: "ABA PayWay · SANDBOX · បានកំណត់ credential",
-        configuredProduction: "ABA PayWay · PRODUCTION · បានកំណត់ credential",
-        missingDetail: "អ្នកអាចមើលគម្រោងបាន ប៉ុន្តែ checkout ត្រូវបានបិទ រហូតដល់ការកំណត់ ABA ចាំបាច់ត្រូវបានបន្ថែមនៅ server។",
-        unavailableDetail: "មិនអាចភ្ជាប់ទៅ API ពិនិត្យការទូទាត់បានទេ។ គម្រោងនៅតែអាចមើលបាន ហើយ checkout ត្រូវបានបិទ។",
-        readyDetail: "មានការកំណត់ ABA ចាំបាច់សម្រាប់ environment នេះ។ Server នៅតែផ្ទៀងផ្ទាត់ការអនុម័តទូទាត់ដោយឡែក។",
-        title: "ស្ថានភាព ABA PayWay"
+        unverified: "Bakong Open API · មិនអាចពិនិត្យស្ថានភាពបាន",
+        setupSandbox: "Bakong Open API · SANDBOX · ត្រូវការកំណត់ credential",
+        setupProduction: "Bakong Open API · PRODUCTION · ត្រូវការកំណត់ credential",
+        configuredSandbox: "Bakong Open API (KHQR) · SANDBOX · ដំណើរការ",
+        configuredProduction: "Bakong Open API (KHQR) · Live · ដំណើរការ",
+        missingDetail: "អ្នកអាចមើលគម្រោងបាន។ សូមកំណត់ BAKONG_API_TOKEN និង BAKONG_ACCOUNT_ID ដើម្បីបើកការទូទាត់ KHQR។",
+        unavailableDetail: "មិនអាចភ្ជាប់ទៅ API ពិនិត្យការទូទាត់បានទេ។ គម្រោងនៅតែអាចមើលបាន។",
+        readyDetail: "Bakong Open API (KHQR) ដំណើរការពេញលេញ។ ស្កេនតាម Bakong ឬគ្រប់កម្មវិធីធនាគារក្នុងប្រទេសកម្ពុជាដើម្បីបើកសិទ្ធិភ្លាមៗ។",
+        title: "ស្ថានភាព Bakong Open API (KHQR)"
       }
     };
     const checkoutCopy = {
@@ -293,11 +349,118 @@
       }
       isCheckoutPending=true;
       const busyState=window.ZyroxUI?.ButtonLoader(button,{label:language==="kh"?"កំពុងបើកការទូទាត់សុវត្ថិភាព…":"Opening secure checkout…"});
+      let activeKhqrInvoiceId = null;
+      let khqrPollInterval = null;
+      let khqrCountdownInterval = null;
+
+      function openKhqrModal(data) {
+        const modal = document.getElementById("khqr-modal");
+        const checkout = data.checkout || {};
+        const invoice = data.invoice || {};
+        activeKhqrInvoiceId = invoice.id || (data.data?.invoice?.id);
+        const planName = language === "kh" ? (data.data?.plan_name || "គម្រោង VIP") : (checkout.plan_name || data.data?.plan_name || "Pro / VIP Tier");
+        document.getElementById("khqr-modal-plan").textContent = planName;
+        document.getElementById("khqr-modal-amount").textContent = `$${Number(checkout.amount || invoice.amount || 0).toFixed(2)} USD`;
+        document.getElementById("khqr-modal-bill").textContent = checkout.bill_number || invoice.invoice_number || "—";
+        document.getElementById("khqr-modal-account").textContent = checkout.account_id || "Bakong";
+
+        const qrImg = document.getElementById("khqr-qr-image");
+        if (checkout.qr_image) {
+          qrImg.src = checkout.qr_image;
+        }
+
+        const deepLink = document.getElementById("khqr-deeplink-btn");
+        if (checkout.deeplink_web || checkout.deeplink_app) {
+          deepLink.href = checkout.deeplink_web || checkout.deeplink_app;
+          deepLink.hidden = false;
+        } else {
+          deepLink.hidden = true;
+        }
+
+        document.getElementById("khqr-modal-status-text").textContent = t("listening_payment");
+
+        let secondsLeft = 900;
+        const timerNode = document.getElementById("khqr-modal-timer");
+        clearInterval(khqrCountdownInterval);
+        khqrCountdownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft <= 0) {
+            clearInterval(khqrCountdownInterval);
+            closeKhqrModal();
+            toast(language === "kh" ? "វិក្កយបត្របានផុតកំណត់។" : "Invoice has expired. Please try again.", true);
+            return;
+          }
+          const m = Math.floor(secondsLeft / 60);
+          const s = secondsLeft % 60;
+          timerNode.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }, 1000);
+
+        clearInterval(khqrPollInterval);
+        khqrPollInterval = setInterval(async () => {
+          if (!activeKhqrInvoiceId) return;
+          try {
+            const res = await fetch(`/api/v1/payments/verify/${activeKhqrInvoiceId}`, {
+              method: "POST",
+              credentials: "include"
+            });
+            const resData = await res.json();
+            if (resData.status === "PAID") {
+              clearInterval(khqrPollInterval);
+              clearInterval(khqrCountdownInterval);
+              closeKhqrModal();
+              toast(language === "kh" ? "🎉 ការទូទាត់ជោគជ័យ! សមាជិកភាពត្រូវបានបើកដំណើរការ!" : "🎉 Payment verified! Subscription is now ACTIVE!");
+              showPaymentState("PAID", t("paid"));
+              await loadAccount();
+            }
+          } catch {}
+        }, 3000);
+
+        modal.hidden = false;
+      }
+
+      function closeKhqrModal() {
+        clearInterval(khqrPollInterval);
+        clearInterval(khqrCountdownInterval);
+        document.getElementById("khqr-modal").hidden = true;
+        activeKhqrInvoiceId = null;
+      }
+
+      document.getElementById("khqr-close-btn").addEventListener("click", closeKhqrModal);
+      document.getElementById("khqr-manual-verify-btn").addEventListener("click", async () => {
+        if (!activeKhqrInvoiceId) return;
+        const btn = document.getElementById("khqr-manual-verify-btn");
+        const busy = window.ZyroxUI?.ButtonLoader(btn, { label: language === "kh" ? "កំពុងពិនិត្យ…" : "Checking…" });
+        try {
+          const res = await fetch(`/api/v1/payments/verify/${activeKhqrInvoiceId}`, {
+            method: "POST",
+            credentials: "include"
+          });
+          const resData = await res.json();
+          if (resData.status === "PAID") {
+            closeKhqrModal();
+            toast(language === "kh" ? "🎉 ការទូទាត់ជោគជ័យ! សមាជិកភាពត្រូវបានបើកដំណើរការ!" : "🎉 Payment verified! Subscription is now ACTIVE!");
+            showPaymentState("PAID", t("paid"));
+            await loadAccount();
+          } else {
+            toast(resData.message || (language === "kh" ? "មិនទាន់ឃើញការទូទាត់ទេ។ សូមស្កេន KHQR និងផ្ទេរប្រាក់ជាមុនសិន។" : "Payment not found yet. Please scan and pay with Bakong."), true);
+          }
+        } catch (err) {
+          toast(err.message, true);
+        } finally {
+          busy?.restore();
+        }
+      });
+
       try{
         const response=await fetch("/api/v1/payments/checkout",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan_id:planId})});
         let data={};try{data=await response.json();}catch{}
         if(response.status===401){isAuthenticated=false;authChecked=true;busyState?.restore();isCheckoutPending=false;const signInUrl=new URL("/",window.location.origin);signInUrl.searchParams.set("auth","signin");signInUrl.searchParams.set("return_to","/dashboard/billing.html#pricing");window.location.assign(signInUrl.toString());return;}
-        if(!response.ok)throw new Error(data.detail||t("checkout_error"));
+        if(!response.ok)throw new Error(data.detail||data.message||t("checkout_error"));
+        busyState?.restore();isCheckoutPending=false;
+        if(data.checkout?.khqr||data.checkout?.qr_image||data.data?.checkout?.khqr){
+          openKhqrModal(data);
+          return;
+        }
         if(!data.invoice?.id||!data.checkout?.url)throw new Error(t("checkout_error"));
         sessionStorage.setItem("zyroxPendingInvoiceId",String(data.invoice.id));
         const form=document.createElement("form");form.method="POST";form.enctype="multipart/form-data";form.action=data.checkout.url;form.style.display="none";

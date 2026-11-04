@@ -680,8 +680,19 @@ Reason: <i>{reason}</i>
 
     def build_tier_details_keyboard(self, tier_code: str) -> Dict[str, Any]:
         """Builds action buttons for payment confirmation and back."""
+        from taikry.saas.bakong_service import bakong_service
+        from taikry.config import PUBLIC_APP_URL
         tier_key = tier_code.upper()
-        keyboard = [[{"text": "ℹ️ Checkout មិនទាន់បើកប្រើ", "callback_data": f"sub:pay:unavailable:{tier_key}"}]]
+
+        keyboard = []
+        if bakong_service.is_configured():
+            keyboard.append([{"text": "🇰🇭 បង់ប្រាក់តាម Bakong KHQR", "callback_data": f"sub:pay:bakong:{tier_key}"}])
+        else:
+            keyboard.append([{"text": "ℹ️ Checkout មិនទាន់បើកប្រើ", "callback_data": f"sub:pay:unavailable:{tier_key}"}])
+
+        if PUBLIC_APP_URL:
+            keyboard.append([{"text": "🌐 បើកទំព័រទូទាត់លើវិបសាយ", "url": f"{PUBLIC_APP_URL.rstrip('/')}/dashboard/billing.html"}])
+
         if self.admin_username and self.admin_username.lstrip("@").replace("_", "").isalnum():
             keyboard.append([{"text": "📞 Contact Admin", "url": f"https://t.me/{self.admin_username}"}])
         keyboard.append([{"text": "⬅️ ត្រឡប់ក្រោយ (Back to Plans)", "callback_data": "sub:plans"}])

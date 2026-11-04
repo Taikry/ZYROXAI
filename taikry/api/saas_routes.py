@@ -33,7 +33,11 @@ from taikry.database.models import (
     RolePermission,
     SystemSetting,
     FeatureFlag,
-    AuditLog
+    AuditLog,
+    PaymentInvoice,
+    PaymentTransaction,
+    UserSubscription,
+    SubscriptionPlan
 )
 from taikry.config import MAX_RISK_PER_TRADE_PERCENT, get_symbol_config
 from taikry.saas import (
@@ -1103,26 +1107,247 @@ def admin_audit_logs_endpoint(limit: int = 100, admin: User = Depends(get_curren
 
 
 # =============================================================================
-# 7. BILLING & CHECKOUT ENDPOINTS (/api/v1/billing)
+# 7. BILLING, PAYMENTS & CHECKOUT ENDPOINTS (/api/v1/billing & /api/v1/payments)
 # =============================================================================
 
+@saas_router.get("/api/v1/billing/status")
+@saas_router.get("/api/v1/payments/status")
+def billing_status_endpoint():
+    """Returns payment gateway and Bakong Open API status."""
+    return billing_adapter.get_provider_status()
+
+
+@saas_router.get("/api/v1/billing/plans")
+@saas_router.get("/api/v1/payments/plans")
+def billing_plans_endpoint():
+    """Returns active subscription plans formatted for billing UI."""
+    db = SessionLocal()
+    try:
+        from taikry.saas.entitlement_service import get_all_plans
+        plans = get_all_plans(db)
+        formatted = []
+        for p in plans:
+            plan_id = p.get("id")
+            name_en = p.get("name_en")
+            name_kh = p.get("name_kh")
+            price = p.get("price_usd", 0.0)
+            interval = p.get("billing_interval", "monthly")
+            formatted.append({
+                "id": plan_id,
+                "name_en": name_en,
+                "name_kh": name_kh,
+                "amount": float(price),
+                "currency": "USD",
+                "billing_interval": interval,
+                "description": name_en,
+                "features": {
+                    "max_ai_scans_per_day": p.get("max_ai_scans_per_day", 10),
+                    "max_deep_analysis_per_day": p.get("max_deep_analysis_per_day", 3),
+                    "signal_alerts_target_min_per_day": p.get("signal_alerts_target_min_per_day", 2),
+                    "max_signal_alerts_per_day": p.get("max_signal_alerts_per_day", 4),
+                    "max_watchlists": p.get("max_watchlists", 5),
+                    "backtesting_enabled": p.get("backtesting_enabled", False),
+                    "telegram_alerts_enabled": p.get("telegram_alerts_enabled", True),
+                    "agent_debate_enabled": p.get("agent_debate_enabled", False)
+                }
+            })
+        return {"plans": formatted}
+    finally:
+        db.close()
+
+
 @saas_router.post("/api/v1/billing/checkout")
+@saas_router.post("/api/v1/payments/checkout")
 def billing_checkout_endpoint(payload: CheckoutRequest, user: User = Depends(get_current_user)):
-    """Initializes checkout session or returns honest coming soon state."""
+    """Initializes checkout session with Bakong Open API (KHQR)."""
     db = SessionLocal()
     try:
         ok, msg, data = billing_adapter.create_checkout_session(
             db=db,
             user_id=user.id,
             plan_id=payload.plan_id,
-            return_url=payload.return_url or "/dashboard/"
+            return_url=payload.return_url or "/dashboard/billing.html"
         )
-        return {"success": ok, "message": msg, "data": data}
+        if not ok and not data.get("configured"):
+            raise HTTPException(status_code=400, detail=msg)
+        return {
+            "success": ok,
+            "message": msg,
+            "invoice": data.get("invoice", {}),
+            "checkout": data.get("checkout", {}),
+            "data": data
+        }
+    finally:
+        db.close()
+
+
+@saas_router.post("/api/v1/billing/verify/{invoice_id}")
+@saas_router.post("/api/v1/payments/verify/{invoice_id}")
+def verify_payment_endpoint(invoice_id: int, user: User = Depends(get_current_user)):
+    """Verifies invoice payment status via Bakong Open API check."""
+    db = SessionLocal()
+    try:
+        ok, msg, data = billing_adapter.verify_invoice(db, invoice_id, user_id=user.id)
+        status_val = data.get("status", "PAID" if ok else "PENDING")
+        return {
+            "status": status_val,
+            "message": msg,
+            "invoice": data,
+            "subscription": data.get("subscription_status", "active_paid" if ok else "unsubscribed")
+        }
+    finally:
+        db.close()
+
+
+@saas_router.get("/api/v1/subscriptions/me")
+def my_subscription_endpoint(user: User = Depends(get_current_user)):
+    """Returns current user's active subscription, days remaining, and invoice history."""
+    db = SessionLocal()
+    try:
+        sub = db.query(UserSubscription).filter(UserSubscription.user_id == user.id).first()
+        invoices = (
+            db.query(PaymentInvoice)
+            .filter(PaymentInvoice.user_id == user.id)
+            .order_by(PaymentInvoice.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        inv_list = [
+            {
+                "id": inv.id,
+                "invoice_number": inv.invoice_number,
+                "checkout_reference": inv.checkout_reference,
+                "amount": float(inv.amount),
+                "currency": inv.currency,
+                "status": inv.status,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None
+            }
+            for inv in invoices
+        ]
+
+        if not sub:
+            return {
+                "subscription": {
+                    "status": "unsubscribed",
+                    "plan_id": "free_trial",
+                    "plan_name_en": "No Active Subscription",
+                    "expires_at": None,
+                    "days_remaining": 0,
+                    "auto_renew": False
+                },
+                "invoices": inv_list
+            }
+
+        plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == sub.plan_id).first()
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        exp = sub.current_period_expires_at or sub.trial_expires_at
+        days_remaining = 0
+        if exp:
+            exp_aware = exp.replace(tzinfo=datetime.timezone.utc) if exp.tzinfo is None else exp
+            if exp_aware > now_utc:
+                days_remaining = (exp_aware - now_utc).days
+
+        return {
+            "subscription": {
+                "status": sub.status,
+                "plan_id": sub.plan_id,
+                "plan_name_en": plan.name_en if plan else sub.plan_id,
+                "expires_at": exp.isoformat() if exp else None,
+                "days_remaining": max(0, days_remaining),
+                "auto_renew": sub.auto_renew
+            },
+            "invoices": inv_list
+        }
+    finally:
+        db.close()
+
+
+@saas_router.post("/api/v1/subscriptions/cancel")
+def cancel_subscription_endpoint(user: User = Depends(get_current_user)):
+    """Schedules subscription cancellation at the end of current paid period."""
+    db = SessionLocal()
+    try:
+        sub = db.query(UserSubscription).filter(UserSubscription.user_id == user.id).first()
+        if not sub:
+            raise HTTPException(status_code=404, detail="No active subscription found.")
+        sub.cancel_at_period_end = True
+        sub.auto_renew = False
+        db.commit()
+        return {"success": True, "message": "Subscription set to cancel at end of current period."}
+    finally:
+        db.close()
+
+
+@saas_router.get("/api/v1/admin/payments/summary")
+def admin_payments_summary_endpoint(admin: User = Depends(get_current_admin)):
+    """Returns payment KPIs and transaction summary for administrators."""
+    db = SessionLocal()
+    try:
+        paid_invoices = db.query(PaymentInvoice).filter(PaymentInvoice.status == "PAID").all()
+        total_revenue = sum([float(i.amount or 0) for i in paid_invoices])
+        pending_count = db.query(PaymentInvoice).filter(PaymentInvoice.status == "PENDING").count()
+        paid_count = len(paid_invoices)
+        failed_count = db.query(PaymentInvoice).filter(PaymentInvoice.status == "FAILED").count()
+        active_subs = db.query(UserSubscription).filter(UserSubscription.status == "active_paid").count()
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        soon_utc = now_utc + datetime.timedelta(days=7)
+        expiring_soon = (
+            db.query(UserSubscription)
+            .filter(
+                UserSubscription.status == "active_paid",
+                UserSubscription.current_period_expires_at <= soon_utc,
+                UserSubscription.current_period_expires_at >= now_utc
+            )
+            .count()
+        )
+
+        return {
+            "verified_revenue": f"{total_revenue:.2f}",
+            "currency": "USD",
+            "pending_invoices": pending_count,
+            "successful_payments": paid_count,
+            "failed_payments": failed_count,
+            "active_subscriptions": active_subs,
+            "expiring_within_7_days": expiring_soon
+        }
+    finally:
+        db.close()
+
+
+@saas_router.get("/api/v1/admin/payments/transactions")
+def admin_payments_transactions_endpoint(limit: int = 20, admin: User = Depends(get_current_admin)):
+    """Returns recent payment transactions for audit."""
+    db = SessionLocal()
+    try:
+        txs = (
+            db.query(PaymentTransaction)
+            .order_by(PaymentTransaction.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return {
+            "transactions": [
+                {
+                    "id": tx.id,
+                    "invoice_id": tx.invoice_id,
+                    "provider": tx.provider,
+                    "provider_transaction_id": tx.provider_transaction_id,
+                    "amount": float(tx.amount),
+                    "currency": tx.currency,
+                    "status": tx.status,
+                    "verification_status": tx.verification_status,
+                    "created_at": tx.created_at.isoformat() if tx.created_at else None
+                }
+                for tx in txs
+            ]
+        }
     finally:
         db.close()
 
 
 @saas_router.post("/api/v1/billing/webhook")
+@saas_router.post("/api/v1/billing/webhook/bakong")
 async def billing_webhook_endpoint(request: Request):
     """Idempotent payment provider webhook processor."""
     sig_header = request.headers.get("X-Signature", "")

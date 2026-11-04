@@ -59,7 +59,19 @@ services:
       - key: SAAS_ADMIN_PASSWORD
         sync: false
       - key: PAYMENT_PROVIDER
-        value: aba_payway
+        value: bakong
+      - key: BAKONG_API_URL
+        value: https://api-bakong.nbc.gov.kh
+      - key: BAKONG_API_TOKEN
+        sync: false
+      - key: BAKONG_ACCOUNT_ID
+        sync: false
+      - key: BAKONG_MERCHANT_NAME
+        value: ZYROX AI
+      - key: BAKONG_MERCHANT_CITY
+        value: Phnom Penh
+      - key: BAKONG_CURRENCY
+        value: USD
       - key: ABA_PAYWAY_ENV
         value: sandbox
       - key: ABA_PAYWAY_MERCHANT_ID
