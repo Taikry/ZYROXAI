@@ -8022,7 +8022,7 @@ async function openV6ConceptExplorerModal() {
 
   const grid = document.getElementById("v6-concepts-grid");
   if (grid) {
-    grid.innerHTML = `<div style="color: #00f0ff; font-size: 12px; padding: 20px;">Scanning technical concepts across Categories A–J...</div>`;
+    grid.innerHTML = `<div class="v6-concepts-loading">Scanning technical concepts across Categories A–J...</div>`;
   }
 
   try {
@@ -8045,7 +8045,7 @@ async function openV6ConceptExplorerModal() {
   } catch (err) {
     console.error("Concept explorer error:", err);
     if (grid) {
-      grid.innerHTML = `<div style="color: #ff3b5c; font-size: 12px; padding: 20px;">Failed to scan concepts: ${err.message}</div>`;
+      grid.innerHTML = `<div class="v6-concepts-error">Failed to scan concepts: ${err.message}</div>`;
     }
   }
 }
@@ -8072,7 +8072,7 @@ function renderV6ConceptsGrid() {
     : v6CurrentDetectedConcepts.filter(c => c.category === v6ActiveConceptCategory);
 
   if (!filtered || filtered.length === 0) {
-    grid.innerHTML = `<div style="color: #94a3b8; font-size: 12px; padding: 20px;">No concepts detected under this category for ${escapeHtml(currentSymbol)}.</div>`;
+    grid.innerHTML = `<div class="v6-concepts-empty">No concepts detected under this category for ${escapeHtml(currentSymbol)}.</div>`;
     return;
   }
 

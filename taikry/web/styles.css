@@ -10802,6 +10802,7 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 }
 
 .v6-meter-fill {
+  width: 50%;
   height: 100%;
   background: linear-gradient(90deg, #ff3b5c 0%, #ffb800 50%, #00ff88 100%);
   border-radius: 3px;
@@ -10846,6 +10847,7 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 
 /* Smart Analysis Center Progress Strip */
 .v6-progress-strip {
+  display: none;
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(0, 240, 255, 0.3);
   border-radius: 8px;
@@ -11017,4 +11019,28 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 .v6-rr-box {
   border-color: rgba(234, 179, 8, 0.35) !important;
   background: rgba(234, 179, 8, 0.05) !important;
+}
+
+#btn-v6-best-setup {
+  background: linear-gradient(135deg, #00f0ff, #0088ff);
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.v6-concepts-empty {
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 20px;
+}
+
+.v6-concepts-loading {
+  color: #00f0ff;
+  font-size: 12px;
+  padding: 20px;
+}
+
+.v6-concepts-error {
+  color: #ff3b5c;
+  font-size: 12px;
+  padding: 20px;
 }

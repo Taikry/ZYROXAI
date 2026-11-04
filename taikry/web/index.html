@@ -727,7 +727,7 @@
                   <div class="v6-confluence-row">
                     <div class="v6-quality-meter">
                       <div class="v6-meter-label">Setup Quality: <b id="v6-score-num">--</b>/100 (<span id="v6-score-tier">WATCHLIST</span>)</div>
-                      <div class="v6-meter-track"><div class="v6-meter-fill" id="v6-meter-fill" style="width: 50%;"></div></div>
+                      <div class="v6-meter-track"><div class="v6-meter-fill" id="v6-meter-fill"></div></div>
                     </div>
                     <div class="v6-pills-row">
                       <span class="v6-pill" id="v6-mtf-pill">MTF: ALIGNED</span>
@@ -763,7 +763,7 @@
 
               
               <!-- 📊 SMART ANALYSIS CENTER PROGRESS STRIP -->
-              <div class="v6-progress-strip" id="v6-progress-strip" style="display: none;">
+              <div class="v6-progress-strip" id="v6-progress-strip">
                 <div class="v6-progress-header">
                   <span class="v6-pulse"></span>
                   <span id="v6-progress-title">Smart Analysis Center: Executing V6 Pipeline...</span>
@@ -790,7 +790,7 @@
 
               <!-- Bottom Action Buttons -->
               <div class="cockpit-footer-actions">
-                <button type="button" class="cockpit-sub-btn cockpit-sub-btn-primary" style="background: linear-gradient(135deg, #00f0ff, #0088ff); color: #0f172a; font-weight: 800;" onclick="triggerV6BestSetupFlow()" id="btn-v6-best-setup">
+                <button type="button" class="cockpit-sub-btn cockpit-sub-btn-primary" onclick="triggerV6BestSetupFlow()" id="btn-v6-best-setup">
                   🔥 Best Setup V6
                 </button>
                 <button type="button" class="cockpit-sub-btn" onclick="openV6ConceptExplorerModal()" id="btn-v6-concept-explorer">
@@ -3324,7 +3324,7 @@
           <button class="v6-cat-btn" onclick="filterV6ConceptCategory('SESSION_CONCEPTS', this)">J: Sessions</button>
         </div>
         <div class="v6-concepts-grid" id="v6-concepts-grid">
-          <div style="color: #94a3b8; font-size: 12px; padding: 20px;">Click '🔥 Best Setup V6' or trigger a market scan to inspect live detected concepts.</div>
+          <div class="v6-concepts-empty">Click '🔥 Best Setup V6' or trigger a market scan to inspect live detected concepts.</div>
         </div>
       </div>
     </div>
