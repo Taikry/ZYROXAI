@@ -49,7 +49,9 @@ def _build_candidate_plan(
         return None
     direction = str(risk_report.get("proposed_direction") or "").upper()
     vote_direction = "BUY" if direction in {"LONG", "BUY"} else ("SELL" if direction in {"SHORT", "SELL"} else "NONE")
-    if vote_direction == "NONE":
+    if vote_direction == "NONE" or vote_direction != consensus_direction:
+        return None
+    if not data_quality.get("is_fresh", False) or material_conflict:
         return None
 
     try:

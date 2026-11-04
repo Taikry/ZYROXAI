@@ -16,6 +16,7 @@ from taikry.api.saas_routes import saas_router
 from taikry.api.market_routes import market_router
 from taikry.api.schema_routes import schema_router
 from app.payments.routes import payments_router
+from taikry.v6.routes import router as v6_router
 from taikry.monitoring.engine import market_monitor_247
 
 @asynccontextmanager
@@ -110,6 +111,7 @@ app.include_router(saas_router)
 app.include_router(market_router)
 app.include_router(schema_router)
 app.include_router(payments_router)
+app.include_router(v6_router)
 
 # Mount web dashboard if directory exists
 web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")

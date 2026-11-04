@@ -26,6 +26,7 @@ def _migration_steps(database_engine) -> List[Migration]:
     from taikry.database.migrate_market_explorer import run_migration as market_explorer
     from taikry.database.migrate_risk_intelligence_v3 import run_migration as risk_intelligence_v3
     from taikry.database.migrate_user_risk_settings_unique import run_migration as user_risk_settings_unique
+    from taikry.database.migrate_v6_models import run_migration as v6_technical_intelligence
 
     return [
         ("0001_telegram_system", "Telegram delivery and signal provenance schema", lambda: telegram_system(database_engine)),
@@ -38,6 +39,7 @@ def _migration_steps(database_engine) -> List[Migration]:
         ("0008_market_explorer", "Provider symbol registry, personal watchlists, and analysis jobs", lambda: market_explorer(database_engine)),
         ("0009_risk_intelligence_v3", "User risk settings and risk assessment audit log", lambda: risk_intelligence_v3(database_engine)),
         ("0010_user_risk_settings_unique", "Enforce one risk settings row per authenticated user", lambda: user_risk_settings_unique(database_engine)),
+        ("0011_v6_technical_intelligence", "V6 regime results, concept detections, and best setup ledger", lambda: v6_technical_intelligence(database_engine)),
     ]
 
 

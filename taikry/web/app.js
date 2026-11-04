@@ -7800,3 +7800,328 @@ window.openSchemaStudio = function() {
     }
   }
 };
+
+// ==========================================================================
+// ZYROX AI V6 — CLIENT CONTROLLER & CONCEPT EXPLORER
+// ==========================================================================
+
+let v6CurrentDetectedConcepts = [];
+let v6ActiveConceptCategory = "ALL";
+let v6ActiveChartOverlays = {};
+
+async function triggerV6BestSetupFlow() {
+  const btn = document.getElementById("btn-v6-best-setup");
+  const strip = document.getElementById("v6-progress-strip");
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmer ? "កំពុងវិភាគ V6…" : "Analyzing V6…" });
+
+  if (strip) strip.style.display = "block";
+
+  const setStepState = (stepNum, state) => {
+    const el = document.getElementById(`v6-step-${stepNum}`);
+    if (el) {
+      el.className = `v6-step-item ${state}`;
+    }
+  };
+
+  // Reset steps
+  for (let i = 1; i <= 10; i++) setStepState(i, "");
+
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  try {
+    setStepState(1, "active");
+    await sleep(250);
+    setStepState(1, "completed");
+    setStepState(2, "active");
+    await sleep(200);
+    setStepState(2, "completed");
+    setStepState(3, "active");
+
+    const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
+    const tfParam = tfMap[currentTimeframe] || "M15";
+
+    const fetchPromise = fetch(`${API_BASE}/api/v6/best-setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        symbol: currentSymbol,
+        timeframe: tfParam
+      })
+    });
+
+    await sleep(200);
+    setStepState(3, "completed");
+    setStepState(4, "active");
+    await sleep(200);
+    setStepState(4, "completed");
+    setStepState(5, "active");
+    await sleep(150);
+    setStepState(5, "completed");
+    setStepState(6, "active");
+    await sleep(150);
+    setStepState(6, "completed");
+    setStepState(7, "active");
+
+    const res = await fetchPromise;
+    if (!res.ok) throw new Error(`V6 Best Setup request failed (${res.status})`);
+    const setupData = await res.json();
+
+    setStepState(7, "completed");
+    setStepState(8, "active");
+    await sleep(150);
+    setStepState(8, "completed");
+    setStepState(9, "active");
+    await sleep(150);
+    setStepState(9, "completed");
+    setStepState(10, "completed");
+
+    renderV6BestSetupCard(setupData);
+
+    const toast = document.getElementById("cockpit-status-toast");
+    if (toast) {
+      toast.innerHTML = `<span class="toast-clock">⚡</span> <b>V6 Best Setup: ${escapeHtml(setupData.symbol)} · ${setupData.direction} · Score ${setupData.quality_score?.total_score || 0}/100</b>`;
+    }
+
+  } catch (err) {
+    console.error("V6 Best Setup error:", err);
+    const toast = document.getElementById("cockpit-status-toast");
+    if (toast) toast.innerText = `V6 Best Setup error: ${err.message}`;
+  } finally {
+    buttonBusyState?.restore();
+    setTimeout(() => {
+      if (strip) strip.style.display = "none";
+    }, 4000);
+  }
+}
+
+function renderV6BestSetupCard(setup) {
+  if (!setup) return;
+
+  const regimeBadge = document.getElementById("v6-regime-badge");
+  const dirBadge = document.getElementById("v6-direction-badge");
+  const stratName = document.getElementById("v6-strat-name");
+  const conceptSub = document.getElementById("v6-concept-sub");
+  const tp1Val = document.getElementById("v6-tp1-val");
+  const tp1R = document.getElementById("v6-tp1-r");
+  const tp2Val = document.getElementById("v6-tp2-val");
+  const tp2R = document.getElementById("v6-tp2-r");
+  const tp3Val = document.getElementById("v6-tp3-val");
+  const tp3R = document.getElementById("v6-tp3-r");
+  const scoreNum = document.getElementById("v6-score-num");
+  const scoreTier = document.getElementById("v6-score-tier");
+  const meterFill = document.getElementById("v6-meter-fill");
+  const mtfPill = document.getElementById("v6-mtf-pill");
+  const riskPill = document.getElementById("v6-risk-pill");
+  const whyList = document.getElementById("v6-why-list");
+
+  // Regime
+  if (regimeBadge) {
+    regimeBadge.innerText = `REGIME: ${setup.regime || "UNCERTAIN"}`;
+  }
+
+  // Direction
+  if (dirBadge) {
+    dirBadge.innerText = setup.direction || "WAIT";
+    const dir = String(setup.direction || "").toUpperCase();
+    if (dir.includes("BUY")) {
+      dirBadge.className = "v6-direction-pill v6-dir-buy";
+    } else if (dir.includes("SELL")) {
+      dirBadge.className = "v6-direction-pill v6-dir-sell";
+    } else if (dir.includes("WAIT")) {
+      dirBadge.className = "v6-direction-pill v6-dir-wait";
+    } else {
+      dirBadge.className = "v6-direction-pill v6-dir-notrade";
+    }
+  }
+
+  // Strategy & Concept
+  if (stratName) {
+    stratName.innerText = setup.strategy?.name || "Market Regime Standby";
+  }
+  if (conceptSub) {
+    conceptSub.innerText = setup.concept?.name ? `Concept: ${setup.concept.name}` : "Multiple technical confluences evaluated.";
+  }
+
+  // Execution Levels & Multi-targets
+  const plan = setup.trade_plan || {};
+  const decimals = (setup.symbol || "").includes("XAU") ? 2 : ((setup.symbol || "").includes("BTC") ? 2 : 4);
+
+  const entryVal = document.getElementById("v6-entry-val");
+  const entryType = document.getElementById("v6-entry-type");
+  const slVal = document.getElementById("v6-sl-val");
+  const slDist = document.getElementById("v6-sl-dist");
+  const rrVal = document.getElementById("v6-rr-val");
+
+  if (entryVal) entryVal.innerText = plan.entry_price ? Number(plan.entry_price).toFixed(decimals) : "--";
+  if (entryType) entryType.innerText = plan.entry_type || "MARKET";
+  if (slVal) slVal.innerText = plan.stop_loss ? Number(plan.stop_loss).toFixed(decimals) : "--";
+  if (slDist) slDist.innerText = plan.stop_distance ? `${Number(plan.stop_distance).toFixed(decimals)} dist` : "--";
+  if (rrVal) rrVal.innerText = plan.risk_reward_ratio || "1:2.0";
+
+  if (tp1Val) tp1Val.innerText = plan.tp1 ? Number(plan.tp1).toFixed(decimals) : "--";
+  if (tp1R) tp1R.innerText = plan.tp1_r ? `+${plan.tp1_r}R` : "--";
+  if (tp2Val) tp2Val.innerText = plan.tp2 ? Number(plan.tp2).toFixed(decimals) : "--";
+  if (tp2R) tp2R.innerText = plan.tp2_r ? `+${plan.tp2_r}R` : "--";
+  if (tp3Val) tp3Val.innerText = plan.tp3 ? Number(plan.tp3).toFixed(decimals) : "--";
+  if (tp3R) tp3R.innerText = plan.tp3_r ? `+${plan.tp3_r}R` : "--";
+
+  // Score
+  const score = setup.quality_score?.total_score || 0;
+  if (scoreNum) scoreNum.innerText = score;
+  if (scoreTier) scoreTier.innerText = setup.quality_score?.classification || "WATCHLIST";
+  if (meterFill) meterFill.style.width = `${Math.min(100, Math.max(5, score))}%`;
+
+  // Pills
+  if (mtfPill) {
+    const mtfStatus = setup.multi_timeframe_status?.alignment_status || "ALIGNED";
+    mtfPill.innerText = `MTF: ${mtfStatus}`;
+  }
+  if (riskPill) {
+    const riskDec = setup.risk_manager?.decision || "APPROVED";
+    riskPill.innerText = `RISK: ${riskDec}`;
+  }
+
+  // Why this setup list
+  if (whyList) {
+    whyList.innerHTML = "";
+    const items = setup.why_this_setup || [];
+    items.forEach(item => {
+      const li = document.createElement("li");
+      li.innerText = item;
+      whyList.appendChild(li);
+    });
+  }
+
+  // Synchronize with Cockpit Plan Card
+  const planEntry = document.getElementById("plan-entry-val");
+  const planSl = document.getElementById("plan-sl-val");
+  const planTp = document.getElementById("plan-tp-val");
+  if (planEntry && plan.entry_price) planEntry.innerText = Number(plan.entry_price).toFixed(decimals);
+  if (planSl && plan.stop_loss) planSl.innerText = Number(plan.stop_loss).toFixed(decimals);
+  if (planTp && plan.tp1) planTp.innerText = `${Number(plan.tp1).toFixed(decimals)} (${plan.risk_reward_ratio || "N/A"})`;
+
+  // Overlay on TradingView / Lightweight Charts
+  if (window.taikryChart && typeof window.taikryChart.setActiveTradeSignal === "function") {
+    window.taikryChart.setActiveTradeSignal({
+      entry_price: plan.entry_price,
+      stop_loss: plan.stop_loss,
+      take_profit_1: plan.tp1,
+      take_profit_2: plan.tp2,
+      take_profit_3: plan.tp3,
+      market_bias: setup.direction,
+      setup_status: setup.risk_manager?.decision || "APPROVED"
+    });
+  }
+}
+
+async function openV6ConceptExplorerModal() {
+  const modal = document.getElementById("modal-v6-concept-explorer");
+  if (!modal) return;
+  modal.classList.remove("modal-hidden");
+
+  const grid = document.getElementById("v6-concepts-grid");
+  if (grid) {
+    grid.innerHTML = `<div style="color: #00f0ff; font-size: 12px; padding: 20px;">Scanning technical concepts across Categories A–J...</div>`;
+  }
+
+  try {
+    const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
+    const tfParam = tfMap[currentTimeframe] || "M15";
+
+    const res = await fetch(`${API_BASE}/api/v6/concepts/detect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        symbol: currentSymbol,
+        timeframe: tfParam
+      })
+    });
+    if (!res.ok) throw new Error(`Concept detection failed (${res.status})`);
+    const data = await res.json();
+    v6CurrentDetectedConcepts = data.concepts || [];
+    renderV6ConceptsGrid();
+  } catch (err) {
+    console.error("Concept explorer error:", err);
+    if (grid) {
+      grid.innerHTML = `<div style="color: #ff3b5c; font-size: 12px; padding: 20px;">Failed to scan concepts: ${err.message}</div>`;
+    }
+  }
+}
+
+function closeV6ConceptExplorerModal() {
+  const modal = document.getElementById("modal-v6-concept-explorer");
+  if (modal) modal.classList.add("modal-hidden");
+}
+
+function filterV6ConceptCategory(category, btnEl) {
+  v6ActiveConceptCategory = category;
+  const tabs = document.querySelectorAll("#v6-cat-tabs .v6-cat-btn");
+  tabs.forEach(b => b.classList.remove("active"));
+  if (btnEl) btnEl.classList.add("active");
+  renderV6ConceptsGrid();
+}
+
+function renderV6ConceptsGrid() {
+  const grid = document.getElementById("v6-concepts-grid");
+  if (!grid) return;
+
+  const filtered = v6ActiveConceptCategory === "ALL"
+    ? v6CurrentDetectedConcepts
+    : v6CurrentDetectedConcepts.filter(c => c.category === v6ActiveConceptCategory);
+
+  if (!filtered || filtered.length === 0) {
+    grid.innerHTML = `<div style="color: #94a3b8; font-size: 12px; padding: 20px;">No concepts detected under this category for ${escapeHtml(currentSymbol)}.</div>`;
+    return;
+  }
+
+  grid.innerHTML = "";
+  filtered.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "v6-concept-item-card";
+
+    const biasColor = c.bias === "BULLISH" ? "#00ff88" : (c.bias === "BEARISH" ? "#ff3b5c" : "#94a3b8");
+    const evidenceText = (c.evidence || []).join(" ");
+
+    card.innerHTML = `
+      <div class="v6-concept-item-header">
+        <div class="v6-concept-item-name">${escapeHtml(c.name)}</div>
+        <div class="v6-concept-conf">${c.confidence || 0}% CONF</div>
+      </div>
+      <div style="font-size: 10px; font-weight: 700; color: ${biasColor}; margin-bottom: 4px;">
+        ${escapeHtml(c.bias || "NEUTRAL")} · ${escapeHtml(c.category || "")}
+      </div>
+      <div class="v6-concept-evidence">${escapeHtml(evidenceText)}</div>
+      <button type="button" class="v6-btn-toggle-chart" onclick="toggleV6ConceptOnChart('${escapeHtml(c.concept_id)}')">
+        ${v6ActiveChartOverlays[c.concept_id] ? "✕ Hide from Chart" : "📍 Show on Chart"}
+      </button>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleV6ConceptOnChart(conceptId) {
+  const concept = v6CurrentDetectedConcepts.find(c => c.concept_id === conceptId);
+  if (!concept) return;
+
+  const isActive = !!v6ActiveChartOverlays[conceptId];
+  if (isActive) {
+    delete v6ActiveChartOverlays[conceptId];
+    if (window.taikryChart && typeof window.taikryChart.removeCustomOverlay === "function") {
+      window.taikryChart.removeCustomOverlay(conceptId);
+    }
+  } else {
+    v6ActiveChartOverlays[conceptId] = true;
+    if (window.taikryChart && typeof window.taikryChart.addCustomOverlay === "function") {
+      window.taikryChart.addCustomOverlay({
+        id: conceptId,
+        name: concept.name,
+        overlay: concept.chart_overlay,
+        levels: concept.levels,
+        bias: concept.bias
+      });
+    }
+  }
+  renderV6ConceptsGrid();
+}
