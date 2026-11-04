@@ -17,7 +17,7 @@ def _credential(name: str, default: str = "") -> str:
     return value
 
 # System Info
-APP_NAME = "TAIKRY AI MARKET INTELLIGENCE PRO"
+APP_NAME = os.getenv("APP_NAME", "ZYROX AI TRADING PRO")
 APP_VERSION = "2.0.0"
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"

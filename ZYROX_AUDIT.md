@@ -2,7 +2,7 @@
 
 **Generated:** November 2026  
 **Repository Source of Truth:** `https://github.com/Taikry/Taikry-AI-Trading`  
-**Production Deployment:** `https://taikry-ai-trading.onrender.com`  
+**Production Deployment:** `https://zyroxai.onrender.com`  
 **System Status:** Operational / Enterprise Grade  
 
 ---

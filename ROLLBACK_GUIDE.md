@@ -4,7 +4,7 @@
 
 ### 1.1 Pause Telegram Signal Dispatching
 To stop all automated Telegram messages immediately without taking the web app or APIs offline:
-1. Open Render Dashboard -> `taikry-ai-trading` -> **Environment**.
+1. Open Render Dashboard -> `zyroxai` -> **Environment**.
 2. Set `TELEGRAM_ENABLED=false`.
 3. Save changes. Render triggers a rolling restart within seconds.
 4. Signal analysis, web cockpits, and user queries remain fully operational.

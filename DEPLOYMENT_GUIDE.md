@@ -60,7 +60,7 @@ The project includes a production blueprint `render.yaml` declaring the web serv
 ```yaml
 services:
   - type: web
-    name: taikry-ai-trading
+    name: zyroxai
     runtime: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn taikry.api.app:app --host 0.0.0.0 --port $PORT"
@@ -95,13 +95,13 @@ git push origin main
 ## 4. Verification & Health Monitoring
 
 ### 4.1 Health Check Endpoints
-- **HTTP GET `/ping`:** Returns `{"status": "ok", "service": "taikry-ai-trading"}`
+- **HTTP GET `/ping`:** Returns `{"status": "pong", "app": "ZYROX AI TRADING PRO", "version": "2.0.0"}`
 - **HTTP GET `/api/v1/system/info`:** Reports brand, version, active modules, and strategy version
 - **HTTP GET `/api/v1/telegram/status`:** Reports Telegram bot connection, chat IDs, and daily quota status
 
 ### 4.2 Logging & Incident Response
 View live application logs in Render Dashboard or via Render CLI:
 ```bash
-render logs -s taikry-ai-trading
+render logs -s zyroxai
 ```
 

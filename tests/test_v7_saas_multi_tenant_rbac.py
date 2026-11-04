@@ -29,13 +29,16 @@ def setup_test_users():
     """Sets up super_admin, admin, user_a, and user_b test accounts."""
     db = SessionLocal()
     try:
-        # Clean any preexisting test users
+        # Clean any preexisting test users and their roles
         test_emails = [
             "v7_superadmin@zyrox.ai",
             "v7_admin@zyrox.ai",
             "v7_usera@zyrox.ai",
             "v7_userb@zyrox.ai"
         ]
+        old_users = db.query(User).filter(User.email.in_(test_emails)).all()
+        for u in old_users:
+            db.query(UserRole).filter(UserRole.user_id == u.id).delete()
         db.query(User).filter(User.email.in_(test_emails)).delete(synchronize_session=False)
         db.commit()
 
@@ -128,6 +131,9 @@ def setup_test_users():
     # Teardown
     db = SessionLocal()
     try:
+        old_users = db.query(User).filter(User.email.in_(test_emails)).all()
+        for u in old_users:
+            db.query(UserRole).filter(UserRole.user_id == u.id).delete()
         db.query(User).filter(User.email.in_(test_emails)).delete(synchronize_session=False)
         db.commit()
     finally:
@@ -139,8 +145,11 @@ def test_user_signup_and_default_role():
     db = SessionLocal()
     try:
         email = "test_signup_v7@example.com"
-        db.query(User).filter(User.email == email).delete()
-        db.commit()
+        old_u = db.query(User).filter(User.email == email).first()
+        if old_u:
+            db.query(UserRole).filter(UserRole.user_id == old_u.id).delete()
+            db.query(User).filter(User.id == old_u.id).delete()
+            db.commit()
 
         ok, msg, data = sign_up_user(db, email, "StrongTraderPass999!", full_name="New Trader")
         assert ok is True
@@ -161,8 +170,11 @@ def test_user_signup_and_default_role():
         assert "admins.manage" not in perms
         assert "system.settings.manage" not in perms
     finally:
-        db.query(User).filter(User.email == "test_signup_v7@example.com").delete()
-        db.commit()
+        old_u = db.query(User).filter(User.email == "test_signup_v7@example.com").first()
+        if old_u:
+            db.query(UserRole).filter(UserRole.user_id == old_u.id).delete()
+            db.query(User).filter(User.id == old_u.id).delete()
+            db.commit()
         db.close()
 
 

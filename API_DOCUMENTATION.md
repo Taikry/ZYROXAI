@@ -4,7 +4,7 @@
 
 ### `GET /ping`
 - **Description:** Basic liveness probe.
-- **Response:** `{"status": "ok", "service": "taikry-ai-trading"}`
+- **Response:** `{"status": "pong", "app": "ZYROX AI TRADING PRO", "version": "2.0.0"}`
 
 ### `GET /api/v1/system/info`
 - **Description:** System identity, active features, strategy version, and operational flags.
@@ -75,8 +75,8 @@
     "tran_id": "ZYROX-TX-001",
     "amount": 49.00,
     "payment_option": "abapay",
-    "return_url": "https://taikry-ai-trading.onrender.com/dashboard/#plans",
-    "continue_success_url": "https://taikry-ai-trading.onrender.com/dashboard/#plans"
+    "return_url": "https://zyroxai.onrender.com/dashboard/#plans",
+    "continue_success_url": "https://zyroxai.onrender.com/dashboard/#plans"
   }
   ```
 - **Response:** `{"status": "SUCCESS", "checkout_url": "...", "hash": "..."}`

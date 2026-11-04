@@ -1,12 +1,12 @@
 # ZYROX AI — Render Production Deployment Runbook
 
 ## 1. Production Service Overview
-- **Service Name:** `taikry-ai-trading`
-- **Public URL:** `https://taikry-ai-trading.onrender.com`
-- **Dashboard URL:** `https://taikry-ai-trading.onrender.com/dashboard/`
+- **Service Name:** `zyroxai`
+- **Public URL:** `https://zyroxai.onrender.com` (or custom domain e.g. `https://zyroxai.com`)
+- **Dashboard URL:** `https://zyroxai.onrender.com/dashboard/`
 - **Healthcheck Path:** `/ping`
 - **Environment:** Python 3.12 (Linux 64-bit)
-- **Host Region:** Oregon, USA (or Frankfurt for European low latency)
+- **Host Region:** Singapore (or Frankfurt / Oregon)
 
 ---
 
@@ -17,6 +17,7 @@
 | `PYTHON_VERSION` | Yes | Runtime Python version | `3.12.0` |
 | `SECRET_KEY` | Yes | App session signature key | `<64-char-hex>` |
 | `DATABASE_URL` | Yes | PostgreSQL connection URI | `postgresql://...` |
+| `PUBLIC_APP_URL` | Yes | Primary public domain URL | `https://zyroxai.onrender.com` |
 | `TELEGRAM_ENABLED` | Yes | Master toggle for bot | `true` |
 | `TELEGRAM_BOT_TOKEN` | Yes | Official BotFather token | `123456789:ABC...` |
 | `TELEGRAM_CHAT_ID` | Yes | Primary alerts channel ID | `-1004341134868` |
@@ -33,19 +34,19 @@
 
 ### 3.1 Ping Endpoint Verification
 ```bash
-curl -i https://taikry-ai-trading.onrender.com/ping
+curl -i https://zyroxai.onrender.com/ping
 ```
 Expected HTTP Response:
 ```json
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status":"ok","service":"taikry-ai-trading"}
+{"status":"pong","app":"ZYROX AI TRADING PRO","version":"2.0.0"}
 ```
 
 ### 3.2 Web Dashboard Verification
 ```bash
-curl -I https://taikry-ai-trading.onrender.com/dashboard/
+curl -I https://zyroxai.onrender.com/dashboard/
 ```
 Expected HTTP Response: `200 OK`
 
