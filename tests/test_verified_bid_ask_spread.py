@@ -91,3 +91,4 @@ def test_xauusd_live_analysis_includes_bid_ask_spread():
     assert data.get("bid") is not None and data.get("bid") > 0
     assert data.get("ask") is not None and data.get("ask") > data.get("bid")
     assert data.get("spread_points") is not None and data.get("spread_points") > 0
+
