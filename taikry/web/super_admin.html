@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#070a0d">
   <title>ZYROX AI — Super Administrator Governance</title>
   <link rel="stylesheet" href="/dashboard/styles.css">
   <style>
@@ -28,6 +27,7 @@
     .super-nav {
       border-bottom: 1px solid var(--panel-border);
       background: rgba(13, 18, 23, 0.88);
+      -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
       position: sticky;
       top: 0;
@@ -43,6 +43,28 @@
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+    .nav-brand-link {
+      color: inherit;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-super-icon {
+      color: var(--super-accent);
+    }
+    .nav-user-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .nav-user-text {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .nav-link-btn {
+      text-decoration: none;
     }
     .badge-super {
       background: rgba(168, 85, 247, 0.18);
@@ -68,6 +90,17 @@
       align-items: center;
       gap: 14px;
       margin-bottom: 28px;
+    }
+    .security-banner-icon {
+      font-size: 22px;
+    }
+    .security-banner-title {
+      color: var(--super-accent);
+    }
+    .security-banner-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
     }
     .super-tabs {
       display: flex;
@@ -118,6 +151,9 @@
       align-items: center;
       border-bottom: 1px solid var(--panel-border);
     }
+    .card-header-title {
+      font-weight: 700;
+    }
     table.data-table {
       width: 100%;
       border-collapse: collapse;
@@ -134,6 +170,40 @@
     table.data-table td {
       padding: 14px 18px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .table-empty-row {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-muted);
+    }
+    .table-empty-pad20 {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+    }
+    .table-error-row {
+      text-align: center;
+      padding: 20px;
+      color: var(--danger);
+    }
+    .text-muted-small {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .text-muted-span {
+      color: var(--text-muted);
+    }
+    .status-active {
+      color: var(--brand-green);
+    }
+    .status-suspended {
+      color: var(--danger);
+    }
+    .status-configured {
+      color: var(--brand-green);
+    }
+    .status-unconfigured {
+      color: var(--danger);
     }
     .btn-action {
       background: #171124;
@@ -188,24 +258,24 @@
 <body>
   <header class="super-nav">
     <div class="brand-title">
-      <a href="/dashboard/" style="color:inherit; text-decoration:none; display:flex; align-items:center; gap:8px;">
-        <span style="color:var(--super-accent)">⚡</span> ZYROX AI
+      <a href="/dashboard/" class="nav-brand-link">
+        <span class="brand-super-icon">⚡</span> ZYROX AI
       </a>
       <span class="badge-super">Super Admin Governance</span>
     </div>
-    <div style="display:flex; align-items:center; gap:16px;">
-      <span id="super-admin-display" style="font-size:13px; color:var(--text-muted);">Verifying master credentials...</span>
-      <a href="/admin" class="btn-action" style="text-decoration:none;">Operations Admin</a>
-      <a href="/dashboard/" class="btn-action" style="text-decoration:none;">Back to Trading</a>
+    <div class="nav-user-actions">
+      <span id="super-admin-display" class="nav-user-text">Verifying master credentials...</span>
+      <a href="/admin" class="btn-action nav-link-btn">Operations Admin</a>
+      <a href="/dashboard/" class="btn-action nav-link-btn">Back to Trading</a>
     </div>
   </header>
 
   <main class="super-container">
     <div class="security-banner">
-      <span style="font-size:22px">🛡️</span>
+      <span class="security-banner-icon">🛡️</span>
       <div>
-        <strong style="color:var(--super-accent)">Restricted Governance Zone</strong>
-        <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+        <strong class="security-banner-title">Restricted Governance Zone</strong>
+        <div class="security-banner-subtitle">
           All operational changes, feature flags, secret updates, and administrative promotions are immutably audited. API secrets and credentials remain server-side and are strictly masked.
         </div>
       </div>
@@ -222,7 +292,7 @@
     <section id="tab-admin-mgmt" class="tab-content active">
       <div class="card-block">
         <div class="card-header">
-          <span style="font-weight:700">Platform Administrators & Role Delegation</span>
+          <span class="card-header-title">Platform Administrators & Role Delegation</span>
           <button class="btn-action btn-save" onclick="promptPromoteUser()">+ Delegate Administrator</button>
         </div>
         <table class="data-table">
@@ -237,7 +307,7 @@
             </tr>
           </thead>
           <tbody id="admins-table-body">
-            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading administrators...</td></tr>
+            <tr><td colspan="6" class="table-empty-row">Loading administrators...</td></tr>
           </tbody>
         </table>
       </div>
@@ -247,7 +317,7 @@
     <section id="tab-flags" class="tab-content">
       <div class="card-block">
         <div class="card-header">
-          <span style="font-weight:700">Canary Feature Toggles & Progressive Rollouts</span>
+          <span class="card-header-title">Canary Feature Toggles & Progressive Rollouts</span>
           <button class="btn-action" onclick="loadFeatureFlags()">Refresh Flags</button>
         </div>
         <table class="data-table">
@@ -262,7 +332,7 @@
             </tr>
           </thead>
           <tbody id="flags-table-body">
-            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading feature flags...</td></tr>
+            <tr><td colspan="6" class="table-empty-row">Loading feature flags...</td></tr>
           </tbody>
         </table>
       </div>
@@ -272,7 +342,7 @@
     <section id="tab-settings" class="tab-content">
       <div class="card-block">
         <div class="card-header">
-          <span style="font-weight:700">Runtime Configuration & Encrypted Key Store</span>
+          <span class="card-header-title">Runtime Configuration & Encrypted Key Store</span>
           <button class="btn-action btn-save" onclick="promptAddSetting()">+ Add / Update Setting</button>
         </div>
         <table class="data-table">
@@ -287,7 +357,7 @@
             </tr>
           </thead>
           <tbody id="settings-table-body">
-            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading platform settings...</td></tr>
+            <tr><td colspan="6" class="table-empty-row">Loading platform settings...</td></tr>
           </tbody>
         </table>
       </div>
@@ -297,7 +367,7 @@
     <section id="tab-ai-providers" class="tab-content">
       <div class="card-block">
         <div class="card-header">
-          <span style="font-weight:700">Multi-Agent Intelligence Provider Routing</span>
+          <span class="card-header-title">Multi-Agent Intelligence Provider Routing</span>
           <button class="btn-action" onclick="loadAIProviders()">Check Provider Status</button>
         </div>
         <table class="data-table">
@@ -311,7 +381,7 @@
             </tr>
           </thead>
           <tbody id="providers-table-body">
-            <tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted)">Loading AI provider models...</td></tr>
+            <tr><td colspan="5" class="table-empty-row">Loading AI provider models...</td></tr>
           </tbody>
         </table>
       </div>
@@ -358,17 +428,17 @@
         tbody.innerHTML = admins.map(a => `
           <tr>
             <td>#${a.id}</td>
-            <td><strong>${a.email}</strong><br><small style="color:var(--text-muted)">${a.full_name || '—'}</small></td>
+            <td><strong>${a.email}</strong><br><small class="text-muted-small">${a.full_name || '—'}</small></td>
             <td><span class="badge-super">${a.role}</span></td>
             <td>${a.permissions_count} permissions active</td>
-            <td><span style="color:${a.is_active ? 'var(--brand-green)' : 'var(--danger)'}">${a.is_active ? 'ACTIVE' : 'SUSPENDED'}</span></td>
+            <td><span class="${a.is_active ? 'status-active' : 'status-suspended'}">${a.is_active ? 'ACTIVE' : 'SUSPENDED'}</span></td>
             <td>
               <button class="btn-action" onclick="changeAdminRole(${a.id}, '${a.role}')">Change Role</button>
             </td>
           </tr>
         `).join('');
       } catch (err) {
-        document.getElementById('admins-table-body').innerHTML = `<tr><td colspan="6" style="color:var(--danger); text-align:center;">Error: ${err.message}</td></tr>`;
+        document.getElementById('admins-table-body').innerHTML = `<tr><td colspan="6" class="table-error-row">Error: ${err.message}</td></tr>`;
       }
     }
 
@@ -430,7 +500,7 @@
               </label>
             </td>
             <td><strong>${f.rollout_percentage}%</strong></td>
-            <td><small style="color:var(--text-muted)">${Array.isArray(f.allowed_roles) ? f.allowed_roles.join(', ') : 'All'}</small></td>
+            <td><small class="text-muted-small">${Array.isArray(f.allowed_roles) ? f.allowed_roles.join(', ') : 'All'}</small></td>
             <td>
               <button class="btn-action" onclick="editFlagRollout('${f.key}', ${f.rollout_percentage})">Edit %</button>
             </td>
@@ -483,14 +553,14 @@
         const tbody = document.getElementById('settings-table-body');
         const settings = data.settings || [];
         if (!settings.length) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted)">No system settings configured.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="table-empty-pad20">No system settings configured.</td></tr>';
           return;
         }
         tbody.innerHTML = settings.map(s => `
           <tr>
             <td><code>${s.key}</code></td>
             <td><code>${s.value || '—'}</code></td>
-            <td>${s.is_secret ? '<span class="badge-secret">SECRET</span>' : '<span style="color:var(--text-muted)">PUBLIC</span>'}</td>
+            <td>${s.is_secret ? '<span class="badge-secret">SECRET</span>' : '<span class="text-muted-span">PUBLIC</span>'}</td>
             <td>${s.description || '—'}</td>
             <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'}</td>
             <td>
@@ -554,7 +624,7 @@
           <tr>
             <td><strong>${p.name}</strong></td>
             <td>${p.role}</td>
-            <td><span style="color:${p.is_configured ? 'var(--brand-green)' : 'var(--danger)'}">${p.is_configured ? 'CONFIGURED' : 'NOT CONFIGURED'}</span></td>
+            <td><span class="${p.is_configured ? 'status-configured' : 'status-unconfigured'}">${p.is_configured ? 'CONFIGURED' : 'NOT CONFIGURED'}</span></td>
             <td><code>${p.status}</code></td>
             <td><code>${p.api_key_masked}</code></td>
           </tr>
@@ -569,4 +639,3 @@
   </script>
 </body>
 </html>
-
