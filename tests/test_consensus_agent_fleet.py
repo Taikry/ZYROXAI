@@ -40,6 +40,8 @@ def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch, tr
     monkeypatch.setattr(agent_self_trainer, "get_current_agent_weights", lambda _symbol: {})
     monkeypatch.setattr(consensus_module, "translate_to_khmer", lambda _report: "Khmer preview report")
     monkeypatch.setattr(consensus_module, "get_llm_status", lambda: {"status": "NOT_PROBED"})
+    from taikry.data.economic_calendar import economic_calendar_provider
+    monkeypatch.setattr(economic_calendar_provider, "check_news_blackout", lambda *_args, **_kwargs: {"is_blackout": False, "status": "CLEAR"})
 
     reports = {
         "data_quality_agent": {"feed_status": "HEALTHY", "is_fresh": True, "spread_points": 0.25, "bid_price": 2699.9, "ask_price": 2700.1},

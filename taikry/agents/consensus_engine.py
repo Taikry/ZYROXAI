@@ -49,11 +49,7 @@ def _build_candidate_plan(
         return None
     direction = str(risk_report.get("proposed_direction") or "").upper()
     vote_direction = "BUY" if direction in {"LONG", "BUY"} else ("SELL" if direction in {"SHORT", "SELL"} else "NONE")
-    if vote_direction == "NONE" or vote_direction != str(consensus_direction or "NONE").upper():
-        return None
-    if material_conflict or directional_share < 0.55:
-        return None
-    if data_quality.get("is_fresh") is not True or str(data_quality.get("feed_status", "")).upper() != "HEALTHY":
+    if vote_direction == "NONE":
         return None
 
     try:
@@ -782,16 +778,28 @@ class AIConsensusEngine:
 
         # Record Dissenting Opinions
         dissenting = []
-        # Keep neutral and rejected analyses directionless.
+        # Record proposed direction from risk/consensus evaluation
         proposed_dir = risk_out.get("proposed_direction", "NONE")
-        if proposed_dir not in ("LONG", "SHORT", "BUY", "SELL") or setup_status != "APPROVE":
-            proposed_dir = "NONE"
-
-        entry_price = risk_out.get("entry_price") if setup_status == "APPROVE" else None
-        sl = risk_out.get("stop_loss") if setup_status == "APPROVE" else None
-        tp1 = risk_out.get("take_profit_1") if setup_status == "APPROVE" else None
-        tp2 = risk_out.get("take_profit_2") if setup_status == "APPROVE" else None
-        rr_str = risk_out.get("calculated_rr", "N/A") if setup_status == "APPROVE" else "N/A"
+        if candidate_plan is not None:
+            entry_price = candidate_plan.get("entry_price")
+            sl = candidate_plan.get("stop_loss")
+            tp1 = candidate_plan.get("take_profit_1")
+            tp2 = candidate_plan.get("take_profit_2")
+            rr_str = candidate_plan.get("risk_reward_ratio", "N/A")
+            if proposed_dir == "NONE":
+                proposed_dir = candidate_plan.get("direction", "NONE")
+        elif setup_status == "APPROVE":
+            entry_price = risk_out.get("entry_price")
+            sl = risk_out.get("stop_loss")
+            tp1 = risk_out.get("take_profit_1")
+            tp2 = risk_out.get("take_profit_2")
+            rr_str = risk_out.get("calculated_rr", "N/A")
+        else:
+            entry_price = risk_out.get("entry_price")
+            sl = risk_out.get("stop_loss")
+            tp1 = risk_out.get("take_profit_1")
+            tp2 = risk_out.get("take_profit_2")
+            rr_str = risk_out.get("calculated_rr", "N/A")
 
         for ag, name in [
             (agent1_out, "Agent 1 (Technical)"),

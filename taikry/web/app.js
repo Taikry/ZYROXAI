@@ -942,11 +942,12 @@ function updateExecutionCard(data) {
   const isApproved = data.setup_status === "APPROVE";
   const scanUnavailable = ["UNAVAILABLE", "ERROR"].includes(String(data.setup_status || "").toUpperCase());
   const dir = data.proposed_direction || "NONE";
-  const candidate = data.candidate_plan;
-  const candidateDirection = String(candidate?.direction || "").toUpperCase();
-  const hasCandidatePlan = !isApproved && candidate?.status === "ANALYSIS_ONLY"
-    && ["LONG", "SHORT"].includes(candidateDirection)
-    && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
+  const candidate = data.candidate_plan || data.agents?.agent_4_risk;
+  const candidateDirection = String(candidate?.direction || candidate?.proposed_direction || data.proposed_direction || "").toUpperCase();
+  const hasCandidatePlan = !isApproved && Boolean(
+    (candidate?.status === "ANALYSIS_ONLY" && ["LONG", "SHORT", "BUY", "SELL"].includes(candidateDirection)) ||
+    [candidate?.entry_price, candidate?.stop_loss, candidate?.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0)
+  );
   const formatCandidateLevel = value => {
     const number = Number(value);
     return Number.isFinite(number) && number > 0
@@ -990,11 +991,11 @@ function updateExecutionCard(data) {
         : `🛡️ <b>${isKhmer ? "ការពារដើមទុន:" : "Capital Protection:"}</b> ${hasCandidatePlan ? `${previewNotice} ` : ""}${escapeHtml(lockNotice)} <span>${reasons.map(escapeHtml).join(" · ")}</span>`;
     }
 
-    document.getElementById("exec-entry").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.entry_price) : "LOCKED";
-    document.getElementById("exec-sl").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.stop_loss) : "LOCKED";
-    document.getElementById("exec-tp1").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.take_profit_1) : "LOCKED";
-    document.getElementById("exec-tp2").innerText = hasCandidatePlan && candidate.take_profit_2 != null ? formatCandidateLevel(candidate.take_profit_2) : "LOCKED";
-    document.getElementById("exec-rr").innerText = hasCandidatePlan ? (candidate.risk_reward_ratio || "N/A") : (data.risk_reward_ratio || "N/A");
+    document.getElementById("exec-entry").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.entry_price) : (data.verified_price || "---");
+    document.getElementById("exec-sl").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.stop_loss) : "---";
+    document.getElementById("exec-tp1").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.take_profit_1) : "---";
+    document.getElementById("exec-tp2").innerText = hasCandidatePlan && candidate.take_profit_2 != null ? formatCandidateLevel(candidate.take_profit_2) : "---";
+    document.getElementById("exec-rr").innerText = hasCandidatePlan ? (candidate.risk_reward_ratio || candidate.calculated_rr || "N/A") : (data.risk_reward_ratio || "N/A");
   }
 
   const inval = document.getElementById("exec-inval");
@@ -3450,6 +3451,7 @@ function updateCockpitPlanCard(data) {
   const rangeLow = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
   const rangeHigh = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
   const approved = statusApproved && hasEntry;
+  const hasCandidatePlan = Boolean(!statusApproved && (Boolean(data.candidate_plan) || (candidate && Number.isFinite(entryPrice) && entryPrice > 0)));
 
   if (planCard) {
     planCard.className = `cockpit-plan-card ${isBuy ? 'plan-buy' : (isSell ? 'plan-sell' : '')}`;

@@ -121,6 +121,7 @@ def test_risk_candidate_approved_and_rejected():
         stop_loss=2690.0,
         take_profit_1=2725.0,  # 25 / 10 = 2.5 R:R
         risk_mode="BALANCED",
+        custom_risk_options={"news_filter_mode": "OFF"},
         persist_log=False
     )
     assert good_res.decision in {RiskDecision.APPROVED, RiskDecision.APPROVED_WITH_REDUCED_RISK, RiskDecision.WAIT_FOR_CONFIRMATION}
