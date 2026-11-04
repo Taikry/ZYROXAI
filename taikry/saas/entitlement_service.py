@@ -267,6 +267,11 @@ def check_and_consume_quota(
     If authorized, records the usage into AIUsageRecord.
     """
     entitlements = get_user_entitlement(db, user_id)
+
+    from taikry.saas.security import has_role
+    if has_role(db, user_id, ["super_admin", "admin"]):
+        return True, "Administrator operational bypass.", entitlements
+
     if not entitlements.get("is_active"):
         status = entitlements.get("subscription_status", "inactive")
         return False, f"Access denied: Subscription or trial is {status}. Please upgrade to continue.", entitlements

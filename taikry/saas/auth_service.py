@@ -21,14 +21,17 @@ from taikry.database.models import (
     VerificationToken,
     AuditLog,
     TelegramLink,
-    NotificationPreferences
+    NotificationPreferences,
+    UserRole
 )
 from taikry.saas.security import (
     hash_password,
     verify_password,
     generate_session_token,
     hash_token,
-    auth_rate_limiter
+    auth_rate_limiter,
+    get_user_roles,
+    get_user_permissions
 )
 from taikry.saas.trial_service import grant_14_day_trial
 
@@ -74,7 +77,7 @@ def sign_up_user(
         hashed_password=hashed_pwd,
         salt=salt,
         full_name=full_name.strip() if full_name else None,
-        role="USER",
+        role="user",
         is_verified=False,
         is_active=True,
         language=language if language in ("en", "kh") else "en",
@@ -88,6 +91,16 @@ def sign_up_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # 0. Assign default user role in user_roles table
+    existing_ur = db.query(UserRole).filter(UserRole.user_id == user.id, UserRole.role_id == "user").first()
+    if not existing_ur:
+        try:
+            user_role = UserRole(user_id=user.id, role_id="user")
+            db.add(user_role)
+            db.commit()
+        except Exception:
+            db.rollback()
 
     # 1. Grant 14-Day Free Trial
     grant_ok, grant_msg, grant_rec = grant_14_day_trial(db, user)
@@ -103,19 +116,21 @@ def sign_up_user(
     )
     db.add(verify_token)
 
-    # 3. Create Default Notification Preferences
-    notif_prefs = NotificationPreferences(
-        user_id=user.id,
-        ai_analysis_completed=True,
-        signal_generated=True,
-        signal_invalidated=True,
-        macro_events=True,
-        daily_summary=True,
-        trial_expiration_reminders=True,
-        subscription_status_changes=True,
-        system_announcements=True
-    )
-    db.add(notif_prefs)
+    # 3. Create Default Notification Preferences if not existing
+    existing_prefs = db.query(NotificationPreferences).filter(NotificationPreferences.user_id == user.id).first()
+    if not existing_prefs:
+        notif_prefs = NotificationPreferences(
+            user_id=user.id,
+            ai_analysis_completed=True,
+            signal_generated=True,
+            signal_invalidated=True,
+            macro_events=True,
+            daily_summary=True,
+            trial_expiration_reminders=True,
+            subscription_status_changes=True,
+            system_announcements=True
+        )
+        db.add(notif_prefs)
 
     # 4. Audit Log
     audit = AuditLog(
@@ -200,6 +215,9 @@ def login_user(
     db.add(audit)
     db.commit()
 
+    roles = get_user_roles(db, user.id)
+    permissions = list(get_user_permissions(db, user.id))
+
     return True, "Login successful.", {
         "session_token": raw_token,
         "expires_at_utc": expires_utc.isoformat(),
@@ -208,6 +226,8 @@ def login_user(
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
+            "roles": roles,
+            "permissions": permissions,
             "is_verified": user.is_verified,
             "language": user.language,
             "timezone": user.timezone

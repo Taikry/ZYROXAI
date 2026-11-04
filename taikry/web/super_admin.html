@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070a0d">
+  <title>ZYROX AI — Super Administrator Governance</title>
+  <link rel="stylesheet" href="/dashboard/styles.css">
+  <style>
+    :root {
+      --bg-dark: #06090c;
+      --panel: #0d1217;
+      --panel-border: #1a252f;
+      --brand-green: #00d99a;
+      --super-accent: #a855f7;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 50% -20%, #201035 0%, var(--bg-dark) 48%);
+      color: var(--text-main);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+    .super-nav {
+      border-bottom: 1px solid var(--panel-border);
+      background: rgba(13, 18, 23, 0.88);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge-super {
+      background: rgba(168, 85, 247, 0.18);
+      color: var(--super-accent);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+    .super-container {
+      max-width: 1400px;
+      margin: 28px auto;
+      padding: 0 24px 60px;
+    }
+    .security-banner {
+      background: rgba(168, 85, 247, 0.08);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .super-tabs {
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 24px;
+    }
+    .super-tab {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+    .super-tab.active {
+      color: var(--super-accent);
+    }
+    .super-tab.active::after {
+      content: "";
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--super-accent);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .card-block {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .card-header {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--panel-border);
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    table.data-table th {
+      background: #090d11;
+      color: var(--text-muted);
+      padding: 12px 18px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--panel-border);
+    }
+    table.data-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .btn-action {
+      background: #171124;
+      border: 1px solid #4a2872;
+      color: var(--super-accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-action:hover {
+      background: #271642;
+    }
+    .btn-save {
+      background: var(--super-accent);
+      color: #fff;
+      border: none;
+    }
+    .btn-save:hover {
+      background: #9333ea;
+    }
+    .badge-secret {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 20px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #24303b; transition: .2s; border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--brand-green); }
+    input:checked + .slider:before { transform: translateX(18px); }
+  </style>
+</head>
+<body>
+  <header class="super-nav">
+    <div class="brand-title">
+      <a href="/dashboard/" style="color:inherit; text-decoration:none; display:flex; align-items:center; gap:8px;">
+        <span style="color:var(--super-accent)">⚡</span> ZYROX AI
+      </a>
+      <span class="badge-super">Super Admin Governance</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <span id="super-admin-display" style="font-size:13px; color:var(--text-muted);">Verifying master credentials...</span>
+      <a href="/admin" class="btn-action" style="text-decoration:none;">Operations Admin</a>
+      <a href="/dashboard/" class="btn-action" style="text-decoration:none;">Back to Trading</a>
+    </div>
+  </header>
+
+  <main class="super-container">
+    <div class="security-banner">
+      <span style="font-size:22px">🛡️</span>
+      <div>
+        <strong style="color:var(--super-accent)">Restricted Governance Zone</strong>
+        <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+          All operational changes, feature flags, secret updates, and administrative promotions are immutably audited. API secrets and credentials remain server-side and are strictly masked.
+        </div>
+      </div>
+    </div>
+
+    <nav class="super-tabs">
+      <button class="super-tab active" onclick="switchSuperTab('tab-admin-mgmt')">Administrator Governance</button>
+      <button class="super-tab" onclick="switchSuperTab('tab-flags')">Feature Flags & Rollouts</button>
+      <button class="super-tab" onclick="switchSuperTab('tab-settings')">System Settings & Secrets</button>
+      <button class="super-tab" onclick="switchSuperTab('tab-ai-providers')">AI Model Providers</button>
+    </nav>
+
+    <!-- TAB 1: ADMIN GOVERNANCE -->
+    <section id="tab-admin-mgmt" class="tab-content active">
+      <div class="card-block">
+        <div class="card-header">
+          <span style="font-weight:700">Platform Administrators & Role Delegation</span>
+          <button class="btn-action btn-save" onclick="promptPromoteUser()">+ Delegate Administrator</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Administrator</th>
+              <th>System Role</th>
+              <th>Granular Permissions</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="admins-table-body">
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading administrators...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 2: FEATURE FLAGS -->
+    <section id="tab-flags" class="tab-content">
+      <div class="card-block">
+        <div class="card-header">
+          <span style="font-weight:700">Canary Feature Toggles & Progressive Rollouts</span>
+          <button class="btn-action" onclick="loadFeatureFlags()">Refresh Flags</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Description</th>
+              <th>State</th>
+              <th>Rollout %</th>
+              <th>Allowed Roles</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="flags-table-body">
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading feature flags...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: SYSTEM SETTINGS -->
+    <section id="tab-settings" class="tab-content">
+      <div class="card-block">
+        <div class="card-header">
+          <span style="font-weight:700">Runtime Configuration & Encrypted Key Store</span>
+          <button class="btn-action btn-save" onclick="promptAddSetting()">+ Add / Update Setting</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Setting Key</th>
+              <th>Value</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Last Updated</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="settings-table-body">
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted)">Loading platform settings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: AI PROVIDERS -->
+    <section id="tab-ai-providers" class="tab-content">
+      <div class="card-block">
+        <div class="card-header">
+          <span style="font-weight:700">Multi-Agent Intelligence Provider Routing</span>
+          <button class="btn-action" onclick="loadAIProviders()">Check Provider Status</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Assigned Role</th>
+              <th>Configuration</th>
+              <th>Operational Status</th>
+              <th>API Key Mask</th>
+            </tr>
+          </thead>
+          <tbody id="providers-table-body">
+            <tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted)">Loading AI provider models...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function switchSuperTab(tabId) {
+      document.querySelectorAll('.super-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-flags') loadFeatureFlags();
+      if (tabId === 'tab-settings') loadSettings();
+      if (tabId === 'tab-ai-providers') loadAIProviders();
+    }
+
+    async function checkSuperAuth() {
+      try {
+        const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+        if (!res.ok) { window.location.assign('/?auth=signin&return_to=/super-admin'); return; }
+        const data = await res.json();
+        const role = String(data.user?.role || '').toLowerCase();
+        const roles = data.user?.roles || [role];
+        if (!roles.includes('super_admin') && role !== 'super_admin') {
+          alert('Access Forbidden: Super Administrator privileges required.');
+          window.location.assign('/admin');
+          return;
+        }
+        document.getElementById('super-admin-display').textContent = `${data.user.email} (SUPER_ADMIN)`;
+        loadAdmins();
+      } catch (err) {
+        console.error('Super auth failed', err);
+      }
+    }
+
+    async function loadAdmins() {
+      try {
+        const res = await fetch('/api/v1/super-admin/admins', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load administrators');
+        const data = await res.json();
+        const tbody = document.getElementById('admins-table-body');
+        const admins = data.admins || [];
+        tbody.innerHTML = admins.map(a => `
+          <tr>
+            <td>#${a.id}</td>
+            <td><strong>${a.email}</strong><br><small style="color:var(--text-muted)">${a.full_name || '—'}</small></td>
+            <td><span class="badge-super">${a.role}</span></td>
+            <td>${a.permissions_count} permissions active</td>
+            <td><span style="color:${a.is_active ? 'var(--brand-green)' : 'var(--danger)'}">${a.is_active ? 'ACTIVE' : 'SUSPENDED'}</span></td>
+            <td>
+              <button class="btn-action" onclick="changeAdminRole(${a.id}, '${a.role}')">Change Role</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        document.getElementById('admins-table-body').innerHTML = `<tr><td colspan="6" style="color:var(--danger); text-align:center;">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function promptPromoteUser() {
+      const userId = prompt("Enter User ID to promote or assign role:");
+      if (!userId) return;
+      const targetRole = prompt("Enter Role to assign ('admin', 'super_admin', 'premium_user', 'user'):", "admin");
+      if (!targetRole) return;
+      try {
+        const res = await fetch('/api/v1/super-admin/admins/promote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user_id: parseInt(userId, 10), role: targetRole })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Role change failed');
+        alert(data.message);
+        loadAdmins();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function changeAdminRole(userId, currentRole) {
+      const newRole = prompt(`Update role for User #${userId} (current: ${currentRole}):`, currentRole === 'admin' ? 'super_admin' : 'admin');
+      if (!newRole || newRole === currentRole) return;
+      try {
+        const res = await fetch('/api/v1/super-admin/admins/promote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user_id: userId, role: newRole })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        alert(data.message);
+        loadAdmins();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function loadFeatureFlags() {
+      try {
+        const res = await fetch('/api/v1/super-admin/feature-flags', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load feature flags');
+        const data = await res.json();
+        const tbody = document.getElementById('flags-table-body');
+        const flags = data.flags || [];
+        tbody.innerHTML = flags.map(f => `
+          <tr>
+            <td><code>${f.key}</code></td>
+            <td>${f.description || '—'}</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleFlag('${f.key}', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </td>
+            <td><strong>${f.rollout_percentage}%</strong></td>
+            <td><small style="color:var(--text-muted)">${Array.isArray(f.allowed_roles) ? f.allowed_roles.join(', ') : 'All'}</small></td>
+            <td>
+              <button class="btn-action" onclick="editFlagRollout('${f.key}', ${f.rollout_percentage})">Edit %</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function toggleFlag(key, enabled) {
+      try {
+        const res = await fetch(`/api/v1/super-admin/feature-flags/${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ enabled })
+        });
+        if (!res.ok) throw new Error('Toggle failed');
+      } catch (err) {
+        alert(err.message);
+        loadFeatureFlags();
+      }
+    }
+
+    async function editFlagRollout(key, current) {
+      const pct = prompt(`Enter rollout percentage for '${key}' (0 - 100):`, current);
+      if (pct === null) return;
+      const num = parseInt(pct, 10);
+      if (isNaN(num) || num < 0 || num > 100) { alert('Invalid percentage'); return; }
+      try {
+        const res = await fetch(`/api/v1/super-admin/feature-flags/${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ rollout_percentage: num })
+        });
+        if (!res.ok) throw new Error('Rollout update failed');
+        loadFeatureFlags();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/v1/super-admin/system-settings', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load settings');
+        const data = await res.json();
+        const tbody = document.getElementById('settings-table-body');
+        const settings = data.settings || [];
+        if (!settings.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted)">No system settings configured.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = settings.map(s => `
+          <tr>
+            <td><code>${s.key}</code></td>
+            <td><code>${s.value || '—'}</code></td>
+            <td>${s.is_secret ? '<span class="badge-secret">SECRET</span>' : '<span style="color:var(--text-muted)">PUBLIC</span>'}</td>
+            <td>${s.description || '—'}</td>
+            <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'}</td>
+            <td>
+              <button class="btn-action" onclick="promptEditSetting('${s.key}', ${s.is_secret})">Edit</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function promptAddSetting() {
+      const key = prompt("Enter setting key (e.g. 'MAX_SCAN_CONCURRENCY'):");
+      if (!key) return;
+      const val = prompt("Enter value:");
+      if (val === null) return;
+      const isSec = confirm("Is this setting sensitive/secret? (If yes, value will be masked on read)");
+      const desc = prompt("Enter description (optional):", "");
+      try {
+        const res = await fetch('/api/v1/super-admin/system-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ key, value: val, is_secret: isSec, description: desc })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        alert(data.message);
+        loadSettings();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function promptEditSetting(key, isSecret) {
+      const val = prompt(`Enter new value for '${key}':`, isSecret ? "[redacted]" : "");
+      if (val === null) return;
+      try {
+        const res = await fetch('/api/v1/super-admin/system-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ key, value: val, is_secret: isSecret })
+        });
+        if (!res.ok) throw new Error('Update failed');
+        loadSettings();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function loadAIProviders() {
+      try {
+        const res = await fetch('/api/v1/super-admin/ai-providers', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load AI providers');
+        const data = await res.json();
+        const tbody = document.getElementById('providers-table-body');
+        const list = data.providers || [];
+        tbody.innerHTML = list.map(p => `
+          <tr>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.role}</td>
+            <td><span style="color:${p.is_configured ? 'var(--brand-green)' : 'var(--danger)'}">${p.is_configured ? 'CONFIGURED' : 'NOT CONFIGURED'}</span></td>
+            <td><code>${p.status}</code></td>
+            <td><code>${p.api_key_masked}</code></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Startup
+    checkSuperAuth();
+  </script>
+</body>
+</html>
+

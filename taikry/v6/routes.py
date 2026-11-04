@@ -21,7 +21,10 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from taikry.data.providers import market_data_engine
-from taikry.database.session import SessionLocal
+from taikry.database.session import SessionLocal, get_db
+from taikry.database.models import User
+from taikry.saas.security import get_current_user_optional, has_role, has_permission
+from sqlalchemy.orm import Session
 from taikry.v6.models import V6MarketRegime, RegimeAnalysisResult, BestSetupResult
 from taikry.v6.regime import v6_regime_engine
 from taikry.v6.concepts.detector import v6_concepts_engine
@@ -164,12 +167,17 @@ def select_strategy(req: SelectStrategyRequest):
 
 
 @router.post("/best-setup", response_model=BestSetupResult)
-def get_best_setup(req: BestSetupRequest, request: Request):
+def get_best_setup(
+    req: BestSetupRequest,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
     """
     Executes master V6 pipeline:
     Regime -> Concepts -> Strategy Selection -> Quality Scoring -> Trade Levels -> AI Review -> Risk Arbiter.
     """
-    user_id = getattr(request.state, "user_id", None) if hasattr(request, "state") else None
+    user_id = current_user.id if current_user else (getattr(request.state, "user_id", None) if hasattr(request, "state") else None)
     setup = v6_intelligence_service.analyze_best_setup(
         symbol=req.symbol.upper(),
         timeframe=req.timeframe,
@@ -177,45 +185,41 @@ def get_best_setup(req: BestSetupRequest, request: Request):
         custom_weights=req.custom_weights
     )
 
-    # Persist Best Setup to database
+    # Persist Best Setup to database with user ownership
     try:
-        db = SessionLocal()
-        try:
-            db.add(V6BestSetupModel(
-                setup_id=setup.setup_id,
-                user_id=user_id,
-                symbol=setup.symbol,
-                timeframe=setup.timeframe,
-                direction=setup.direction,
-                regime=setup.regime.value,
-                strategy_id=setup.strategy.get("strategy_id"),
-                strategy_name=setup.strategy.get("name"),
-                quality_score=setup.quality_score.total_score,
-                quality_classification=setup.quality_score.classification,
-                entry_type=setup.trade_plan.entry_type,
-                entry_price=setup.trade_plan.entry_price,
-                stop_loss=setup.trade_plan.stop_loss,
-                stop_distance=setup.trade_plan.stop_distance,
-                invalidation_reason=setup.trade_plan.invalidation_reason,
-                tp1=setup.trade_plan.tp1,
-                tp1_r=setup.trade_plan.tp1_r,
-                tp2=setup.trade_plan.tp2,
-                tp2_r=setup.trade_plan.tp2_r,
-                tp3=setup.trade_plan.tp3,
-                tp3_r=setup.trade_plan.tp3_r,
-                risk_reward_ratio=setup.trade_plan.risk_reward_ratio,
-                trade_plan_json=setup.trade_plan.model_dump(),
-                quality_score_json=setup.quality_score.model_dump(),
-                mtf_status_json=setup.multi_timeframe_status,
-                ai_review_json=setup.ai_review,
-                risk_manager_json=setup.risk_manager,
-                why_this_setup=setup.why_this_setup
-            ))
-            db.commit()
-        finally:
-            db.close()
+        db.add(V6BestSetupModel(
+            setup_id=setup.setup_id,
+            user_id=user_id,
+            symbol=setup.symbol,
+            timeframe=setup.timeframe,
+            direction=setup.direction,
+            regime=setup.regime.value,
+            strategy_id=setup.strategy.get("strategy_id"),
+            strategy_name=setup.strategy.get("name"),
+            quality_score=setup.quality_score.total_score,
+            quality_classification=setup.quality_score.classification,
+            entry_type=setup.trade_plan.entry_type,
+            entry_price=setup.trade_plan.entry_price,
+            stop_loss=setup.trade_plan.stop_loss,
+            stop_distance=setup.trade_plan.stop_distance,
+            invalidation_reason=setup.trade_plan.invalidation_reason,
+            tp1=setup.trade_plan.tp1,
+            tp1_r=setup.trade_plan.tp1_r,
+            tp2=setup.trade_plan.tp2,
+            tp2_r=setup.trade_plan.tp2_r,
+            tp3=setup.trade_plan.tp3,
+            tp3_r=setup.trade_plan.tp3_r,
+            risk_reward_ratio=setup.trade_plan.risk_reward_ratio,
+            trade_plan_json=setup.trade_plan.model_dump(),
+            quality_score_json=setup.quality_score.model_dump(),
+            mtf_status_json=setup.multi_timeframe_status,
+            ai_review_json=setup.ai_review,
+            risk_manager_json=setup.risk_manager,
+            why_this_setup=setup.why_this_setup
+        ))
+        db.commit()
     except Exception:
-        pass
+        db.rollback()
 
     return setup
 
@@ -268,30 +272,42 @@ def get_concepts_by_id(analysis_id: str):
 
 
 @router.get("/setups/{setup_id}")
-def get_setup_by_id(setup_id: str):
-    """Retrieves a specific setup record by ID."""
-    db = SessionLocal()
-    try:
-        row = db.query(V6BestSetupModel).filter_by(setup_id=setup_id).first()
-        if not row:
-            raise HTTPException(status_code=404, detail=f"Setup {setup_id} not found.")
-        return {
-            "setup_id": row.setup_id,
-            "symbol": row.symbol,
-            "timeframe": row.timeframe,
-            "direction": row.direction,
-            "regime": row.regime,
-            "strategy": {"strategy_id": row.strategy_id, "name": row.strategy_name},
-            "quality_score": row.quality_score_json,
-            "trade_plan": row.trade_plan_json,
-            "mtf_status": row.mtf_status_json,
-            "ai_review": row.ai_review_json,
-            "risk_manager": row.risk_manager_json,
-            "why_this_setup": row.why_this_setup,
-            "created_at": row.created_at.isoformat()
-        }
-    finally:
-        db.close()
+def get_setup_by_id(
+    setup_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    """Retrieves a specific setup record by ID with strict tenant isolation."""
+    row = db.query(V6BestSetupModel).filter_by(setup_id=setup_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Setup {setup_id} not found.")
+
+    # Strict User Data Isolation:
+    # If the setup belongs to a specific user, only the owner, an administrator, or an authorized auditor can access it.
+    if row.user_id is not None:
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required to access this setup.")
+        is_owner = (current_user.id == row.user_id)
+        is_admin = has_role(db, current_user.id, ["admin", "super_admin"])
+        can_read = has_permission(db, current_user.id, "signals.read")
+        if not (is_owner or is_admin or can_read):
+            raise HTTPException(status_code=403, detail="Access forbidden: You do not have permission to view this setup.")
+
+    return {
+        "setup_id": row.setup_id,
+        "symbol": row.symbol,
+        "timeframe": row.timeframe,
+        "direction": row.direction,
+        "regime": row.regime,
+        "strategy": {"strategy_id": row.strategy_id, "name": row.strategy_name},
+        "quality_score": row.quality_score_json,
+        "trade_plan": row.trade_plan_json,
+        "mtf_status": row.mtf_status_json,
+        "ai_review": row.ai_review_json,
+        "risk_manager": row.risk_manager_json,
+        "why_this_setup": row.why_this_setup,
+        "created_at": row.created_at.isoformat()
+    }
 
 
 @router.get("/chart-overlays/{analysis_id}")

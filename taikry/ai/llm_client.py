@@ -1854,6 +1854,35 @@ Respond strictly in JSON matching the schema.
                 "confidence": None
             }
 
+        evidence_sections = {
+            "verified_market_data": {
+                "price": price_val,
+                "source": price_src,
+                "timestamp_utc": price_timestamp_utc,
+                "freshness": quote_freshness.get("status", "UNKNOWN_TIMESTAMP"),
+                "symbol": sym,
+                "timeframe": tf
+            },
+            "calculated_indicators": {
+                "market_bias": live_bias,
+                "consensus_direction": live_dir,
+                "approved_setup_available": bool(approved_setup),
+                "trade_style": trade_style
+            },
+            "verified_news": {
+                "upcoming_catalyst": cal_note if cal_note else None,
+                "macro_regime": macro_note if macro_note else None
+            },
+            "ai_interpretation": {
+                "summary_en": smart_analysis.get("synthesis_summary_en", ""),
+                "summary_kh": smart_analysis.get("synthesis_summary_kh", "")
+            },
+            "unavailable_data": [
+                "Tick-by-tick institutional order book depth (L2/L3 unavailable)",
+                "Unverified private whisper news and social rumors"
+            ]
+        }
+
         return {
             "status": "SUCCESS",
             "ai_status": "SUCCESS",
@@ -1875,6 +1904,7 @@ Respond strictly in JSON matching the schema.
             },
             "smart_analysis": smart_analysis,
             "trade_execution": trade_execution,
+            "evidence_sections": evidence_sections,
             "deep_research": deep_research_data,
             "deep_research_status": deep_research_status,
         }
@@ -1919,6 +1949,34 @@ Respond strictly in JSON matching the schema.
             "take_profit_2": live_tp2,
             "risk_reward_ratio": live_rr,
             "confidence": live_conf
+        },
+        "evidence_sections": {
+            "verified_market_data": {
+                "price": price_val,
+                "source": price_src,
+                "timestamp_utc": price_timestamp_utc,
+                "freshness": quote_freshness.get("status", "UNKNOWN_TIMESTAMP"),
+                "symbol": sym,
+                "timeframe": tf
+            },
+            "calculated_indicators": {
+                "market_bias": live_bias,
+                "consensus_direction": live_dir,
+                "approved_setup_available": bool(approved_setup),
+                "trade_style": trade_style
+            },
+            "verified_news": {
+                "upcoming_catalyst": cal_note if cal_note else None,
+                "macro_regime": macro_note if macro_note else None
+            },
+            "ai_interpretation": {
+                "summary_en": fallback_en,
+                "summary_kh": fallback_kh
+            },
+            "unavailable_data": [
+                "Cloud LLM inference timed out or unconfigured",
+                "Tick-by-tick order book depth"
+            ]
         },
         "deep_research": deep_research_data,
         "deep_research_status": deep_research_status,

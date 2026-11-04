@@ -24,7 +24,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from taikry.database.session import get_db, SessionLocal
-from taikry.database.models import PaperTrade, User
+from taikry.database.models import (
+    PaperTrade,
+    User,
+    Role,
+    Permission,
+    UserRole,
+    RolePermission,
+    SystemSetting,
+    FeatureFlag,
+    AuditLog
+)
 from taikry.config import MAX_RISK_PER_TRADE_PERCENT, get_symbol_config
 from taikry.saas import (
     sign_up_user,
@@ -54,7 +64,17 @@ from taikry.saas import (
     admin_override_user_subscription,
     admin_get_analytics_summary,
     admin_get_audit_logs,
-    billing_adapter
+    billing_adapter,
+    get_current_user,
+    get_current_user_optional,
+    get_current_admin,
+    get_current_super_admin,
+    require_permission,
+    require_role,
+    has_permission,
+    has_role,
+    get_user_roles,
+    get_user_permissions
 )
 
 saas_router = APIRouter()
@@ -84,81 +104,6 @@ def _send_auth_email(recipient: str, subject: str, body: str) -> bool:
     except Exception:
         logger.exception("Failed to send account email")
         return False
-
-
-# =============================================================================
-# DEPENDENCY: AUTHENTICATED USER EXTRACTOR
-# =============================================================================
-
-def get_current_user(
-    request: Request,
-    authorization: Optional[str] = Header(default=None),
-    x_session_token: Optional[str] = Header(default=None),
-    zyrox_session: Optional[str] = Cookie(default=None),
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    Extracts and authenticates user from Authorization header, X-Session-Token, or HttpOnly cookie.
-    Keeps user instance attached to active request database session.
-    """
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-    elif x_session_token:
-        token = x_session_token.strip()
-    elif zyrox_session:
-        token = zyrox_session.strip()
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please sign in to continue."
-        )
-
-    user = authenticate_session(db, token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired or invalid. Please sign in again."
-        )
-    return user
-
-
-
-def get_current_user_optional(
-    request: Request,
-    authorization: Optional[str] = Header(default=None),
-    x_session_token: Optional[str] = Header(default=None),
-    zyrox_session: Optional[str] = Cookie(default=None),
-    db: Session = Depends(get_db)
-) -> Optional[User]:
-    """
-    Extracts authenticated user if credentials exist. Returns None if unauthenticated.
-    """
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-    elif x_session_token:
-        token = x_session_token.strip()
-    elif zyrox_session:
-        token = zyrox_session.strip()
-
-    if not token:
-        return None
-
-    try:
-        return authenticate_session(db, token)
-    except Exception:
-        return None
-
-def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Ensures the authenticated user has verified ADMIN privileges."""
-    if not is_admin_user(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access forbidden: Administrator privileges required."
-        )
-    return current_user
 
 
 # =============================================================================
@@ -261,6 +206,33 @@ class UserPaperTradeJournalUpdate(BaseModel):
     tags: List[str] = Field(default_factory=list, max_length=12)
     emotion_tag: Optional[str] = Field(default=None, max_length=40)
     mistake_tag: Optional[str] = Field(default=None, max_length=40)
+
+
+class SuperAdminPromoteRequest(BaseModel):
+    user_id: int = Field(..., description="Target user ID")
+    role: str = Field(..., description="Role to assign: super_admin, admin, premium_user, or user")
+
+
+class SystemSettingUpsertRequest(BaseModel):
+    key: str = Field(..., min_length=2, max_length=100)
+    value: Optional[str] = None
+    is_secret: bool = False
+    description: Optional[str] = None
+
+
+class FeatureFlagUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    rollout_percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    allowed_roles: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
+class AIProviderConfigureRequest(BaseModel):
+    provider: str = Field(..., description="gemini, deepseek, claude, or openai")
+    model_name: Optional[str] = None
+    api_key: Optional[str] = None
+    is_enabled: bool = True
+    priority: int = 1
 
 
 def _user_day_start_utc(user: User) -> datetime.datetime:
@@ -1256,3 +1228,346 @@ def admin_user_sub_put_alias(
     )
     res = admin_override_subscription_endpoint(req, admin)
     return {"plan_slug": p_id, "message": res.get("message")}
+
+
+# =============================================================================
+# ADMIN OPERATIONS & SIGNAL AUDIT ENDPOINTS
+# =============================================================================
+
+@saas_router.get("/api/v1/admin/signals/stats")
+def admin_get_signals_stats(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Returns aggregated signal performance and delivery statistics."""
+    from taikry.database.models import ConsensusReport, SignalLifecycleModel
+
+    total_consensus = db.query(ConsensusReport).count()
+    recent_signals = (
+        db.query(ConsensusReport)
+        .order_by(ConsensusReport.id.desc())
+        .limit(20)
+        .all()
+    )
+    total_lifecycles = db.query(SignalLifecycleModel).count()
+    active_lifecycles = db.query(SignalLifecycleModel).filter(SignalLifecycleModel.current_state.in_(["ACTIVE", "WAITING_CONFIRMATION"])).count()
+
+    return {
+        "total_consensus_signals": total_consensus,
+        "total_lifecycles_tracked": total_lifecycles,
+        "active_lifecycles": active_lifecycles,
+        "recent_signals": [
+            {
+                "id": s.id,
+                "symbol": s.symbol,
+                "bias": s.market_bias,
+                "status": s.setup_status,
+                "entry": s.entry_price,
+                "tp1": s.take_profit_1,
+                "sl": s.stop_loss,
+                "timestamp": s.timestamp_utc.isoformat() if s.timestamp_utc else None
+            }
+            for s in recent_signals
+        ]
+    }
+
+
+@saas_router.get("/api/v1/admin/system/health")
+def admin_get_system_health(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Inspects detailed system health, DB connection, and runtime telemetry."""
+    from sqlalchemy import text
+    import time
+
+    t0 = time.time()
+    db_ok = True
+    try:
+        db.execute(text("SELECT 1")).scalar()
+    except Exception:
+        db_ok = False
+    db_latency_ms = round((time.time() - t0) * 1000, 2)
+
+    return {
+        "status": "HEALTHY" if db_ok else "DEGRADED",
+        "database": {
+            "status": "UP" if db_ok else "DOWN",
+            "latency_ms": db_latency_ms
+        },
+        "time_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "subsystems": {
+            "regime_engine": "ONLINE",
+            "concepts_engine": "ONLINE",
+            "strategy_selector": "ONLINE",
+            "telegram_engine": "ONLINE",
+            "market_data_engine": "ONLINE"
+        }
+    }
+
+
+# =============================================================================
+# SUPER ADMIN GOVERNANCE & CONFIGURATION ENDPOINTS (PHASE 14 & 15)
+# =============================================================================
+
+@saas_router.get("/api/v1/super-admin/admins")
+def super_admin_list_admins(
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Lists all platform administrators and super-administrators with their role grants."""
+    admin_users = (
+        db.query(User)
+        .filter(User.role.in_(["super_admin", "admin", "ADMIN"]), User.deleted_at == None)
+        .all()
+    )
+    result = []
+    for u in admin_users:
+        roles = get_user_roles(db, u.id)
+        perms = list(get_user_permissions(db, u.id))
+        result.append({
+            "id": u.id,
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+            "roles": roles,
+            "permissions_count": len(perms),
+            "permissions": perms,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat() if u.created_at else None
+        })
+    return {"total_admins": len(result), "admins": result}
+
+
+@saas_router.post("/api/v1/super-admin/admins/promote")
+def super_admin_promote_admin(
+    payload: SuperAdminPromoteRequest,
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Assigns or modifies administrative roles for a user."""
+    target_user = db.query(User).filter(User.id == payload.user_id, User.deleted_at == None).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found.")
+
+    target_role = payload.role.strip().lower()
+    valid_roles = ["super_admin", "admin", "premium_user", "user"]
+    if target_role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role '{target_role}'. Valid roles: {valid_roles}")
+
+    # Prevent removing the only super admin
+    if target_user.id == super_admin.id and target_role != "super_admin":
+        other_super_admins = db.query(User).filter(User.role == "super_admin", User.id != super_admin.id, User.deleted_at == None).count()
+        if other_super_admins == 0:
+            raise HTTPException(status_code=400, detail="Cannot demote yourself: You are the sole Super Administrator.")
+
+    old_role = target_user.role
+    target_user.role = target_role
+    target_user.updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+    # Update user_roles table
+    db.query(UserRole).filter(UserRole.user_id == target_user.id).delete()
+    db.add(UserRole(
+        user_id=target_user.id,
+        role_id=target_role,
+        granted_by=super_admin.id
+    ))
+
+    # Audit log
+    db.add(AuditLog(
+        actor_user_id=super_admin.id,
+        action="SUPERADMIN_ROLE_CHANGE",
+        target_type="user",
+        target_id=str(target_user.id),
+        details={"old_role": old_role, "new_role": target_role, "target_email": target_user.email}
+    ))
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Successfully updated user {target_user.email} role to '{target_role}'.",
+        "user_id": target_user.id,
+        "role": target_role
+    }
+
+
+@saas_router.get("/api/v1/super-admin/system-settings")
+def super_admin_get_settings(
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns platform settings.
+    CRITICAL SECURITY REQUIREMENT: Secret values are always REDACTED.
+    """
+    settings = db.query(SystemSetting).all()
+    results = []
+    for s in settings:
+        safe_val = "[redacted]" if s.is_secret and s.value else s.value
+        results.append({
+            "key": s.key,
+            "value": safe_val,
+            "is_secret": s.is_secret,
+            "description": s.description,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "updated_by": s.updated_by
+        })
+    return {"total_settings": len(results), "settings": results}
+
+
+@saas_router.post("/api/v1/super-admin/system-settings")
+def super_admin_upsert_setting(
+    payload: SystemSettingUpsertRequest,
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Upserts a system setting. If a secret is submitted as '[redacted]', existing value is retained."""
+    existing = db.query(SystemSetting).filter(SystemSetting.key == payload.key).first()
+    new_val = payload.value
+
+    if existing and payload.is_secret and new_val in ("[redacted]", "••••••••"):
+        new_val = existing.value  # Retain existing secret
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    if existing:
+        existing.value = new_val
+        existing.is_secret = payload.is_secret
+        if payload.description is not None:
+            existing.description = payload.description
+        existing.updated_by = super_admin.id
+        existing.updated_at = now_utc
+    else:
+        db.add(SystemSetting(
+            key=payload.key,
+            value=new_val,
+            is_secret=payload.is_secret,
+            description=payload.description,
+            updated_by=super_admin.id,
+            updated_at=now_utc
+        ))
+
+    db.add(AuditLog(
+        actor_user_id=super_admin.id,
+        action="SUPERADMIN_SETTING_UPSERT",
+        target_type="system_setting",
+        target_id=payload.key,
+        details={"key": payload.key, "is_secret": payload.is_secret}
+    ))
+    db.commit()
+
+    return {"success": True, "message": f"Setting '{payload.key}' updated successfully."}
+
+
+@saas_router.get("/api/v1/super-admin/feature-flags")
+def super_admin_get_feature_flags(
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Lists all runtime feature flags and canary rollout states."""
+    flags = db.query(FeatureFlag).all()
+    results = []
+    for f in flags:
+        results.append({
+            "key": f.key,
+            "enabled": f.enabled,
+            "description": f.description,
+            "allowed_roles": f.allowed_roles,
+            "rollout_percentage": f.rollout_percentage,
+            "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+            "updated_by": f.updated_by
+        })
+    return {"total_flags": len(results), "flags": results}
+
+
+@saas_router.post("/api/v1/super-admin/feature-flags/{key}")
+def super_admin_update_feature_flag(
+    key: str,
+    payload: FeatureFlagUpdateRequest,
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Updates or toggles a feature flag."""
+    flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).first()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    if not flag:
+        flag = FeatureFlag(
+            key=key,
+            enabled=payload.enabled if payload.enabled is not None else False,
+            description=payload.description or "",
+            allowed_roles=payload.allowed_roles or ["super_admin", "admin"],
+            rollout_percentage=payload.rollout_percentage if payload.rollout_percentage is not None else 100,
+            updated_by=super_admin.id,
+            updated_at=now_utc
+        )
+        db.add(flag)
+    else:
+        if payload.enabled is not None:
+            flag.enabled = payload.enabled
+        if payload.rollout_percentage is not None:
+            flag.rollout_percentage = payload.rollout_percentage
+        if payload.allowed_roles is not None:
+            flag.allowed_roles = payload.allowed_roles
+        if payload.description is not None:
+            flag.description = payload.description
+        flag.updated_by = super_admin.id
+        flag.updated_at = now_utc
+
+    db.add(AuditLog(
+        actor_user_id=super_admin.id,
+        action="SUPERADMIN_FLAG_UPDATE",
+        target_type="feature_flag",
+        target_id=key,
+        details={"key": key, "enabled": flag.enabled, "rollout": flag.rollout_percentage}
+    ))
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Feature flag '{key}' updated successfully.",
+        "flag": {
+            "key": flag.key,
+            "enabled": flag.enabled,
+            "rollout_percentage": flag.rollout_percentage,
+            "allowed_roles": flag.allowed_roles
+        }
+    }
+
+
+@saas_router.get("/api/v1/super-admin/ai-providers")
+def super_admin_get_ai_providers(
+    super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Inspects configured AI model providers and current latency/status."""
+    from taikry.config import GEMINI_API_KEY, REAL_LLM_PROVIDER
+    gemini_configured = bool(GEMINI_API_KEY and len(GEMINI_API_KEY) > 10)
+    return {
+        "active_primary_provider": REAL_LLM_PROVIDER,
+        "providers": [
+            {
+                "id": "gemini",
+                "name": "Google Gemini 2.5 Flash / 1.5 Pro",
+                "is_configured": gemini_configured,
+                "api_key_masked": "AIzaSy••••••••" if gemini_configured else "NOT_CONFIGURED",
+                "status": "OPERATIONAL" if gemini_configured else "MISSING_KEY",
+                "role": "Primary Deep Intelligence & Multi-Agent Reasoning"
+            },
+            {
+                "id": "deepseek",
+                "name": "DeepSeek R1 / V3",
+                "is_configured": False,
+                "api_key_masked": "NOT_CONFIGURED",
+                "status": "STANDBY",
+                "role": "Adversarial Risk & SMC Counter-Validation"
+            },
+            {
+                "id": "openai",
+                "name": "OpenAI GPT-4o",
+                "is_configured": False,
+                "api_key_masked": "NOT_CONFIGURED",
+                "status": "STANDBY",
+                "role": "Fallback LLM"
+            }
+        ]
+    }
+

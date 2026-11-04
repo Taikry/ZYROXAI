@@ -14,8 +14,11 @@ import secrets
 import threading
 import logging
 import os
-import hashlib
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List, Set, Union
+from sqlalchemy.orm import Session
+from fastapi import Request, Header, Cookie, Depends, HTTPException, status
+from taikry.database.session import get_db
+from taikry.database.models import User, Permission, UserRole, RolePermission
 
 PBKDF2_ITERATIONS = 600_000
 PBKDF2_HASH_ALGO = "sha256"
@@ -185,4 +188,195 @@ class LoginRateLimiter:
 
 # Global rate limiter instance
 auth_rate_limiter = LoginRateLimiter(max_attempts=5, window_seconds=900)
+
+
+# =============================================================================
+# V7 MULTI-TENANT RBAC, PERMISSIONS & AUTHORIZATION HELPERS
+# =============================================================================
+
+def get_user_roles(db: Session, user_id: int) -> List[str]:
+    """Returns list of active role IDs assigned to the user."""
+    rows = db.query(UserRole.role_id).filter(UserRole.user_id == user_id).all()
+    roles = [r[0] for r in rows]
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.role:
+        u_role = user.role.strip().lower()
+        if u_role in ("super_admin", "admin", "premium_user", "user") and u_role not in roles:
+            roles.append(u_role)
+        elif u_role == "admin" and "admin" not in roles:
+            roles.append("admin")
+    return roles or ["user"]
+
+
+def get_user_permissions(db: Session, user_id: int) -> Set[str]:
+    """Returns set of all granular permission codes granted to the user."""
+    roles = get_user_roles(db, user_id)
+    if "super_admin" in roles:
+        perms = db.query(Permission.id).all()
+        return {p[0] for p in perms}
+
+    rows = (
+        db.query(RolePermission.permission_id)
+        .filter(RolePermission.role_id.in_(roles))
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
+def has_permission(db: Session, user_id: int, permission_code: str) -> bool:
+    """Checks if user possesses a specific permission."""
+    perms = get_user_permissions(db, user_id)
+    return permission_code in perms
+
+
+def has_role(db: Session, user_id: int, required_role: Union[str, List[str], Set[str]]) -> bool:
+    """Checks if user possesses one of the required roles."""
+    roles = set(get_user_roles(db, user_id))
+    if "super_admin" in roles:
+        return True
+    if isinstance(required_role, str):
+        target_roles = {required_role}
+    else:
+        target_roles = set(required_role)
+    return bool(roles.intersection(target_roles))
+
+
+def get_current_user(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_session_token: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Extracts and authenticates user from Authorization header, X-Session-Token, or HttpOnly cookie.
+    """
+    from taikry.saas.auth_service import authenticate_session
+
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif x_session_token:
+        token = x_session_token.strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please sign in to continue."
+        )
+
+    user = authenticate_session(db, token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or invalid. Please sign in again."
+        )
+    return user
+
+
+def get_current_user_optional(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_session_token: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Extracts authenticated user if credentials exist. Returns None if unauthenticated.
+    """
+    from taikry.saas.auth_service import authenticate_session
+
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif x_session_token:
+        token = x_session_token.strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if not token:
+        return None
+
+    try:
+        return authenticate_session(db, token)
+    except Exception:
+        return None
+
+
+def require_permission(permission_code: str):
+    """
+    FastAPI dependency factory enforcing that the authenticated user possesses permission_code.
+    Raises 401 if unauthenticated, 403 if missing permission.
+    """
+    def _dependency(
+        user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ) -> User:
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated or suspended."
+            )
+        if not has_permission(db, user.id, permission_code):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access forbidden: requires permission '{permission_code}'."
+            )
+        return user
+    return _dependency
+
+
+def require_role(required_roles: Union[str, List[str]]):
+    """
+    FastAPI dependency factory enforcing that the user possesses at least one of required_roles.
+    Raises 401 if unauthenticated, 403 if unauthorized.
+    """
+    roles_list = [required_roles] if isinstance(required_roles, str) else list(required_roles)
+    def _dependency(
+        user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ) -> User:
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated or suspended."
+            )
+        if not has_role(db, user.id, roles_list):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access forbidden: requires role in {roles_list}."
+            )
+        return user
+    return _dependency
+
+
+def get_current_admin(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> User:
+    """Ensures the authenticated user has verified ADMIN or SUPER_ADMIN privileges."""
+    if not has_role(db, user.id, ["admin", "super_admin"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Administrator privileges required."
+        )
+    return user
+
+
+def get_current_super_admin(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> User:
+    """Ensures the authenticated user has verified SUPER_ADMIN privileges."""
+    roles = get_user_roles(db, user.id)
+    if "super_admin" not in roles and str(user.role or "").strip().lower() != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Super Administrator privileges required."
+        )
+    return user
+
 

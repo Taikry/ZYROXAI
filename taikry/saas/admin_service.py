@@ -31,8 +31,19 @@ logger = logging.getLogger(__name__)
 
 
 def is_admin_user(user: Optional[User]) -> bool:
-    """Verifies that the user object has verified ADMIN privileges."""
-    return bool(user and user.is_active and user.role == "ADMIN")
+    """Verifies that the user object has verified ADMIN or SUPER_ADMIN privileges."""
+    if not user or not user.is_active:
+        return False
+    u_role = str(user.role or "").strip().lower()
+    return u_role in ("admin", "super_admin")
+
+
+def is_super_admin_user(user: Optional[User]) -> bool:
+    """Verifies that the user object has verified SUPER_ADMIN privileges."""
+    if not user or not user.is_active:
+        return False
+    u_role = str(user.role or "").strip().lower()
+    return u_role == "super_admin"
 
 
 def bootstrap_admin_if_needed(db: Session) -> Optional[User]:

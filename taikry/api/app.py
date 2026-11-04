@@ -100,6 +100,27 @@ def root_page():
         return FileResponse(landing_file)
     return RedirectResponse(url="/dashboard/", status_code=307)
 
+@app.get("/admin", include_in_schema=False)
+def admin_page():
+    admin_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "admin.html")
+    if os.path.exists(admin_file):
+        return FileResponse(admin_file)
+    return RedirectResponse(url="/dashboard/", status_code=307)
+
+@app.get("/super-admin", include_in_schema=False)
+def super_admin_page():
+    super_admin_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "super_admin.html")
+    if os.path.exists(super_admin_file):
+        return FileResponse(super_admin_file)
+    return RedirectResponse(url="/dashboard/", status_code=307)
+
+@app.get("/billing", include_in_schema=False)
+def billing_page():
+    billing_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "billing.html")
+    if os.path.exists(billing_file):
+        return FileResponse(billing_file)
+    return RedirectResponse(url="/dashboard/billing.html", status_code=307)
+
 # Fast keep-alive ping for cloud free tier monitors (e.g. UptimeRobot, Cron-Job)
 @app.get("/ping", tags=["System"])
 def ping():

@@ -915,3 +915,81 @@ class AuditLog(Base):
     details = Column(JSON, nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=_utc_now, index=True)
+
+
+# =============================================================================
+# V7 MULTI-TENANT SAAS RBAC, SYSTEM SETTINGS & FEATURE FLAGS
+# =============================================================================
+
+class Role(Base):
+    """System and custom roles for RBAC authorization."""
+    __tablename__ = "roles"
+
+    id = Column(String(50), primary_key=True)  # "super_admin", "admin", "premium_user", "user"
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    is_system_role = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class Permission(Base):
+    """Granular operational permissions for platform features."""
+    __tablename__ = "permissions"
+
+    id = Column(String(100), primary_key=True)  # e.g., "users.read", "ai.providers.manage"
+    category = Column(String(50), index=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class UserRole(Base):
+    """Many-to-many mapping of users to assigned roles."""
+    __tablename__ = "user_roles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    role_id = Column(String(50), ForeignKey("roles.id", ondelete="CASCADE"), index=True, nullable=False)
+    granted_by = Column(Integer, nullable=True)
+    granted_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class RolePermission(Base):
+    """Many-to-many mapping of roles to granted permissions."""
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    role_id = Column(String(50), ForeignKey("roles.id", ondelete="CASCADE"), index=True, nullable=False)
+    permission_id = Column(String(100), ForeignKey("permissions.id", ondelete="CASCADE"), index=True, nullable=False)
+    granted_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class SystemSetting(Base):
+    """Super Admin runtime configuration key-value store."""
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=True)
+    is_secret = Column(Boolean, default=False, nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_by = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
+
+class FeatureFlag(Base):
+    """Feature flag toggles and role-gated access rules."""
+    __tablename__ = "feature_flags"
+
+    key = Column(String(100), primary_key=True)
+    enabled = Column(Boolean, default=False, nullable=False)
+    description = Column(String(255), nullable=True)
+    allowed_roles = Column(JSON, nullable=True)
+    rollout_percentage = Column(Integer, default=100, nullable=False)
+    updated_by = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, default=_utc_now, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
+
