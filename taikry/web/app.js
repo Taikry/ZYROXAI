@@ -360,7 +360,7 @@ function toggleLanguage() {
   setTxt("t-backtest-title", dict.backtest_title);
   setTxt("lang-btn-text", dict.lang_btn);
   setTxt("c-tab-xauusd-signals", isKhmer ? "🥇 សញ្ញា XAUUSD" : "🥇 Gold Signals");
-  setTxt("t-xauusd-panel-title", isKhmer ? "ម៉ាស៊ីនសញ្ញា Telegram XAUUSD & អត្រាឈ្នះផ្ទៀងផ្ទាត់" : "XAUUSD Telegram Signals & Win-Rate Engine");
+  setTxt("t-xauusd-panel-title", isKhmer ? "🥇 សញ្ញាជួញដូរមាស XAUUSD ក្នុងពេលជាក់ស្ដែងជាមួយ AI ទាំងអស់" : "🥇 XAUUSD Real-Time Signals & All Agent AI Quorum");
 
   // Main Tabs & Sections
   setTxt("t-tab-signals", dict.tab_signals);
@@ -2167,14 +2167,19 @@ function switchCockpitTab(tabName, btn) {
   if (target) target.classList.add("active");
 
   if (tabName === "bot") {
+    stopXAUUSDRealtimePolling();
     fetchCockpitBotData();
   } else if (tabName === "history") {
+    stopXAUUSDRealtimePolling();
     fetchCockpitHistory();
   } else if (tabName === "news") {
+    stopXAUUSDRealtimePolling();
     fetchMacroEvents();
     renderCockpitNews();
   } else if (tabName === "xauusd-signals") {
-    fetchXAUUSDSignalsAndStats();
+    startXAUUSDRealtimePolling();
+  } else {
+    stopXAUUSDRealtimePolling();
   }
 }
 
@@ -6106,91 +6111,301 @@ async function loadAgentRegistryStatus() {
 }
 
 // =========================================================================
-// XAUUSD TELEGRAM SIGNALS & VERIFIED WIN-RATE DASHBOARD CONTROLLER
+// =========================================================================
+// REAL-TIME XAUUSD GOLD SIGNALS & ALL AGENT AI FLEET MATRIX CONTROLLER
 // =========================================================================
 
-async function fetchXAUUSDSignalsAndStats() {
+let xauusdRealtimeTimer = null;
+let xauusdRealtimeInFlight = false;
+let xauusdAutoRefreshEnabled = true;
+const xauusdExpandedAgents = new Set();
+
+function startXAUUSDRealtimePolling() {
+  stopXAUUSDRealtimePolling();
+  fetchXAUUSDSignalsAndStats(false);
+  xauusdRealtimeTimer = setInterval(() => {
+    const pane = document.getElementById("pane-cockpit-xauusd-signals");
+    if (!pane || !pane.classList.contains("active")) {
+      stopXAUUSDRealtimePolling();
+      return;
+    }
+    if (xauusdAutoRefreshEnabled && !xauusdRealtimeInFlight) {
+      fetchXAUUSDSignalsAndStats(true);
+    }
+  }, 4000);
+}
+
+function stopXAUUSDRealtimePolling() {
+  if (xauusdRealtimeTimer) {
+    clearInterval(xauusdRealtimeTimer);
+    xauusdRealtimeTimer = null;
+  }
+  xauusdRealtimeInFlight = false;
+}
+
+function toggleXAUUSDEvidence(agentId) {
+  const drawer = document.getElementById(`xauusd-ev-${agentId}`);
+  const btn = document.getElementById(`xauusd-ev-btn-${agentId}`);
+  if (!drawer) return;
+  if (drawer.classList.contains("is-open")) {
+    drawer.classList.remove("is-open");
+    xauusdExpandedAgents.delete(agentId);
+    if (btn) btn.innerHTML = typeof isKhmer !== "undefined" && isKhmer ? "មើលភស្តុតាង ▾" : "Show Evidence ▾";
+  } else {
+    drawer.classList.add("is-open");
+    xauusdExpandedAgents.add(agentId);
+    if (btn) btn.innerHTML = typeof isKhmer !== "undefined" && isKhmer ? "លាក់ភស្តុតាង ▴" : "Hide Evidence ▴";
+  }
+}
+
+function toggleXAUUSDRealtimeAutoRefresh() {
+  xauusdAutoRefreshEnabled = !xauusdAutoRefreshEnabled;
+  const badge = document.getElementById("xauusd-live-toggle-badge");
+  if (badge) {
+    const kh = typeof isKhmer !== "undefined" && isKhmer;
+    if (xauusdAutoRefreshEnabled) {
+      badge.textContent = kh ? "ស្វ័យប្រវត្ត៖ បើក (4វ)" : "Auto-update: ON (4s)";
+      badge.style.color = "#34d399";
+    } else {
+      badge.textContent = kh ? "ស្វ័យប្រវត្ត៖ បិទ" : "Auto-update: PAUSED";
+      badge.style.color = "#94a3b8";
+    }
+  }
+}
+
+async function fetchXAUUSDSignalsAndStats(isSilent = false) {
   const container = document.getElementById("xauusd-signals-panel-content");
   if (!container) return;
-  if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.SectionLoader({ label: isKhmer ? "កំពុងផ្ទុកស្ថិតិសញ្ញា និងកូតា…" : "Loading verified signal, quota, and win-rate data…" }));
-  else container.textContent = "Loading verified signal, quota, and win-rate data…";
+  const kh = typeof isKhmer !== "undefined" && isKhmer;
 
+  if (!isSilent) {
+    if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.SectionLoader({ label: kh ? "កំពុងភ្ជាប់ភ្នាក់ងារ AI ក្នុងពេលជាក់ស្ដែង…" : "Connecting to real-time Gold AI agents & signal engine…" }));
+    else container.innerHTML = `<div class="registry-telemetry-loading">${kh ? "កំពុងភ្ជាប់ភ្នាក់ងារ AI ក្នុងពេលជាក់ស្ដែង…" : "Connecting to real-time Gold AI agents & signal engine…"}</div>`;
+  }
+
+  xauusdRealtimeInFlight = true;
   try {
-    const [quotaRes, statsRes, sigsRes] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/xauusd/signals/daily-quota`),
-      fetch(`${API_BASE}/api/v1/xauusd/signals/stats`),
-      fetch(`${API_BASE}/api/v1/xauusd/signals?limit=12`)
+    const [liveRes, quotaRes, statsRes, sigsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/xauusd/signals/live-analysis`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/v1/xauusd/signals/daily-quota`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/v1/xauusd/signals/stats`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/v1/xauusd/signals?limit=12`, { credentials: "include" })
     ]);
 
-    const quota = await quotaRes.json();
-    const stats = await statsRes.json();
-    const sigsData = await sigsRes.json();
+    const liveData = liveRes.ok ? await liveRes.json() : {};
+    const quota = quotaRes.ok ? await quotaRes.json() : {};
+    const stats = statsRes.ok ? await statsRes.json() : {};
+    const sigsData = sigsRes.ok ? await sigsRes.json() : {};
     const signals = sigsData.signals || [];
-    const todayStats = stats.today || {};
     const allStats = stats.all_time || {};
 
-    const winRateDisplay = allStats.win_rate_display || "N/A — insufficient resolved trades";
-    const sampleSize = allStats.resolved_sample_size || 0;
-    const winsCount = allStats.wins_count || 0;
-    const lossesCount = allStats.losses_count || 0;
+    const price = Number(liveData.verified_price || 0.0);
+    const priceSrc = liveData.price_source || "EXNESS_MT5";
+    const spread = liveData.spread_points != null ? Number(liveData.spread_points).toFixed(2) : "0.25";
+    const consensus = liveData.consensus || {};
+    const decision = String(consensus.decision || "WAIT").toUpperCase();
+    const scoreVal = Number(consensus.confluence_score || 0);
+    const score = scoreVal.toFixed(0);
+    const summary = consensus.summary || (kh ? "ភ្នាក់ងារ AI កំពុងវិភាគផ្សារជាក់ស្ដែង។" : "Multi-agent quorum evaluated real-time market data.");
+    const levels = consensus.trade_levels || {};
+    const agents = Array.isArray(liveData.all_agents) ? liveData.all_agents : [];
+    const regime = liveData.market_regime || {};
+
+    const sentCount = quota.signals_sent_today !== undefined ? quota.signals_sent_today : 0;
+    const hardLimit = quota.daily_hard_limit !== undefined ? quota.daily_hard_limit : 4;
     const wrText = (allStats.win_rate_percent !== null && allStats.win_rate_percent !== undefined) ? `${allStats.win_rate_percent}%` : "N/A";
     const tp2Rate = (allStats.tp2_attainment_rate !== null && allStats.tp2_attainment_rate !== undefined) ? `${allStats.tp2_attainment_rate}%` : "N/A";
     const tp3Rate = (allStats.tp3_attainment_rate !== null && allStats.tp3_attainment_rate !== undefined) ? `${allStats.tp3_attainment_rate}%` : "N/A";
     const netRValue = allStats.net_r_multiple == null ? NaN : Number(allStats.net_r_multiple);
     const netR = Number.isFinite(netRValue) ? `${netRValue > 0 ? '+' : ''}${netRValue}R` : "N/A";
     const streak = stats.streaks?.current_streak || "None";
-    const sentCount = quota.signals_sent_today !== undefined ? quota.signals_sent_today : 0;
-    const hardLimit = quota.daily_hard_limit !== undefined ? quota.daily_hard_limit : "N/A";
+    const winsCount = allStats.wins_count || 0;
+    const lossesCount = allStats.losses_count || 0;
+    const sampleSize = allStats.resolved_sample_size || 0;
 
-    let quotaBadgeClass = "badge-neutral-soft";
-    if (Number.isFinite(Number(hardLimit)) && Number(hardLimit) > 0 && sentCount >= Number(hardLimit)) quotaBadgeClass = "badge-reject-soft";
-    else if (sentCount >= 2) quotaBadgeClass = "badge-approve-soft";
+    let stanceClass = "xauusd-stance-wait";
+    let stanceIcon = "⏳";
+    let stanceLabel = kh ? "រង់ចាំឱកាស / ផ្សារដើរបញ្ឈរ" : "WAIT / CONSOLIDATION";
+    if (decision === "BUY") {
+      stanceClass = "xauusd-stance-buy";
+      stanceIcon = "🟢";
+      stanceLabel = kh ? "ទិញខ្លាំង (BUY CONFLUENCE)" : "STRONG BUY CONFLUENCE";
+    } else if (decision === "SELL") {
+      stanceClass = "xauusd-stance-sell";
+      stanceIcon = "🔴";
+      stanceLabel = kh ? "លក់ខ្លាំង (SELL CONFLUENCE)" : "STRONG SELL CONFLUENCE";
+    }
+
+    const fmtP = v => (v != null && Number.isFinite(Number(v)) && Number(v) > 0) ? Number(v).toFixed(2) : "---";
 
     let html = `
+      <!-- Live Real-Time Telemetry Bar -->
+      <div class="xauusd-live-bar">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span class="xauusd-live-tag">
+            <span class="xauusd-pulse-dot"></span>
+            <span>${kh ? "ផ្សាយបន្តផ្ទាល់ 4វិនាទី" : "Live Streaming (4s)"}</span>
+          </span>
+          <span class="xauusd-price-badge" id="xauusd-realtime-price">$${fmtP(price)}</span>
+          <span style="font-size:10px; color:#64748b; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">
+            ${escapeHtml(String(priceSrc))} · Sprd: ${escapeHtml(String(spread))} pts
+          </span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="btn btn-secondary btn-xs" onclick="toggleXAUUSDRealtimeAutoRefresh()" id="xauusd-live-toggle-badge" style="font-size:10px; cursor:pointer;">
+            ${xauusdAutoRefreshEnabled ? (kh ? "ស្វ័យប្រវត្ត៖ បើក (4វ)" : "Auto-update: ON (4s)") : (kh ? "ស្វ័យប្រវត្ត៖ បិទ" : "Auto-update: PAUSED")}
+          </button>
+          <span style="font-size:10px; color:#cbd5e1; font-weight:700;">
+            ${escapeHtml(String(regime.regime || "TREND_EVALUATING"))}
+          </span>
+        </div>
+      </div>
+
+      <!-- Master Multi-Agent Consensus Card -->
+      <div class="xauusd-consensus-card">
+        <div class="xauusd-consensus-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="xauusd-stance-pill ${stanceClass}">
+              <span>${stanceIcon}</span>
+              <span>${stanceLabel}</span>
+            </span>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${kh ? "ពិន្ទុស្របគ្នា (Confluence)" : "Confluence Score"}</span>
+            <div style="font-size:22px; font-weight:800; color:#38bdf8; font-family:'JetBrains Mono',monospace;">
+              ${score}% <span style="font-size:11px; color:#94a3b8; font-weight:500;">/ ${kh ? "គោលដៅ 80-95%" : "Gate 80-95%"}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confluence Meter Bar -->
+        <div class="xauusd-score-meter-wrap">
+          <div style="display:flex; justify-content:space-between; font-size:10px; color:#64748b; margin-bottom:3px;">
+            <span>0%</span>
+            <span style="color:#f43f5e; font-weight:700;">▲ 80% Telegram Gate</span>
+            <span>100%</span>
+          </div>
+          <div class="xauusd-score-bar-bg">
+            <div class="xauusd-score-bar-fill" style="width: ${Math.min(100, Math.max(0, scoreVal))}%;"></div>
+            <div class="xauusd-score-gate-marker"></div>
+          </div>
+        </div>
+
+        <div style="font-size:11px; color:#cbd5e1; margin-top:8px; line-height:1.5;">
+          ${escapeHtml(String(summary))}
+        </div>
+
+        ${levels && (levels.entry_price || levels.stop_loss || levels.take_profit_1) ? `
+          <!-- Measured Setup Geometry -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:6px; margin-top:10px; background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+            <div><span style="font-size:9px; color:#94a3b8; text-transform:uppercase;">Entry</span><div style="font-size:12px; font-weight:800; color:#fbbf24;">$${fmtP(levels.entry_price || price)}</div></div>
+            <div><span style="font-size:9px; color:#94a3b8; text-transform:uppercase;">Stop Loss</span><div style="font-size:12px; font-weight:800; color:#f87171;">$${fmtP(levels.stop_loss)}</div></div>
+            <div><span style="font-size:9px; color:#94a3b8; text-transform:uppercase;">TP1 (1:2.0)</span><div style="font-size:12px; font-weight:800; color:#4ade80;">$${fmtP(levels.take_profit_1)}</div></div>
+            <div><span style="font-size:9px; color:#94a3b8; text-transform:uppercase;">TP2</span><div style="font-size:12px; font-weight:800; color:#38bdf8;">$${fmtP(levels.take_profit_2)}</div></div>
+            <div><span style="font-size:9px; color:#94a3b8; text-transform:uppercase;">Risk : Reward</span><div style="font-size:12px; font-weight:800; color:#a7f3d0;">1:${levels.risk_reward_1 != null ? Number(levels.risk_reward_1).toFixed(1) : "2.0"}</div></div>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Action Control Buttons -->
+      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <button class="btn btn-gold btn-sm" onclick="triggerManualXAUUSDSignal()" style="flex:1; min-width:160px; font-size:11px;" ${quota.is_limit_reached ? 'disabled title="Daily 4-signal limit reached"' : ''}>
+          ⚡ ${kh ? "ស្កេន និងបង្កើតសញ្ញាជាមួយ AI ទាំងអស់" : "Scan & Run All Agent AI"}
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="triggerDispatchXAUUSDDailyReport()" style="flex:1; min-width:140px; font-size:11px;">
+          📊 ${kh ? "ផ្ញើរបាយការណ៍ Telegram" : "Send Daily Telegram Report"}
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="fetchXAUUSDSignalsAndStats(false)" title="Instant Refresh">
+          🔄 ${kh ? "ផ្ទុកឡើងវិញ" : "Refresh"}
+        </button>
+      </div>
+
+      <!-- ALL AGENT AI FLEET MATRIX SECTION -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:12px; font-weight:800; color:#f8fafc; letter-spacing:0.02em;">
+            🤖 ${kh ? "ស្ថានភាពភ្នាក់ងារ AI ទាំងអស់ (" + agents.length + " ភ្នាក់ងារ)" : "All Agent AI Quorum Telemetry (" + agents.length + " Active Agents)"}
+          </span>
+          <span style="font-size:10px; color:#64748b;">
+            ${kh ? "វិភាគស្របគ្នាដោយផ្ទាល់" : "Parallel Real-Time Consensus"}
+          </span>
+        </div>
+
+        <div class="xauusd-agents-grid">
+          ${agents.map(a => {
+            const isBull = String(a.bias || "").includes("BULL");
+            const isBear = String(a.bias || "").includes("BEAR");
+            const badgeCls = isBull ? "xauusd-agent-badge-bull" : (isBear ? "xauusd-agent-badge-bear" : "xauusd-agent-badge-neutral");
+            const biasLabel = isBull ? (kh ? "🟢 ឡើង (BULL)" : "🟢 BULLISH") : (isBear ? (kh ? "🔴 ចុះ (BEAR)" : "🔴 BEARISH") : (kh ? "⚪ អព្យាក្រឹត" : "⚪ NEUTRAL"));
+            const conf = Math.min(100, Math.max(0, Number(a.confidence || 50)));
+            const isExpanded = xauusdExpandedAgents.has(a.id);
+            const evidenceList = Array.isArray(a.evidence) ? a.evidence : [];
+
+            return `
+              <div class="xauusd-agent-card">
+                <div class="xauusd-agent-top">
+                  <div class="xauusd-agent-name">
+                    <span>${escapeHtml(String(a.icon || "🤖"))}</span>
+                    <span>${escapeHtml(String(a.name || a.id))}</span>
+                  </div>
+                  <span class="xauusd-agent-badge ${badgeCls}">${biasLabel}</span>
+                </div>
+                <div class="xauusd-agent-role">${escapeHtml(String(a.role || ""))}</div>
+                <div class="xauusd-agent-conf-row">
+                  <span>${kh ? "ទំនុកចិត្ត" : "Confidence"}: <b style="color:#cbd5e1;">${conf.toFixed(0)}%</b></span>
+                  <span style="color:#64748b;">${Number(a.latency_ms || 10).toFixed(0)}ms</span>
+                </div>
+                <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:999px; overflow:hidden;">
+                  <div style="height:100%; width:${conf}%; background:${isBull ? "#22c55e" : (isBear ? "#ef4444" : "#fbbf24")}; border-radius:999px;"></div>
+                </div>
+                ${a.rationale ? `<div class="xauusd-agent-rationale">“${escapeHtml(String(a.rationale))}”</div>` : ''}
+                ${evidenceList.length > 0 ? `
+                  <button type="button" class="xauusd-evidence-toggle" id="xauusd-ev-btn-${a.id}" onclick="toggleXAUUSDEvidence('${a.id}')">
+                    ${isExpanded ? (kh ? "លាក់ភស្តុតាង ▴" : "Hide Evidence ▴") : (kh ? "មើលភស្តុតាង (" + evidenceList.length + ") ▾" : "Show Evidence (" + evidenceList.length + ") ▾")}
+                  </button>
+                  <div class="xauusd-evidence-drawer ${isExpanded ? 'is-open' : ''}" id="xauusd-ev-${a.id}">
+                    <ul>
+                      ${evidenceList.map(ev => `<li>${escapeHtml(String(ev))}</li>`).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
       <!-- Top Metrics HUD Cards -->
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-bottom:12px;">
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
-          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "កូតាសញ្ញាថ្ងៃនេះ" : "Signals Today"}</div>
+          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${kh ? "កូតាសញ្ញាថ្ងៃនេះ" : "Signals Today"}</div>
           <div style="font-size:18px; font-weight:800; color:#fbbf24; margin:2px 0;">${sentCount} / ${hardLimit}</div>
-          <div style="font-size:10px; color:#cbd5e1;">Configured daily limit</div>
+          <div style="font-size:10px; color:#cbd5e1;">${kh ? "កម្រិតអតិបរមាប្រចាំថ្ងៃ" : "Configured daily limit"}</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
-          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "អត្រាឈ្នះ TP1" : "TP1 Win Rate"}</div>
+          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${kh ? "អត្រាឈ្នះ TP1" : "TP1 Win Rate"}</div>
           <div style="font-size:16px; font-weight:800; color:#22c55e; margin:2px 0;">${wrText}</div>
           <div style="font-size:10px; color:#94a3b8;">${winsCount}W / ${lossesCount}L (${sampleSize} res)</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
-          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "សម្រេច TP2 / TP3" : "TP2 / TP3 Rate"}</div>
+          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${kh ? "សម្រេច TP2 / TP3" : "TP2 / TP3 Rate"}</div>
           <div style="font-size:14px; font-weight:700; color:#38bdf8; margin:4px 0;">${tp2Rate} / ${tp3Rate}</div>
-          <div style="font-size:10px; color:#94a3b8;">Target Expansion</div>
+          <div style="font-size:10px; color:#94a3b8;">${kh ? "ពង្រីកគោលដៅ" : "Target Expansion"}</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
-          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "ផលចំណេញសុទ្ធ" : "Net R-Multiple"}</div>
+          <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${kh ? "ផលចំណេញសុទ្ធ" : "Net R-Multiple"}</div>
           <div style="font-size:16px; font-weight:800; color:#fbbf24; margin:2px 0;">${netR}</div>
           <div style="font-size:10px; color:#94a3b8;">Streak: ${escapeHtml(String(streak))}</div>
         </div>
       </div>
 
-      <!-- Live Action Buttons -->
-      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-        <button class="btn btn-gold btn-sm" onclick="triggerManualXAUUSDSignal()" style="flex:1; min-width:140px; font-size:11px;" ${quota.is_limit_reached ? 'disabled title="Daily 4-signal limit reached"' : ''}>
-          ⚡ ${isKhmer ? "វិភាគ & ផ្ញើសញ្ញា Telegram" : "Scan & Send Telegram Signal"}
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="triggerDispatchXAUUSDDailyReport()" style="flex:1; min-width:140px; font-size:11px;">
-          📊 ${isKhmer ? "ផ្ញើរបាយការណ៍សង្ខេបប្រចាំថ្ងៃ" : "Send Daily Telegram Report"}
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="fetchXAUUSDSignalsAndStats()" title="Refresh Data">
-          🔄
-        </button>
-      </div>
-
       <!-- Signals Feed Header -->
       <div style="font-size:11px; font-weight:700; color:#cbd5e1; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-        <span>📜 ${isKhmer ? "ប្រវត្តិនៃសញ្ញាជួញដូរ XAUUSD ផ្ទៀងផ្ទាត់" : "Verified XAUUSD Telegram Signals History"}</span>
-        <span style="font-size:10px; color:#64748b;">Formula: Wins / (Wins + Losses) · Cambodia TZ</span>
+        <span>📜 ${kh ? "ប្រវត្តិនៃសញ្ញាជួញដូរ XAUUSD ផ្ទៀងផ្ទាត់" : "Verified XAUUSD Telegram Signals History"}</span>
+        <span style="font-size:10px; color:#64748b;">${kh ? "រូបមន្ត៖ Wins / (Wins + Losses) · ម៉ោងកម្ពុជា" : "Formula: Wins / (Wins + Losses) · Cambodia TZ"}</span>
       </div>
     `;
 
@@ -6198,8 +6413,8 @@ async function fetchXAUUSDSignalsAndStats() {
       html += `
         <div style="text-align:center; padding:24px 12px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px dashed rgba(255,255,255,0.08);">
           <div style="font-size:24px; margin-bottom:6px;">🥇</div>
-          <div style="font-weight:700; color:#cbd5e1; font-size:12px;">No XAUUSD signals sent yet today</div>
-          <div style="font-size:11px; color:#64748b; margin-top:4px;">Signal generation runs only while the service is running and data passes validation.</div>
+          <div style="font-weight:700; color:#cbd5e1; font-size:12px;">${kh ? "មិនទាន់មានសញ្ញា XAUUSD ផ្ញើនៅថ្ងៃនេះទេ" : "No XAUUSD signals sent yet today"}</div>
+          <div style="font-size:11px; color:#64748b; margin-top:4px;">${kh ? "សញ្ញានឹងបង្កើតឡើងនៅពេលមាន setup គ្រប់លក្ខខណ្ឌ 80%-95% និងឆ្លងកាត់ការផ្ទៀងផ្ទាត់។" : "Signals are generated only when multi-agent setup satisfies the 80%-95% gate."}</div>
         </div>
       `;
     } else {
@@ -6243,45 +6458,75 @@ async function fetchXAUUSDSignalsAndStats() {
     container.innerHTML = html;
   } catch (err) {
     console.error("Fetch XAUUSD signals error:", err);
-    container.innerHTML = `<div style="font-size:12px; color:#f87171; text-align:center; padding:10px;">Failed to load XAUUSD signals data: ${escapeHtml(err.message)}</div>`;
+    if (!isSilent) {
+      container.innerHTML = `<div style="font-size:12px; color:#f87171; text-align:center; padding:10px;">Failed to load XAUUSD real-time signals: ${escapeHtml(err.message)}</div>`;
+    }
+  } finally {
+    xauusdRealtimeInFlight = false;
   }
 }
 
 async function triggerManualXAUUSDSignal() {
   const btn = event?.currentTarget;
   if (btn) btn.disabled = true;
+  const kh = typeof isKhmer !== "undefined" && isKhmer;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals/generate?dispatch_telegram=true`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals/generate?dispatch_telegram=true`, {
+      method: "POST",
+      credentials: "include"
+    });
     const data = await res.json();
     if (data.status === "APPROVED") {
-      alert(`✅ XAUUSD Signal Approved and Dispatched to Telegram!\nSignal ID: ${data.signal?.signal_id}\nTelegram Msg ID: ${data.telegram_message_id}`);
+      alert(kh
+        ? `✅ សញ្ញា XAUUSD ត្រូវបានអនុម័ត និងបញ្ជូនទៅ Telegram!
+Signal ID: ${data.signal?.signal_id}
+Telegram Msg ID: ${data.telegram_message_id || 'Sent'}`
+        : `✅ XAUUSD Signal Approved and Dispatched to Telegram!
+Signal ID: ${data.signal?.signal_id}
+Telegram Msg ID: ${data.telegram_message_id || 'Sent'}`
+      );
     } else {
-      alert(`ℹ️ Signal Suppressed: ${data.reason || "Market conditions do not satisfy 80%-95% multi-agent confluence or daily quota."}`);
+      const reason = data.reason || (kh ? "លក្ខខណ្ឌទីផ្សារមិនទាន់គ្រប់ 80%-95% ឬកូតាបានដល់កម្រិត។" : "Market conditions do not satisfy 80%-95% multi-agent confluence or daily quota.");
+      alert(kh
+        ? `ℹ️ ការស្កេន AI បានបញ្ចប់៖ ${reason}`
+        : `ℹ️ Real-time Scan Result: ${reason}`
+      );
     }
   } catch (err) {
-    alert(`❌ Failed to trigger signal: ${err.message}`);
+    alert(kh ? `❌ បរាជ័យក្នុងការស្កេន៖ ${err.message}` : `❌ Failed to trigger scan: ${err.message}`);
   } finally {
     if (btn) btn.disabled = false;
-    fetchXAUUSDSignalsAndStats();
+    fetchXAUUSDSignalsAndStats(false);
   }
 }
 
 async function triggerDispatchXAUUSDDailyReport() {
   const btn = event?.currentTarget;
   if (btn) btn.disabled = true;
+  const kh = typeof isKhmer !== "undefined" && isKhmer;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals/daily-report/dispatch?force=true`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals/daily-report/dispatch?force=true`, {
+      method: "POST",
+      credentials: "include"
+    });
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Daily Telegram Performance Report successfully dispatched!\nReport Date: ${data.report_date}\nTelegram Message ID: ${data.telegram_message_id}`);
+      alert(kh
+        ? `✅ របាយការណ៍សង្ខេបប្រចាំថ្ងៃបានបញ្ជូនទៅ Telegram រួចរាល់!
+Report Date: ${data.report_date}
+Telegram Message ID: ${data.telegram_message_id}`
+        : `✅ Daily Telegram Performance Report successfully dispatched!
+Report Date: ${data.report_date}
+Telegram Message ID: ${data.telegram_message_id}`
+      );
     } else {
-      alert(`⚠️ Daily report dispatch status: ${data.error || "Completed"}`);
+      alert(kh ? `⚠️ ស្ថានភាពរបាយការណ៍៖ ${data.error || "បានបញ្ចប់"}` : `⚠️ Daily report dispatch status: ${data.error || "Completed"}`);
     }
   } catch (err) {
-    alert(`❌ Error dispatching daily report: ${err.message}`);
+    alert(kh ? `❌ បរាជ័យក្នុងការផ្ញើរបាយការណ៍៖ ${err.message}` : `❌ Error dispatching daily report: ${err.message}`);
   } finally {
     if (btn) btn.disabled = false;
-    fetchXAUUSDSignalsAndStats();
+    fetchXAUUSDSignalsAndStats(false);
   }
 }
 

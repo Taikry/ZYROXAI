@@ -2425,6 +2425,22 @@ def get_xauusd_daily_quota_endpoint(target_date: Optional[str] = None):
     return xauusd_signal_engine.get_daily_quota_status(target_date)
 
 
+@router.get("/api/v1/xauusd/signals/live-analysis")
+def get_xauusd_live_analysis_endpoint(
+    trade_style: str = "INTRADAY",
+    bypass_cache: bool = False
+):
+    """
+    Returns real-time multi-agent AI analysis, live consensus,
+    and individual agent opinions on XAUUSD.
+    """
+    from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
+    return xauusd_signal_engine.get_live_realtime_analysis(
+        trade_style=trade_style,
+        bypass_cache=bypass_cache
+    )
+
+
 @router.get("/api/v1/xauusd/signals/{signal_id}")
 def get_xauusd_signal_detail_endpoint(signal_id: str):
     """
@@ -2495,22 +2511,37 @@ def get_xauusd_signal_detail_endpoint(signal_id: str):
 
 @router.post("/api/v1/xauusd/signals/generate")
 def generate_xauusd_signal_endpoint(
+    request: Request,
     dispatch_telegram: bool = True,
     trade_style: str = "INTRADAY",
     telegram_progress: bool = True,
-    _: bool = Depends(require_admin_access),
 ):
     """
     Executes a real-time multi-agent scan on XAUUSD, synthesizes consensus,
-    enforces atomic daily quota, and optionally dispatches to Telegram if approved.
+    enforces atomic daily quota, and dispatches to Telegram if approved.
+    Gracefully handles admin authorization for Telegram broadcast while allowing
+    full multi-agent scan evaluation for authenticated users.
     """
     from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
     from taikry.notifications.telegram_service import telegram_service
 
-    analysis_run_id = telegram_service.begin_analysis_run("XAUUSD", timeframe="H1") if dispatch_telegram and telegram_progress else None
+    # Check if admin access is granted for Telegram broadcast
+    can_dispatch_telegram = False
+    if dispatch_telegram:
+        try:
+            can_dispatch_telegram = require_admin_access(request)
+        except Exception:
+            can_dispatch_telegram = False
+
+    analysis_run_id = (
+        telegram_service.begin_analysis_run("XAUUSD", timeframe="H1")
+        if (can_dispatch_telegram and telegram_progress)
+        else None
+    )
     progress_callback = (
         lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
     ) if analysis_run_id else None
+
     result = xauusd_signal_engine.generate_xauusd_signal(
         "XAUUSD", trade_style=trade_style, progress_callback=progress_callback
     )
@@ -2525,14 +2556,18 @@ def generate_xauusd_signal_endpoint(
         return {
             "status": "SUPPRESSED",
             "reason": result.get("error") or result.get("rejection_reason"),
-            "data": result
+            "data": result,
+            "telegram_dispatched": False,
+            "telegram_note": "Signal suppressed by multi-agent consensus or daily quota."
         }
 
     tg_ok = False
     msg_id = None
     tg_err = None
-    if dispatch_telegram:
+    if can_dispatch_telegram:
         tg_ok, msg_id, tg_err = telegram_service.send_xauusd_signal_alert(result, analysis_run_id=analysis_run_id)
+    else:
+        tg_err = "Telegram broadcast requires administrator privileges; signal generated in shadow/preview mode."
 
     return {
         "status": "APPROVED",

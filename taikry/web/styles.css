@@ -11044,3 +11044,256 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   font-size: 12px;
   padding: 20px;
 }
+
+
+/* ==========================================================================
+   REAL-TIME XAUUSD GOLD SIGNALS & ALL AGENT AI FLEET MATRIX
+   ========================================================================== */
+
+.xauusd-live-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.xauusd-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #34d399;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.xauusd-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: xauusd-pulse 1.4s infinite;
+}
+
+@keyframes xauusd-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+.xauusd-price-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.xauusd-consensus-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.65), rgba(6, 78, 59, 0.2));
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.xauusd-consensus-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.xauusd-stance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.xauusd-stance-buy {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.2);
+}
+
+.xauusd-stance-sell {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #f87171;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+}
+
+.xauusd-stance-wait {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.xauusd-score-meter-wrap {
+  margin: 10px 0;
+}
+
+.xauusd-score-bar-bg {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.xauusd-score-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8, #fbbf24, #10b981);
+  transition: width 0.4s ease-out;
+}
+
+.xauusd-score-gate-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80%;
+  width: 2px;
+  background: #f43f5e;
+  box-shadow: 0 0 6px #f43f5e;
+}
+
+.xauusd-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.xauusd-agent-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.xauusd-agent-card:hover {
+  border-color: rgba(52, 211, 153, 0.35);
+  transform: translateY(-1px);
+}
+
+.xauusd-agent-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.xauusd-agent-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xauusd-agent-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.xauusd-agent-badge-bull {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.xauusd-agent-badge-bear {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.xauusd-agent-badge-neutral {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.xauusd-agent-role {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.xauusd-agent-conf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.xauusd-agent-rationale {
+  font-size: 10.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 2px solid #38bdf8;
+}
+
+.xauusd-evidence-toggle {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.xauusd-evidence-drawer {
+  font-size: 10px;
+  color: #94a3b8;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  display: none;
+  line-height: 1.45;
+}
+
+.xauusd-evidence-drawer.is-open {
+  display: block;
+}
+
+.xauusd-evidence-drawer ul {
+  margin: 0;
+  padding-left: 14px;
+}
+
+.xauusd-evidence-drawer li {
+  margin-bottom: 3px;
+}

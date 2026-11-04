@@ -199,6 +199,9 @@ class XAUUSDSignalEngine:
         self.expiry_hours = DEFAULT_SIGNAL_EXPIRY_HOURS
         self.min_agent_coverage_ratio = 0.60  # At least 60% of eligible agents must participate
         self._generation_lock = threading.Lock()
+        self._live_analysis_cache: Dict[str, Any] = {}
+        self._live_analysis_cache_time: float = 0.0
+        self._live_cache_ttl: float = 3.5
 
     # -------------------------------------------------------------------------
     # 1. ATOMIC DAILY QUOTA & DEDUPLICATION CHECKS
@@ -1435,6 +1438,252 @@ class XAUUSDSignalEngine:
             return {}
         finally:
             db.close()
+
+
+    # -------------------------------------------------------------------------
+    # REAL-TIME LIVE MULTI-AGENT ANALYSIS
+    # -------------------------------------------------------------------------
+
+    def get_live_realtime_analysis(
+        self,
+        trade_style: str = "INTRADAY",
+        bypass_cache: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Generates a non-persisting, read-only real-time analysis of XAUUSD
+        across all registered AI agents with synthesized consensus.
+        Cached for 3.5 seconds to support high-frequency frontend live updates.
+        """
+        now = time.time()
+        if not bypass_cache and self._live_analysis_cache and (now - self._live_analysis_cache_time < self._live_cache_ttl):
+            return self._live_analysis_cache
+
+        agent_metadata = {
+            "technical_analyst": {"name": "Technical Analyst", "icon": "📈", "role": "Trend, EMAs, RSI, ATR, VWAP"},
+            "ict_smc_analyst": {"name": "ICT / SMC Analyst", "icon": "🏛️", "role": "Order Blocks, FVG, Liquidity Sweeps, OTE"},
+            "fractal_mtf_analyst": {"name": "Fractal MTF Analyst", "icon": "⚡", "role": "Multi-Timeframe Alignment (H4, H1, M15, M5)"},
+            "regime_detection_agent": {"name": "Market Regime", "icon": "🧭", "role": "Trend Regime, Hurst Exponent, Volatility"},
+            "quantitative_research_agent": {"name": "Quantitative Research", "icon": "🔬", "role": "Z-Scores, Realized Volatility, Skewness"},
+            "ml_forecast_agent": {"name": "ML Forecast Model", "icon": "🤖", "role": "Directional Probability & Conviction"},
+            "macro_analyst": {"name": "Macro & News Risk", "icon": "🌐", "role": "DXY Correlation & Pre-News Blackout Windows"},
+            "orderflow_sentiment_analyst": {"name": "Order Flow & CVD", "icon": "🌊", "role": "Volume Delta & Smart Money Absorption"},
+            "concept_recommender": {"name": "Concept Recommender", "icon": "🎯", "role": "14 Institutional Concept Matching"},
+            "risk_validator": {"name": "Risk Guardian", "icon": "🛡️", "role": "Capital Protection, R:R >= 1:2.0 Floor"},
+            "data_quality_agent": {"name": "Data Integrity", "icon": "📡", "role": "Feed Freshness & Spread Audit"},
+            "counter_analysis_agent": {"name": "Critic & Adversary", "icon": "⚔️", "role": "Adversarial Stress Testing & Invalidation"},
+            "execution_simulation_agent": {"name": "Execution Sim", "icon": "🎯", "role": "Slippage & Effective Fill Validation"}
+        }
+
+        try:
+            verified_price, price_source, price_ts = market_data_engine.get_verified_price("XAUUSD")
+            quote = market_data_engine.get_verified_quote("XAUUSD") or {}
+            spread = 0.25
+            if quote:
+                try:
+                    spread = float(quote.get("spread") or (float(quote.get("ask", 0)) - float(quote.get("bid", 0))))
+                except (TypeError, ValueError):
+                    spread = 0.25
+            if not math.isfinite(spread) or spread <= 0:
+                spread = 0.25
+
+            candles = market_data_engine.get_multi_timeframe_candles("XAUUSD", ["H1", "M15", "M5"])
+            agent_outputs = self.execute_all_agents("XAUUSD", candles, verified_price, price_ts, price_source, trade_style)
+            consensus = self.synthesize_consensus("XAUUSD", verified_price, agent_outputs, candles, price_ts, spread, trade_style)
+
+            # Evaluate candidate review agents
+            levels = consensus.get("levels") or {}
+            decision = consensus.get("decision", "WAIT")
+            test_dir = decision if decision in {"BUY", "SELL"} else "BUY"
+            entry_p = float(levels.get("entry_price") or levels.get("take_profit_1") and verified_price or verified_price)
+            sl_p = float(levels.get("stop_loss") or (entry_p - 10.0 if test_dir == "BUY" else entry_p + 10.0))
+            tp1_p = float(levels.get("take_profit_1") or (entry_p + 20.0 if test_dir == "BUY" else entry_p - 20.0))
+
+            # 1. Risk Validator
+            rv = agent_registry._agents.get("risk_validator")
+            if rv:
+                try:
+                    start_t = time.perf_counter()
+                    res_rv = rv.execute(
+                        symbol="XAUUSD",
+                        verified_price=verified_price,
+                        price_timestamp=price_ts,
+                        agent1_report=agent_outputs.get("technical_analyst", {}),
+                        agent2_report=agent_outputs.get("ict_smc_analyst", {}),
+                        agent3_report=agent_outputs.get("macro_analyst", {}),
+                        candidate_levels=levels or {"entry_price": entry_p, "stop_loss": sl_p, "take_profit_1": tp1_p}
+                    )
+                    res_dict = self._coerce_agent_output(res_rv)
+                    lat = (time.perf_counter() - start_t) * 1000.0
+                    is_app = res_dict.get("approved", True)
+                    agent_outputs["risk_validator"] = {
+                        "agent_id": "risk_validator",
+                        "name": rv.metadata.name,
+                        "specialization": rv.metadata.specialization,
+                        "status": "SUCCESS",
+                        "bias": "BULLISH" if (is_app and test_dir == "BUY") else ("BEARISH" if (is_app and test_dir == "SELL") else "NEUTRAL"),
+                        "confidence": 90.0 if is_app else 35.0,
+                        "rationale": str(res_dict.get("rationale") or res_dict.get("reason") or "Capital protection verified."),
+                        "evidence": res_dict.get("evidence") or [],
+                        "latency_ms": round(lat, 1)
+                    }
+                except Exception as e:
+                    agent_outputs["risk_validator"] = {"agent_id": "risk_validator", "name": rv.metadata.name, "status": "DEFERRED", "reason": str(e)}
+
+            # 2. Counter-Analysis & Devil's Advocate Critic
+            ca = agent_registry._agents.get("counter_analysis_agent")
+            if ca:
+                try:
+                    start_t = time.perf_counter()
+                    res_ca = ca.execute(
+                        symbol="XAUUSD",
+                        proposed_direction=test_dir,
+                        entry_price=entry_p,
+                        stop_loss=sl_p,
+                        take_profit_1=tp1_p,
+                        technical_report=agent_outputs.get("technical_analyst", {}),
+                        smc_report=agent_outputs.get("ict_smc_analyst", {}),
+                        macro_report=agent_outputs.get("macro_analyst", {})
+                    )
+                    res_dict = self._coerce_agent_output(res_ca)
+                    lat = (time.perf_counter() - start_t) * 1000.0
+                    frag = float(res_dict.get("fragility_score") or 40.0)
+                    agent_outputs["counter_analysis_agent"] = {
+                        "agent_id": "counter_analysis_agent",
+                        "name": ca.metadata.name,
+                        "specialization": ca.metadata.specialization,
+                        "status": "SUCCESS",
+                        "bias": "NEUTRAL" if frag > 60 else test_dir,
+                        "confidence": round(100.0 - frag, 1),
+                        "rationale": str(res_dict.get("rationale") or res_dict.get("critique_stance") or "Adversarial stress test complete."),
+                        "evidence": res_dict.get("evidence") or [],
+                        "latency_ms": round(lat, 1)
+                    }
+                except Exception as e:
+                    agent_outputs["counter_analysis_agent"] = {"agent_id": "counter_analysis_agent", "name": ca.metadata.name, "status": "DEFERRED", "reason": str(e)}
+
+            # 3. Execution Simulation Agent
+            es = agent_registry._agents.get("execution_simulation_agent")
+            if es:
+                try:
+                    start_t = time.perf_counter()
+                    res_es = es.execute(
+                        symbol="XAUUSD",
+                        direction=test_dir,
+                        entry_price=entry_p,
+                        stop_loss=sl_p,
+                        take_profit_1=tp1_p,
+                        current_spread_points=spread
+                    )
+                    res_dict = self._coerce_agent_output(res_es)
+                    lat = (time.perf_counter() - start_t) * 1000.0
+                    viable = res_dict.get("is_execution_viable", True)
+                    agent_outputs["execution_simulation_agent"] = {
+                        "agent_id": "execution_simulation_agent",
+                        "name": es.metadata.name,
+                        "specialization": es.metadata.specialization,
+                        "status": "SUCCESS",
+                        "bias": test_dir if viable else "NEUTRAL",
+                        "confidence": 88.0 if viable else 45.0,
+                        "rationale": str(res_dict.get("rationale") or f"Fill: {res_dict.get('effective_fill_price', entry_p)} | Slippage: {res_dict.get('estimated_slippage_points', 0.0)} pts"),
+                        "evidence": res_dict.get("evidence") or [],
+                        "latency_ms": round(lat, 1)
+                    }
+                except Exception as e:
+                    agent_outputs["execution_simulation_agent"] = {"agent_id": "execution_simulation_agent", "name": es.metadata.name, "status": "DEFERRED", "reason": str(e)}
+
+            quota = self.get_daily_quota_status()
+
+            formatted_agents = []
+            ordered_agent_ids = [
+                "technical_analyst", "ict_smc_analyst", "fractal_mtf_analyst",
+                "regime_detection_agent", "quantitative_research_agent", "ml_forecast_agent",
+                "macro_analyst", "orderflow_sentiment_analyst", "concept_recommender",
+                "risk_validator", "data_quality_agent", "counter_analysis_agent", "execution_simulation_agent"
+            ]
+            seen_ids = set()
+            for aid in ordered_agent_ids:
+                out = agent_outputs.get(aid)
+                if not out:
+                    continue
+                seen_ids.add(aid)
+                meta = agent_metadata.get(aid, {})
+                formatted_agents.append({
+                    "id": aid,
+                    "name": meta.get("name", out.get("name", aid)),
+                    "icon": meta.get("icon", "🤖"),
+                    "role": meta.get("role", out.get("specialization", "")),
+                    "bias": "BULLISH" if ("BULL" in str(out.get("bias") or "").upper() or "BUY" in str(out.get("bias") or "").upper()) else ("BEARISH" if ("BEAR" in str(out.get("bias") or "").upper() or "SELL" in str(out.get("bias") or "").upper()) else "NEUTRAL"),
+                    "confidence": round(float(out.get("confidence") or 50.0), 1),
+                    "status": out.get("status", "SUCCESS"),
+                    "latency_ms": out.get("latency_ms", 10.0),
+                    "rationale": out.get("rationale") or (out.get("evidence")[0] if out.get("evidence") else ""),
+                    "evidence": out.get("evidence") or [],
+                    "key_levels": out.get("key_levels") or out.get("key_price_levels") or {}
+                })
+
+            for aid, out in agent_outputs.items():
+                if aid in seen_ids or aid in DEFERRED_SIGNAL_AGENT_REASONS:
+                    continue
+                meta = agent_metadata.get(aid, {})
+                formatted_agents.append({
+                    "id": aid,
+                    "name": meta.get("name", out.get("name", aid)),
+                    "icon": meta.get("icon", "🤖"),
+                    "role": meta.get("role", out.get("specialization", "")),
+                    "bias": "BULLISH" if ("BULL" in str(out.get("bias") or "").upper() or "BUY" in str(out.get("bias") or "").upper()) else ("BEARISH" if ("BEAR" in str(out.get("bias") or "").upper() or "SELL" in str(out.get("bias") or "").upper()) else "NEUTRAL"),
+                    "confidence": round(float(out.get("confidence") or 50.0), 1),
+                    "status": out.get("status", "SUCCESS"),
+                    "latency_ms": out.get("latency_ms", 10.0),
+                    "rationale": out.get("rationale") or (out.get("evidence")[0] if out.get("evidence") else ""),
+                    "evidence": out.get("evidence") or [],
+                    "key_levels": out.get("key_levels") or out.get("key_price_levels") or {}
+                })
+
+            regime_out = agent_outputs.get("regime_detection_agent", {})
+            macro_out = agent_outputs.get("macro_analyst", {})
+            result = {
+                "status": "SUCCESS",
+                "symbol": "XAUUSD",
+                "verified_price": round(float(verified_price), 2),
+                "price_source": str(price_source),
+                "price_timestamp": price_ts.isoformat() if hasattr(price_ts, "isoformat") else str(price_ts),
+                "spread_points": round(spread, 2),
+                "consensus": {
+                    "decision": decision,
+                    "confluence_score": round(float(consensus.get("score") or 0.0), 1),
+                    "gate_target_min": self.min_score,
+                    "gate_target_max": self.max_score,
+                    "gate_passed": decision in {"BUY", "SELL"} and (self.min_score <= float(consensus.get("score") or 0) <= self.max_score),
+                    "summary": consensus.get("rejection_reason") or consensus.get("summary") or "Multi-agent quorum evaluated.",
+                    "trade_levels": levels,
+                    "invalidation_conditions_en": consensus.get("invalidation_conditions_en") or [],
+                    "invalidation_conditions_kh": consensus.get("invalidation_conditions_kh") or [],
+                },
+                "market_regime": {
+                    "regime": regime_out.get("regime", "TREND_BULLISH_WEAK"),
+                    "volatility": regime_out.get("volatility_regime", "NORMAL_LIQUIDITY"),
+                    "hurst": regime_out.get("hurst_exponent", 0.5),
+                    "news_risk": "BLACKOUT" if macro_out.get("is_blackout") else "CLEAR"
+                },
+                "quota": quota,
+                "all_agents": formatted_agents,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+            self._live_analysis_cache = result
+            self._live_analysis_cache_time = now
+            return result
+        except Exception as exc:
+            logger.error("Error in get_live_realtime_analysis: %s", exc, exc_info=True)
+            return {
+                "status": "ERROR",
+                "symbol": "XAUUSD",
+                "error": str(exc),
+                "verified_price": 0.0,
+                "consensus": {"decision": "WAIT", "confluence_score": 0.0},
+                "all_agents": [],
+                "quota": self.get_daily_quota_status(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
 
 
 # Singleton Instance
