@@ -5261,6 +5261,135 @@ html, body {
   color: #cbd5e1;
 }
 
+/* Multi-Agent Fleet Box inside AI Chat */
+.chat-agents-fleet-box {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 8px;
+}
+
+.chat-agents-fleet-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.chat-agents-fleet-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f1f5f9;
+}
+
+.chat-agents-fleet-bot-icon {
+  font-size: 13px;
+}
+
+.chat-agents-count-badge {
+  font-size: 9.5px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.chat-agents-quorum-pill {
+  font-size: 9.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.chat-agents-quorum-pill.agent-quorum-bull {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.chat-agents-quorum-pill.agent-quorum-bear {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.chat-agents-quorum-pill.agent-quorum-neutral {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.chat-agents-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chat-agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: default;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.chat-agent-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.chat-agent-pill.bias-bull {
+  border-left: 3px solid #10b981;
+}
+
+.chat-agent-pill.bias-bear {
+  border-left: 3px solid #ef4444;
+}
+
+.chat-agent-pill.bias-neut {
+  border-left: 3px solid #94a3b8;
+}
+
+.chat-agent-pill-icon {
+  font-size: 11px;
+}
+
+.chat-agent-pill-name {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.chat-agent-pill-bias {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.bias-bull .chat-agent-pill-bias {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.bias-bear .chat-agent-pill-bias {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.bias-neut .chat-agent-pill-bias {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+}
+
 /* Action Buttons inside Card */
 .chat-setup-actions {
   display: flex;

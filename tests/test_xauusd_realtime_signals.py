@@ -63,3 +63,4 @@ def test_xauusd_generate_signal_safe_execution():
     assert response.status_code == 200
     data = response.json()
     assert data.get("status") in {"APPROVED", "SUPPRESSED"}
+

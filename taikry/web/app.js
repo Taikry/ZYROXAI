@@ -5739,6 +5739,57 @@ Model: ${providerTag}
 
     const safeCopyText = copyText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
+    const agents = Array.isArray(data.agents) ? data.agents : [];
+    let agentsFleetHtml = "";
+    if (agents.length > 0) {
+      const bullCount = agents.filter(a => a.bias === "BULLISH").length;
+      const bearCount = agents.filter(a => a.bias === "BEARISH").length;
+      const neutCount = agents.filter(a => a.bias === "NEUTRAL").length;
+
+      let quorumBadgeClass = "agent-quorum-neutral";
+      let quorumText = `${bullCount}B · ${bearCount}S · ${neutCount}N`;
+      if (bullCount >= Math.ceil(agents.length * 0.5)) {
+        quorumBadgeClass = "agent-quorum-bull";
+        quorumText = isKhmer ? `ទំនោរទិញ (${bullCount}/${agents.length})` : `Bullish Quorum (${bullCount}/${agents.length})`;
+      } else if (bearCount >= Math.ceil(agents.length * 0.5)) {
+        quorumBadgeClass = "agent-quorum-bear";
+        quorumText = isKhmer ? `ទំនោរលក់ (${bearCount}/${agents.length})` : `Bearish Quorum (${bearCount}/${agents.length})`;
+      } else {
+        quorumText = isKhmer ? `កុងសង់ស៊ីសចម្រុះ (${bullCount}B · ${bearCount}S · ${neutCount}N)` : `Mixed Consensus (${bullCount}B · ${bearCount}S · ${neutCount}N)`;
+      }
+
+      const pillsHtml = agents.map(ag => {
+        const biasClass = ag.bias === "BULLISH" ? "bias-bull" : (ag.bias === "BEARISH" ? "bias-bear" : "bias-neut");
+        const safeName = escapeHtml(ag.name || ag.id);
+        const safeRat = escapeHtml(ag.rationale || "");
+        const safeBias = escapeHtml(ag.bias || "NEUTRAL");
+        const icon = escapeHtml(ag.icon || "🤖");
+        return `
+          <div class="chat-agent-pill ${biasClass}" title="${safeName}: ${safeRat}">
+            <span class="chat-agent-pill-icon">${icon}</span>
+            <span class="chat-agent-pill-name">${safeName}</span>
+            <span class="chat-agent-pill-bias">${safeBias}</span>
+          </div>
+        `;
+      }).join("");
+
+      agentsFleetHtml = `
+        <div class="chat-agents-fleet-box">
+          <div class="chat-agents-fleet-top">
+            <div class="chat-agents-fleet-title">
+              <span class="chat-agents-fleet-bot-icon">🤖</span>
+              <b>${isKhmer ? "ក្រុមភ្នាក់ងារ AI ទាំងអស់" : "Multi-Agent Fleet"}</b>
+              <span class="chat-agents-count-badge">${agents.length} Agents</span>
+            </div>
+            <span class="chat-agents-quorum-pill ${quorumBadgeClass}">${escapeHtml(quorumText)}</span>
+          </div>
+          <div class="chat-agents-pills-wrap">
+            ${pillsHtml}
+          </div>
+        </div>
+      `;
+    }
+
     let cardHtml = `
       <div class="chat-setup-card">
         <div class="chat-setup-header">
@@ -5751,6 +5802,7 @@ Model: ${providerTag}
 
         ${liveContextHtml}
         ${aiWarningHtml}
+        ${agentsFleetHtml}
 
         <div class="chat-setup-grid">
           <div class="chat-setup-item">
