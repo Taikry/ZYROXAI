@@ -274,6 +274,47 @@ def logout_user(db: Session, session_token: str) -> bool:
     return deleted > 0
 
 
+def refresh_user_session(db: Session, session_token: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    """
+    Rotates the active session token to a fresh 256-bit token with a renewed 30-day expiration.
+    Returns (success, message, new_session_data).
+    """
+    if not session_token or len(session_token) < 20:
+        return False, "Invalid session token.", None
+
+    token_h = hash_token(session_token)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    session = db.query(UserSession).filter(
+        UserSession.token_hash == token_h,
+        UserSession.expires_at > now_utc
+    ).first()
+
+    if not session:
+        return False, "Session expired or invalid.", None
+
+    user = db.query(User).filter(User.id == session.user_id, User.deleted_at == None).first()
+    if not user or not user.is_active:
+        return False, "User account is suspended or inactive.", None
+
+    # Generate fresh token
+    raw_token, new_token_hash = generate_session_token()
+    expires_utc = now_utc + datetime.timedelta(days=SESSION_DURATION_DAYS)
+
+    session.token_hash = new_token_hash
+    session.expires_at = expires_utc
+    session.last_seen_at = now_utc
+    db.commit()
+
+    return True, "Session refreshed successfully.", {
+        "session_token": raw_token,
+        "expires_at": expires_utc.isoformat(),
+        "user_id": user.id,
+        "email": user.email,
+        "role": user.role
+    }
+
+
 def verify_email_token(db: Session, raw_token: str) -> Tuple[bool, str]:
     """Verifies user's email address using a single-use token."""
     token_h = hash_token(raw_token)

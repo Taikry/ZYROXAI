@@ -11426,3 +11426,59 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 .xauusd-evidence-drawer li {
   margin-bottom: 3px;
 }
+
+
+/* ==========================================================================
+   ZYROX AI V4 — STANDARDIZED BUTTON STATE MACHINE & PROGRESS SYSTEM
+   ========================================================================== */
+.zyrox-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  border-radius: var(--border-radius-sm, 6px);
+  transition: all 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.zyrox-btn:disabled,
+.zyrox-btn.zyrox-btn-disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.zyrox-btn.zyrox-btn-loading {
+  cursor: wait !important;
+  pointer-events: none !important;
+}
+
+.zyrox-btn.zyrox-btn-loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: zyroxSpin 0.7s linear infinite;
+}
+
+.zyrox-btn.zyrox-btn-success {
+  border-color: var(--zyrox-primary, #10B981) !important;
+  color: var(--zyrox-primary, #10B981) !important;
+}
+
+.zyrox-btn.zyrox-btn-error {
+  border-color: var(--zyrox-danger, #EF4444) !important;
+  color: var(--zyrox-danger, #EF4444) !important;
+}
+
+@keyframes zyroxSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

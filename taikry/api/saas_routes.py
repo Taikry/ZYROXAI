@@ -45,6 +45,7 @@ from taikry.saas import (
     login_user,
     authenticate_session,
     logout_user,
+    refresh_user_session,
     verify_email_token,
     request_password_reset,
     reset_password,
@@ -693,6 +694,61 @@ def logout_endpoint(
             logout_user(db, token)
         response.delete_cookie(key=SESSION_COOKIE_NAME)
         return {"success": True, "message": "Logged out successfully."}
+    finally:
+        db.close()
+
+
+@saas_router.post("/api/v1/auth/refresh")
+def refresh_session_endpoint(
+    response: Response,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_session_token: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None)
+):
+    """
+    Rotates the current session token to a fresh 256-bit token with renewed expiration.
+    Sets the refreshed HttpOnly cookie and returns new session metadata.
+    """
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif x_session_token:
+        token = x_session_token.strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session token required for refresh."
+        )
+
+    db = SessionLocal()
+    try:
+        ok, msg, data = refresh_user_session(db, token)
+        if not ok or not data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=msg
+            )
+
+        # Set refreshed secure session cookie
+        secure_cookie = os.getenv("ENVIRONMENT", "").lower() == "production"
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=data["session_token"],
+            max_age=30 * 24 * 3600,
+            httponly=True,
+            samesite="lax",
+            secure=secure_cookie
+        )
+
+        return {
+            "success": True,
+            "message": "Session token successfully refreshed.",
+            "data": data
+        }
     finally:
         db.close()
 
