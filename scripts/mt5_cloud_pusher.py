@@ -211,3 +211,4 @@ class WindowsMT5CloudPusher:
 if __name__ == "__main__":
     pusher = WindowsMT5CloudPusher(CLOUD_BACKEND_URL, BRIDGE_TOKEN)
     pusher.run_forever()
+

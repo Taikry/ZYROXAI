@@ -75,11 +75,14 @@ BAKONG_CURRENCY=USD
 ## 3. Rollback & Disaster Recovery Procedure
 
 If an unexpected regression occurs in production:
+
 1. **Immediate Git Rollback:**
+
    ```bash
    git revert HEAD
    git push origin main
    ```
+
    Render auto-deploy will trigger within 30 seconds and redeploy the previous stable build.
 2. **Database Snapshot:**
    Render PostgreSQL creates automated daily WAL backups. A point-in-time recovery can be triggered directly in the Render Dashboard under **Databases > Backups**.

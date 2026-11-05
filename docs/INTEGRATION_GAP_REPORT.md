@@ -14,6 +14,7 @@ This report identifies architectural and operational gaps between the local deve
 ## 2. Identified Integration Gaps & Remediation
 
 ### Gap 1: Desktop MT5 Terminal to Cloud Render Network Traversal
+
 * **Description:** Render runs on isolated Linux cloud containers in Singapore (`singapore` region). It cannot directly connect to a local private Windows PC running MetaTrader 5 on `127.0.0.1:8001` through an inbound connection due to NAT and dynamic IP assignment.
 * **Current State:**
   * The local development environment polls `http://127.0.0.1:8001` via `mt5_receiver.py`.
@@ -27,6 +28,7 @@ This report identifies architectural and operational gaps between the local deve
 ---
 
 ### Gap 2: ABA PayWay Live Merchant Credentials vs Sandbox
+
 * **Description:** The system has full support for NBC Bakong Open API (KHQR EMVCo dynamic QR generation with server-side MD5 check). ABA PayWay is implemented in sandbox mode with RSA encryption (`taikry/saas/billing_adapter.py`), but production merchant onboarding requires live merchant credentials.
 * **Current State:**
   * Bakong KHQR handles domestic Cambodian QR payments natively across all 40+ Bakong member banks (including ABA, Acleda, Canadia, Sathapana).
@@ -39,6 +41,7 @@ This report identifies architectural and operational gaps between the local deve
 ---
 
 ### Gap 3: Missing Dedicated Short-Lived Access Token Refresh Endpoint
+
 * **Description:** Currently, user sessions use a single 30-day SHA-256 hashed session token stored in `user_sessions`. While secure against database dumps, industry best practices encourage short-lived access tokens (e.g. 1 hour) with rotating refresh tokens.
 * **Remediation Plan:**
   * Add `/api/v1/auth/refresh` endpoint in `taikry/api/saas_routes.py`.
@@ -48,6 +51,7 @@ This report identifies architectural and operational gaps between the local deve
 ---
 
 ### Gap 4: Frontend Button State Transitions & Duplicate Click Debouncing
+
 * **Description:** While all 223 buttons in `index.html` are mapped to live JavaScript functions, button state transitions (`IDLE` $\rightarrow$ `LOADING` $\rightarrow$ `SUCCESS` / `ERROR`) currently rely on ad-hoc text swaps (`innerHTML = 'Analyzing...'`) without a formal state machine class.
 * **Remediation Plan:**
   * Introduce standardized CSS utility classes (`.zyrox-btn-loading`, `.zyrox-btn-disabled`, `.zyrox-btn-success`).
@@ -57,6 +61,7 @@ This report identifies architectural and operational gaps between the local deve
 ---
 
 ### Gap 5: Dedicated Visual Heatmap & Journal Views
+
 * **Description:**
   * The Market Screener in Section 2 is a list-based table rather than a visual tile-based heatmap grid with color intensity matching momentum.
   * The Trading Journal is accessible via the paper trading ledger, but lacks a dedicated full-page view featuring trade chart screenshots and tag analytics.

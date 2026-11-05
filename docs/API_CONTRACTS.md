@@ -10,9 +10,11 @@
 ## 1. Health & Diagnostic Endpoints
 
 ### `GET /ping`
+
 * **Description:** Production health check used by Render load balancer and uptime monitors.
 * **Authentication:** None.
 * **Response (200 OK):**
+
 ```json
 {
   "status": "pong",
@@ -26,10 +28,12 @@
 ## 2. Market Data & Pricing Contracts
 
 ### `GET /api/v1/prices/realtime?symbols={symbols}`
+
 * **Description:** Retrieves verified real-time quotes with institutional bid/ask spread and data provenance.
 * **Parameters:** `symbols` (comma-separated, e.g. `XAUUSD,EURUSD,BTCUSDT`).
 * **Authentication:** None.
 * **Response (200 OK):**
+
 ```json
 {
   "status": "SUCCESS",
@@ -63,10 +67,12 @@
 ## 3. Best Setup & Consensus Analysis Contracts
 
 ### `GET /api/v1/best-setup?symbol={symbol}&timeframe={tf}`
+
 * **Description:** Evaluates multi-timeframe regime, technical indicators, and SMC concepts to produce a candidate setup.
 * **Parameters:** `symbol` (default `XAUUSD`), `timeframe` (default `M15`).
 * **Authentication:** Optional (authenticated users receive elevated quotas).
 * **Response (200 OK):**
+
 ```json
 {
   "symbol": "XAUUSD",
@@ -96,9 +102,11 @@
 ## 4. Multi-Agent AI Chat & Copilot Contracts
 
 ### `POST /api/v1/ai/chat`
+
 * **Description:** Real AI Copilot integrating multi-agent consensus, verified quote context, and multimodal chart vision.
 * **Authentication:** Optional (rate-limited per session / IP).
 * **Request Body:**
+
 ```json
 {
   "query": "Why is the market WAIT on XAUUSD?",
@@ -109,7 +117,9 @@
   "history": []
 }
 ```
+
 * **Response (200 OK):**
+
 ```json
 {
   "status": "SUCCESS",
@@ -148,8 +158,10 @@
 ## 5. Authentication & User Profile Contracts
 
 ### `POST /api/v1/auth/signup`
+
 * **Request:** `{ "email": "trader@example.com", "password": "SecurePassword123!", "full_name": "Pro Trader" }`
 * **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -164,6 +176,7 @@
 ```
 
 ### `POST /api/v1/auth/login`
+
 * **Request:** `{ "email": "trader@example.com", "password": "SecurePassword123!" }`
 * **Response (200 OK):** Sets HttpOnly cookie `zyrox_session` and returns session details.
 
@@ -172,8 +185,10 @@
 ## 6. Payments & KHQR Contracts
 
 ### `POST /api/v1/billing/checkout`
+
 * **Request:** `{ "plan_id": "pro", "currency": "USD" }`
 * **Response (200 OK):**
+
 ```json
 {
   "status": "SUCCESS",
@@ -194,5 +209,6 @@
 ```
 
 ### `POST /api/v1/billing/verify/{invoice_id}`
+
 * **Description:** Verifies payment server-side directly against the National Bank of Cambodia Bakong Open API.
 * **Response (200 OK):** Returns payment verification outcome and extended subscription dates.
