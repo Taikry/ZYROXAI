@@ -11472,14 +11472,3 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
     transform: rotate(360deg);
   }
 }
-
-/* Standard scrollbar hiding with feature query protection */
-@supports (scrollbar-width: none) {
-  .timeframe-selector-group,
-  .cockpit-tabs-group,
-  .cockpit-quick-chips-bar,
-  .cockpit-subpane-tabs,
-  .studio-nav {
-    scrollbar-width: none !important;
-  }
-}
