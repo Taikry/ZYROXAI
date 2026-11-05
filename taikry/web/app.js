@@ -1463,6 +1463,8 @@ async function savePaperTradeJournal(tradeId) {
       cached.mistake_tag = data.journal.mistake_tag;
     }
     if (feedback) feedback.textContent = "Saved · រក្សាទុករួចរាល់";
+    if (typeof renderDedicatedJournalGrid === "function") renderDedicatedJournalGrid();
+    if (typeof fetchCockpitHistory === "function") fetchCockpitHistory();
     window.setTimeout(closePaperTradeJournal, 600);
   } catch (error) {
     if (feedback) feedback.textContent = error.message;
@@ -2227,6 +2229,13 @@ async function fetchCockpitHistory() {
     if (res.ok) {
       const data = await res.json();
       const trades = data.trades || [];
+      window.paperTradeCache = trades;
+      window.paperTradeSummary = data.account_summary || {};
+
+      if (typeof updateCockpitJournalKPI === "function") {
+        updateCockpitJournalKPI(data.account_summary);
+      }
+
       if (trades.length === 0) {
         container.innerHTML = `<div class="bot-debate-placeholder"><span>No paper trades are recorded in the ledger.</span></div>`;
         return;
@@ -2236,14 +2245,16 @@ async function fetchCockpitHistory() {
         const pnl = pnlValue == null || !Number.isFinite(Number(pnlValue)) ? null : Number(pnlValue);
         const rValue = t.r_multiple == null || !Number.isFinite(Number(t.r_multiple)) ? null : Number(t.r_multiple);
         const result = t.status === "OPEN"
-          ? (pnl != null ? `Live $${pnl.toFixed(2)} · SL ${Number(t.stop_loss).toLocaleString()} / TP ${Number(t.take_profit_1).toLocaleString()}` : "Waiting for fresh price")
+          ? (pnl != null ? `Live $${pnl.toFixed(2)}` : "Waiting for quote")
           : (rValue != null ? `${rValue.toFixed(2)}R` : (pnl != null ? `$${pnl.toFixed(2)}` : "N/A"));
+        const emotionIcon = t.emotion_tag ? getEmotionBadgeIcon(t.emotion_tag) : "";
         return `
-        <div class="history-item-row">
+        <div class="history-item-row" onclick="openPaperTradeJournal(${Number(t.id)})" title="Click to view & edit journal reflections">
           <span class="history-sym">${escapeHtml(String(t.symbol || "N/A"))}</span>
-          <span class="history-dir ${t.direction === 'BUY' ? 'dir-buy' : 'dir-sell'}">${escapeHtml(String(t.direction || "N/A"))} PAPER</span>
+          <span class="history-dir ${t.direction === 'BUY' ? 'dir-buy' : 'dir-sell'}">${escapeHtml(String(t.direction || "N/A"))}</span>
           <span class="history-price">${t.entry_price != null && Number.isFinite(Number(t.entry_price)) ? `$${Number(t.entry_price).toLocaleString()}` : "N/A"}</span>
           <span class="history-status ${t.status === 'CLOSED' ? 'status-pass' : 'status-pending'}">${escapeHtml(String(t.status || "N/A"))} (${result})</span>
+          ${emotionIcon ? `<span style="font-size:11px" title="${escapeHtml(t.emotion_tag)}">${emotionIcon}</span>` : ''}
         </div>
       `;
       }).join("");
@@ -8426,4 +8437,287 @@ function toggleV6ConceptOnChart(conceptId) {
     }
   }
   renderV6ConceptsGrid();
+}
+
+
+// ============================================================================
+// DEDICATED TRADE JOURNAL & PNL ANALYTICS SYSTEM
+// ============================================================================
+window.journalFilterStatus = "ALL";
+window.journalSearchQuery = "";
+
+async function openDedicatedJournalModal() {
+  const modal = document.getElementById("modal-trade-journal");
+  if (!modal) return;
+  modal.classList.remove("modal-hidden");
+  await refreshDedicatedJournalData();
+}
+
+function closeDedicatedJournalModal() {
+  const modal = document.getElementById("modal-trade-journal");
+  if (modal) modal.classList.add("modal-hidden");
+}
+
+async function refreshDedicatedJournalData() {
+  const container = document.getElementById("journal-trades-container");
+  if (container) {
+    container.innerHTML = `<div class="journal-loading-state"><span>🔄 Loading institutional trade ledger & PnL metrics...</span></div>`;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/me/paper-trades`);
+    if (res.ok) {
+      const data = await res.json();
+      window.paperTradeCache = data.trades || [];
+      window.paperTradeSummary = data.account_summary || {};
+
+      // Update Cockpit Quick Bar
+      updateCockpitJournalKPI(data.account_summary);
+
+      // Update Modal KPI Ribbon
+      updateModalJournalKPI(data.account_summary, window.paperTradeCache);
+
+      // Render Grid
+      renderDedicatedJournalGrid();
+    } else {
+      if (container) {
+        container.innerHTML = `<div class="journal-empty-state"><span>Please sign in to view your private Trade Journal.</span></div>`;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load journal:", err);
+    if (container) {
+      container.innerHTML = `<div class="journal-empty-state"><span>Unable to load trading journal at this time.</span></div>`;
+    }
+  }
+}
+
+function updateCockpitJournalKPI(summary) {
+  if (!summary) return;
+  const wrEl = document.getElementById("cp-j-winrate");
+  const pfEl = document.getElementById("cp-j-pf");
+  const pnlEl = document.getElementById("cp-j-pnl");
+  const totEl = document.getElementById("cp-j-total");
+
+  if (wrEl) wrEl.textContent = `${Number(summary.win_rate_percent || 0).toFixed(1)}%`;
+  if (pfEl) pfEl.textContent = summary.profit_factor != null ? Number(summary.profit_factor).toFixed(2) : "1.00";
+  if (pnlEl) {
+    const pnl = Number(summary.realized_pnl || summary.today_realized_pnl || 0);
+    pnlEl.textContent = `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+    pnlEl.className = pnl >= 0 ? "val-green" : "val-red";
+  }
+  if (totEl) totEl.textContent = String((summary.wins || 0) + (summary.losses || 0) + (summary.open_trades_count || 0));
+}
+
+function updateModalJournalKPI(summary, trades) {
+  const realizedEl = document.getElementById("j-kpi-realized-pnl");
+  const todayEl = document.getElementById("j-kpi-today-pnl");
+  const winRateEl = document.getElementById("j-kpi-win-rate");
+  const winLossEl = document.getElementById("j-kpi-win-loss");
+  const pfEl = document.getElementById("j-kpi-profit-factor");
+  const expEl = document.getElementById("j-kpi-expectancy");
+  const openCountEl = document.getElementById("j-kpi-open-count");
+  const unrealizedEl = document.getElementById("j-kpi-unrealized-pnl");
+
+  const closed = (trades || []).filter(t => t.status === "CLOSED");
+  const open = (trades || []).filter(t => t.status === "OPEN");
+  const wins = closed.filter(t => Number(t.pnl || 0) > 0);
+  const losses = closed.filter(t => Number(t.pnl || 0) < 0);
+
+  const totalRealized = closed.reduce((acc, t) => acc + Number(t.pnl || 0), 0);
+  const totalUnrealized = open.reduce((acc, t) => acc + Number(t.unrealized_pnl || 0), 0);
+  const todayPnl = Number(summary?.today_realized_pnl || 0);
+
+  const winRate = closed.length > 0 ? (wins.length / closed.length) * 100 : 0;
+  const grossWin = wins.reduce((acc, t) => acc + Number(t.pnl || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((acc, t) => acc + Number(t.pnl || 0), 0));
+  const profitFactor = grossLoss > 0 ? grossWin / grossLoss : (grossWin > 0 ? 9.99 : 0);
+
+  const rSum = closed.reduce((acc, t) => acc + Number(t.r_multiple || 0), 0);
+  const expectancy = closed.length > 0 ? rSum / closed.length : 0;
+
+  if (realizedEl) {
+    realizedEl.textContent = `${totalRealized >= 0 ? "+" : ""}$${totalRealized.toFixed(2)}`;
+    realizedEl.className = `j-kpi-value ${totalRealized >= 0 ? "text-green" : "text-red"}`;
+  }
+  if (todayEl) todayEl.textContent = `Today: ${todayPnl >= 0 ? "+" : ""}$${todayPnl.toFixed(2)}`;
+  if (winRateEl) winRateEl.textContent = `${winRate.toFixed(1)}%`;
+  if (winLossEl) winLossEl.textContent = `${wins.length}W / ${losses.length}L (${closed.length} closed)`;
+  if (pfEl) pfEl.textContent = profitFactor.toFixed(2);
+  if (expEl) expEl.textContent = `Expectancy: ${expectancy >= 0 ? "+" : ""}${expectancy.toFixed(2)}R`;
+  if (openCountEl) openCountEl.textContent = String(open.length);
+  if (unrealizedEl) unrealizedEl.textContent = `Floating: ${totalUnrealized >= 0 ? "+" : ""}$${totalUnrealized.toFixed(2)}`;
+}
+
+function filterJournalByStatus(filterStatus, btn) {
+  window.journalFilterStatus = filterStatus;
+  document.querySelectorAll("#journal-status-filters .j-filter-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  renderDedicatedJournalGrid();
+}
+
+function onJournalSearchInput(query) {
+  window.journalSearchQuery = (query || "").trim().toLowerCase();
+  renderDedicatedJournalGrid();
+}
+
+function renderDedicatedJournalGrid() {
+  const container = document.getElementById("journal-trades-container");
+  if (!container) return;
+
+  const allTrades = window.paperTradeCache || [];
+  if (allTrades.length === 0) {
+    container.innerHTML = `
+      <div class="journal-empty-state">
+        <span class="empty-icon">📓</span>
+        <strong>No trades in your journal yet</strong>
+        <p>Execute paper trades or connect live execution signals to populate your institutional performance journal.</p>
+      </div>`;
+    return;
+  }
+
+  const statusFilter = window.journalFilterStatus || "ALL";
+  const query = window.journalSearchQuery || "";
+
+  let filtered = allTrades.filter(t => {
+    const isClosed = t.status === "CLOSED";
+    const pnl = Number(t.pnl || 0);
+
+    if (statusFilter === "OPEN" && t.status !== "OPEN") return false;
+    if (statusFilter === "WON" && (!isClosed || pnl <= 0)) return false;
+    if (statusFilter === "LOST" && (!isClosed || pnl >= 0)) return false;
+
+    if (query) {
+      const matchSym = String(t.symbol || "").toLowerCase().includes(query);
+      const matchNotes = String(t.journal_notes || "").toLowerCase().includes(query);
+      const matchEmotion = String(t.emotion_tag || "").toLowerCase().includes(query);
+      const matchMistake = String(t.mistake_tag || "").toLowerCase().includes(query);
+      const matchTags = (t.journal_tags || []).some(tg => String(tg).toLowerCase().includes(query));
+      if (!matchSym && !matchNotes && !matchEmotion && !matchMistake && !matchTags) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="journal-empty-state">
+        <span>No trades match your current filters.</span>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="journal-trades-grid">
+      ${filtered.map(t => {
+        const isOpen = t.status === "OPEN";
+        const pnlValue = isOpen ? t.unrealized_pnl : t.pnl;
+        const pnlNum = Number(pnlValue || 0);
+        const rVal = t.r_multiple != null && Number.isFinite(Number(t.r_multiple)) ? Number(t.r_multiple) : null;
+        const isWin = !isOpen && pnlNum > 0;
+        const isLoss = !isOpen && pnlNum < 0;
+
+        let statusClass = "status-open";
+        let statusText = "🟢 OPEN ACTIVE";
+        if (isWin) {
+          statusClass = "status-win";
+          statusText = `🏆 WINNER · ${rVal != null ? rVal.toFixed(2) + "R" : ""}`;
+        } else if (isLoss) {
+          statusClass = "status-loss";
+          statusText = `🛑 LOSS · ${rVal != null ? rVal.toFixed(2) + "R" : ""}`;
+        }
+
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleString() : "Recent";
+        const emotionIcon = t.emotion_tag ? getEmotionBadgeIcon(t.emotion_tag) : "";
+
+        return `
+        <div class="journal-trade-card ${statusClass}">
+          <div class="jt-card-header">
+            <div class="jt-header-left">
+              <span class="jt-sym">${escapeHtml(String(t.symbol || "N/A"))}</span>
+              <span class="jt-dir ${t.direction === 'BUY' ? 'dir-buy' : 'dir-sell'}">${escapeHtml(String(t.direction || "BUY"))}</span>
+              <span class="jt-id">#${t.id}</span>
+            </div>
+            <div class="jt-header-right">
+              <span class="jt-status-badge ${statusClass}">${statusText}</span>
+              <span class="jt-date">${escapeHtml(dateStr)}</span>
+            </div>
+          </div>
+
+          <div class="jt-metrics-grid">
+            <div class="jt-metric"><span class="jtm-label">Entry</span><strong>$${Number(t.entry_price || 0).toLocaleString()}</strong></div>
+            <div class="jt-metric"><span class="jtm-label">${isOpen ? "Live Price" : "Exit Price"}</span><strong>${t.exit_price ? "$" + Number(t.exit_price).toLocaleString() : (t.current_price ? "$" + Number(t.current_price).toLocaleString() : "—")}</strong></div>
+            <div class="jt-metric"><span class="jtm-label">Stop Loss</span><strong class="text-red">$${Number(t.stop_loss || 0).toLocaleString()}</strong></div>
+            <div class="jt-metric"><span class="jtm-label">Take Profit</span><strong class="text-green">$${Number(t.take_profit_1 || 0).toLocaleString()}</strong></div>
+            <div class="jt-metric"><span class="jtm-label">Lots / Risk</span><strong>${t.lot_size || 0.1} lots · $${Number(t.risk_amount || 0).toFixed(0)}</strong></div>
+            <div class="jt-metric"><span class="jtm-label">${isOpen ? "Floating PnL" : "Realized PnL"}</span><strong class="${pnlNum >= 0 ? 'text-green' : 'text-red'}">${pnlNum >= 0 ? '+' : ''}$${pnlNum.toFixed(2)}</strong></div>
+          </div>
+
+          <div class="jt-psychology-row">
+            ${t.emotion_tag ? `<span class="jt-tag emotion-tag">${emotionIcon} ${escapeHtml(t.emotion_tag)}</span>` : `<span class="jt-tag tag-empty">+ Add Emotion</span>`}
+            ${t.mistake_tag ? `<span class="jt-tag mistake-tag">⚠️ ${escapeHtml(t.mistake_tag)}</span>` : ''}
+            ${(t.journal_tags || []).map(tg => `<span class="jt-tag strategy-tag">🏷️ ${escapeHtml(tg)}</span>`).join("")}
+          </div>
+
+          <div class="jt-notes-preview">
+            <span class="jtn-label">Trader Reflections:</span>
+            <p class="jtn-text">${escapeHtml(t.journal_notes || "No reflection notes recorded for this trade yet. Click 'Edit Journal' to record what you learned.")}</p>
+          </div>
+
+          <div class="jt-card-actions">
+            <button class="btn btn-outline btn-sm" onclick="openPaperTradeJournal(${Number(t.id)})">
+              ✍️ Edit Journal & Psychology
+            </button>
+          </div>
+        </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function getEmotionBadgeIcon(emotion) {
+  const em = String(emotion || "").toLowerCase();
+  if (em.includes("calm")) return "😌";
+  if (em.includes("confident")) return "🎯";
+  if (em.includes("fomo")) return "⚡";
+  if (em.includes("anxious")) return "😰";
+  if (em.includes("frustrated") || em.includes("revenge")) return "🔥";
+  return "🧠";
+}
+
+function exportJournalToCSV() {
+  const trades = window.paperTradeCache || [];
+  if (trades.length === 0) {
+    alert("No trades found in journal to export.");
+    return;
+  }
+
+  const headers = ["ID", "Symbol", "Direction", "Status", "Entry Price", "Exit Price", "Stop Loss", "Take Profit", "Lots", "Risk ($)", "PnL ($)", "R-Multiple", "Emotion", "Mistakes", "Tags", "Notes", "Date"];
+  const rows = trades.map(t => [
+    t.id,
+    t.symbol,
+    t.direction,
+    t.status,
+    t.entry_price,
+    t.exit_price || "",
+    t.stop_loss,
+    t.take_profit_1,
+    t.lot_size,
+    t.risk_amount,
+    t.status === "OPEN" ? t.unrealized_pnl : t.pnl,
+    t.r_multiple || "",
+    `"${(t.emotion_tag || "").replace(/"/g, '""')}"`,
+    `"${(t.mistake_tag || "").replace(/"/g, '""')}"`,
+    `"${(t.journal_tags || []).join("; ").replace(/"/g, '""')}"`,
+    `"${(t.journal_notes || "").replace(/"/g, '""')}"`,
+    t.created_at || ""
+  ]);
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `zyrox_ai_trade_journal_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

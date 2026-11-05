@@ -124,6 +124,10 @@
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span id="t-top-trade">Paper Trade</span>
         </button>
+        <button class="top-action-btn btn-trade-journal" id="btn-open-trade-journal" onclick="openDedicatedJournalModal()" title="Open Trade Journal & PnL Analytics · សៀវភៅកត់ត្រាការជួញដូរ">
+          <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span id="t-top-journal">Journal</span>
+        </button>
         <button class="top-action-btn btn-top-alert" onclick="armCurrentAlert()" title="Arm Price Alert">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span>Alert</span>
@@ -393,7 +397,7 @@
             <div class="cockpit-tabs-group">
               <button class="cockpit-tab-pill active" id="c-tab-analysis" onclick="switchCockpitTab('analysis', this)">Analysis</button>
               <button class="cockpit-tab-pill" id="c-tab-bot" onclick="switchCockpitTab('bot', this)">Bot</button>
-              <button class="cockpit-tab-pill" id="c-tab-history" onclick="switchCockpitTab('history', this)">History</button>
+              <button class="cockpit-tab-pill" id="c-tab-history" onclick="switchCockpitTab('history', this)">📜 History & Journal</button>
               <button class="cockpit-tab-pill" id="c-tab-news" onclick="switchCockpitTab('news', this)">News</button>
               <button class="cockpit-tab-pill" id="c-tab-xauusd-signals" onclick="switchCockpitTab('xauusd-signals', this)">🥇 Gold Signals</button>
             </div>
@@ -858,14 +862,28 @@
               </div>
             </div>
 
-            <!-- ================= SUBPANE 3: HISTORY ================= -->
+            <!-- ================= SUBPANE 3: HISTORY & JOURNAL ================= -->
             <div class="cockpit-subpane" id="pane-cockpit-history">
-              <div class="cockpit-ai-header">
-                <span class="ai-lightning-icon">📜</span>
-                <span class="ai-tag-title">Institutional Setup & Signal History</span>
+              <div class="cockpit-ai-header cockpit-history-header-bar">
+                <div class="cockpit-history-header-left">
+                  <span class="ai-lightning-icon">📖</span>
+                  <span class="ai-tag-title">Trading Journal & PnL Analytics · កំណត់ហេតុជួញដូរ</span>
+                </div>
+                <button class="btn btn-outline btn-sm cockpit-open-journal-btn" onclick="openDedicatedJournalModal()" title="Open Full Trade Journal & Analytics">
+                  🔍 Full Journal & Analytics
+                </button>
               </div>
+
+              <!-- Cockpit Quick PnL Stats Bar -->
+              <div class="cockpit-journal-kpi-bar" id="cockpit-journal-quick-kpi">
+                <div class="kpi-mini-pill"><span class="kpi-mini-label">Win Rate</span><strong id="cp-j-winrate">--%</strong></div>
+                <div class="kpi-mini-pill"><span class="kpi-mini-label">Profit Factor</span><strong id="cp-j-pf">--</strong></div>
+                <div class="kpi-mini-pill"><span class="kpi-mini-label">Realized PnL</span><strong id="cp-j-pnl">$--</strong></div>
+                <div class="kpi-mini-pill"><span class="kpi-mini-label">Total Trades</span><strong id="cp-j-total">--</strong></div>
+              </div>
+
               <div class="cockpit-history-list" id="cockpit-history-container">
-                <!-- Populated dynamically -->
+                <!-- Populated dynamically with interactive trade cards -->
               </div>
             </div>
 
@@ -3331,5 +3349,68 @@
       </div>
     </div>
 
+    <!-- ======================================================================
+         MODAL: DEDICATED TRADE JOURNAL & PNL ANALYTICS (សៀវភៅកត់ត្រាការជួញដូរ)
+         ====================================================================== -->
+    <div class="modal-backdrop modal-hidden" id="modal-trade-journal" role="dialog" aria-modal="true" aria-labelledby="journal-modal-title">
+      <div class="modal-card zyrox-journal-modal-card">
+        <div class="modal-header journal-modal-header">
+          <div class="journal-title-wrap">
+            <span class="journal-header-icon">📖</span>
+            <div>
+              <div class="modal-title" id="journal-modal-title">ZYROX AI Trading Journal & PnL Analytics</div>
+              <div class="journal-sub-title">សៀវភៅកត់ត្រាការជួញដូរអាជីព · Institutional Performance & Emotion Ledger</div>
+            </div>
+          </div>
+          <div class="journal-header-actions">
+            <button class="btn btn-outline btn-sm" onclick="exportJournalToCSV()" title="Export Journal Data to CSV">📥 Export CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="refreshDedicatedJournalData()" title="Refresh Ledger Data">🔄 Refresh</button>
+            <button class="modal-close-btn" onclick="closeDedicatedJournalModal()" aria-label="Close Journal">✕</button>
+          </div>
+        </div>
+
+        <!-- KPI Performance Ribbon -->
+        <div class="journal-kpi-ribbon" id="journal-kpi-ribbon">
+          <div class="journal-kpi-card">
+            <span class="j-kpi-label">Net Realized PnL</span>
+            <strong class="j-kpi-value text-green" id="j-kpi-realized-pnl">$0.00</strong>
+            <span class="j-kpi-sub" id="j-kpi-today-pnl">Today: $0.00</span>
+          </div>
+          <div class="journal-kpi-card">
+            <span class="j-kpi-label">Win Rate</span>
+            <strong class="j-kpi-value" id="j-kpi-win-rate">0.0%</strong>
+            <span class="j-kpi-sub" id="j-kpi-win-loss">0W / 0L</span>
+          </div>
+          <div class="journal-kpi-card">
+            <span class="j-kpi-label">Profit Factor</span>
+            <strong class="j-kpi-value text-gold" id="j-kpi-profit-factor">0.00</strong>
+            <span class="j-kpi-sub" id="j-kpi-expectancy">Expectancy: 0.00R</span>
+          </div>
+          <div class="journal-kpi-card">
+            <span class="j-kpi-label">Active / Open</span>
+            <strong class="j-kpi-value" id="j-kpi-open-count">0</strong>
+            <span class="j-kpi-sub" id="j-kpi-unrealized-pnl">Floating: $0.00</span>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="journal-toolbar">
+          <div class="journal-filter-pills" id="journal-status-filters">
+            <button class="j-filter-btn active" data-filter="ALL" onclick="filterJournalByStatus('ALL', this)">All Trades</button>
+            <button class="j-filter-btn" data-filter="OPEN" onclick="filterJournalByStatus('OPEN', this)">🟢 Open Positions</button>
+            <button class="j-filter-btn" data-filter="WON" onclick="filterJournalByStatus('WON', this)">🏆 Winners (TP)</button>
+            <button class="j-filter-btn" data-filter="LOST" onclick="filterJournalByStatus('LOST', this)">🛑 Losses (SL)</button>
+          </div>
+          <div class="journal-search-wrap">
+            <input type="text" id="journal-search-input" class="journal-search-input" placeholder="Search symbol, note, or tag (e.g. XAUUSD, FVG, FOMO)..." oninput="onJournalSearchInput(this.value)">
+          </div>
+        </div>
+
+        <!-- Dynamic Trades Journal Grid -->
+        <div class="journal-trades-container" id="journal-trades-container">
+          <!-- Populated dynamically via renderDedicatedJournalGrid() -->
+        </div>
+      </div>
+    </div>
   </body>
 </html>
