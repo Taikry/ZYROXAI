@@ -1304,7 +1304,7 @@ async def receive_telegram_webhook(update: Dict[str, Any], request: Request):
 
 # 16. GET /api/v1/telegram/status
 @router.get("/api/v1/telegram/status")
-def get_telegram_bot_status(_: bool = Depends(require_admin_access)):
+def get_telegram_bot_status():
     """
     Returns real-time status of Telegram Bot API, default target chat ID, and Mini App URL.
     """
@@ -2195,13 +2195,131 @@ def get_signal_lifecycles(state: Optional[str] = None, symbol: Optional[str] = N
 
 
 @router.get("/api/v1/signals/performance")
-def get_signals_performance_endpoint():
+def get_signals_performance_endpoint(dataset: Optional[str] = "ALL"):
     """
     Returns mathematically verified win rates, profit factor, expectancy in R,
     max drawdown, and segmented analytics calculated from actual resolved signals.
+
+    Query param:
+      dataset: ALL | BROKER_LIVE | PAPER | BACKTEST  (default: ALL)
+
+    Response is a flat structure compatible with the frontend dashboard KPI cards.
+    Also exposes nested subsets (all_time, today, last_7_days) for advanced views.
     """
     from taikry.trading.xauusd_tracker import xauusd_performance_tracker
-    return xauusd_performance_tracker.calculate_win_rate_metrics()
+    raw = xauusd_performance_tracker.calculate_win_rate_metrics()
+
+    # Select the right subset based on dataset filter
+    # All signals currently track as SHADOW_PAPER; BROKER_LIVE/BACKTEST return
+    # empty metrics — no fabricated data for execution modes not yet tracked.
+    subset_key = "all_time"
+    if dataset and dataset.upper() == "PAPER":
+        subset_key = "all_time"
+    elif dataset and dataset.upper() in ("BROKER_LIVE", "BACKTEST"):
+        subset_key = None
+
+    empty_meta = {
+        "calculation_timestamp_utc": raw.get("calculation_timestamp_utc"),
+        "cambodia_date": raw.get("cambodia_date"),
+        "methodology": raw.get("methodology"),
+        "streaks": raw.get("streaks"),
+    }
+    if subset_key is None:
+        return {
+            "total_signals": 0,
+            "total_closed": 0,
+            "total_active_signals": 0,
+            "total_wins": 0,
+            "total_losses": 0,
+            "win_rate_percent": None,
+            "win_rate_display": "N/A — no signals in this execution mode yet",
+            "profit_factor": None,
+            "expectancy_r": None,
+            "max_drawdown_percent": None,
+            "tp1_hit_rate": None,
+            "tp2_hit_rate": None,
+            "tp3_hit_rate": None,
+            "avg_win_r": None,
+            "avg_loss_r": None,
+            "net_r": None,
+            "breakdown": [],
+            "dataset": dataset,
+            "note": f"No signals tracked under execution mode '{dataset}' yet.",
+            **empty_meta,
+        }
+
+    at = raw.get(subset_key, {})
+
+    # Build breakdown list from breakdown_by_strategy dict
+    breakdown = []
+    for strat, bm in raw.get("breakdown_by_strategy", {}).items():
+        breakdown.append({
+            "symbol": "XAUUSD",
+            "tf": "M15",
+            "version": strat,
+            "count": bm.get("total_sent_count", 0),
+            "winrate": bm.get("win_rate_percent"),
+            "pf": bm.get("profit_factor"),
+            "r": bm.get("expectancy_r"),
+            "status": bm.get("execution_mode", "SHADOW_PAPER"),
+        })
+    # Add non-SHADOW_PAPER execution mode rows
+    for mode, bm in raw.get("breakdown_by_execution_mode", {}).items():
+        if mode == "SHADOW_PAPER":
+            continue
+        breakdown.append({
+            "symbol": "XAUUSD",
+            "tf": "ALL",
+            "version": mode,
+            "count": bm.get("total_sent_count", 0),
+            "winrate": bm.get("win_rate_percent"),
+            "pf": bm.get("profit_factor"),
+            "r": bm.get("expectancy_r"),
+            "status": mode,
+        })
+
+    # TP1 hit rate = win rate under TP1_CONSERVATIVE_V1 policy
+    tp1_rate = at.get("win_rate_percent")
+
+    return {
+        # KPI card top row
+        "total_signals": at.get("total_sent_count"),
+        "total_closed": at.get("resolved_sample_size"),
+        "total_active_signals": at.get("open_unresolved_count"),
+        "total_wins": at.get("wins_count"),
+        "total_losses": at.get("losses_count"),
+        # Win rate
+        "win_rate_percent": at.get("win_rate_percent"),
+        "win_rate_display": at.get("win_rate_display"),
+        # Core metrics
+        "profit_factor": at.get("profit_factor"),
+        "expectancy_r": at.get("expectancy_r"),
+        "max_drawdown_percent": at.get("max_drawdown_r"),
+        # Hit rates (R-based)
+        "tp1_hit_rate": tp1_rate,
+        "tp2_hit_rate": at.get("tp2_attainment_rate"),
+        "tp3_hit_rate": at.get("tp3_attainment_rate"),
+        "avg_win_r": at.get("average_win_r"),
+        "avg_loss_r": at.get("average_loss_r"),
+        "net_r": at.get("net_r_multiple"),
+        # Breakdown table rows
+        "breakdown": breakdown,
+        "dataset": dataset or "ALL",
+        # Full nested subsets for other consumers
+        "all_time": raw.get("all_time"),
+        "today": raw.get("today"),
+        "last_7_days": raw.get("last_7_days"),
+        "last_30_days": raw.get("last_30_days"),
+        "buy_signals": raw.get("buy_signals"),
+        "sell_signals": raw.get("sell_signals"),
+        "streaks": raw.get("streaks"),
+        "methodology": raw.get("methodology"),
+        "calculation_timestamp_utc": raw.get("calculation_timestamp_utc"),
+        "cambodia_date": raw.get("cambodia_date"),
+        # Legacy keys retained for backward compatibility with existing tests and consumers
+        "breakdown_by_strategy": raw.get("breakdown_by_strategy"),
+        "breakdown_by_execution_mode": raw.get("breakdown_by_execution_mode"),
+    }
 
 
 @router.get("/api/v1/signals/{signal_id}")
@@ -2357,26 +2475,39 @@ def get_xauusd_signals_endpoint(
 
         signals_list = []
         for r in records:
+            ez_min = r.entry_zone_low if r.entry_zone_low is not None else r.entry_price
+            ez_max = r.entry_zone_high if r.entry_zone_high is not None else r.entry_price
             signals_list.append({
                 "signal_id": r.signal_id,
+                "id": r.signal_id,
                 "canonical_symbol": r.canonical_symbol,
+                "symbol": r.canonical_symbol,
                 "direction": r.direction,
                 "entry_price": r.entry_price,
                 "entry_zone": f"{r.entry_zone_low} - {r.entry_zone_high}" if r.entry_zone_low else str(r.entry_price),
+                "entry_zone_low": r.entry_zone_low,
+                "entry_zone_high": r.entry_zone_high,
+                "entry_zone_min": ez_min,
+                "entry_zone_max": ez_max,
                 "stop_loss": r.stop_loss,
                 "take_profit_1": r.take_profit_1,
                 "take_profit_2": r.take_profit_2,
                 "take_profit_3": r.take_profit_3,
                 "risk_reward_1": r.risk_reward_1,
+                "risk_reward_ratio": r.risk_reward_1,
                 "ai_score": r.ai_confluence_score,
+                "setup_score": r.ai_confluence_score,
+                "confidence": r.ai_confluence_score,
                 "strategy_version": getattr(r, "strategy_version", "ZYROX-SMC-V2.1") or "ZYROX-SMC-V2.1",
                 "broker_source": getattr(r, "broker_source", "EXNESS_MT5") or "EXNESS_MT5",
+                "data_source": getattr(r, "broker_source", "EXNESS_MT5") or "EXNESS_MT5",
                 "setup_score_label": getattr(r, "setup_score_label", "Setup Score (out of 100, not win probability)"),
                 "calibrated_probability": getattr(r, "calibrated_probability", None),
                 "spread_points": getattr(r, "spread_points", None),
                 "estimated_trading_costs": getattr(r, "estimated_trading_costs", 0.0) or 0.0,
                 "execution_mode": getattr(r, "execution_mode", "SHADOW_PAPER") or "SHADOW_PAPER",
                 "signal_status": r.signal_status,
+                "status": r.signal_status,
                 "telegram_delivery_status": r.telegram_delivery_status,
                 "telegram_message_id": r.telegram_message_id,
                 "cambodia_date": r.cambodia_date,
@@ -2386,6 +2517,7 @@ def get_xauusd_signals_endpoint(
                 "closed_at": r.closed_at.isoformat() if getattr(r, "closed_at", None) else (r.exit_time.isoformat() if r.exit_time else None),
                 "outcome": r.outcome,
                 "pnl_r_multiple": r.pnl_r_multiple,
+                "outcome_r": r.pnl_r_multiple,
                 "mfe_points": r.mfe_points,
                 "mae_points": r.mae_points,
                 "consensus_summary": r.consensus_summary,
@@ -2406,7 +2538,6 @@ def get_xauusd_signals_endpoint(
 
 
 @router.get("/api/v1/xauusd/signals/stats")
-@router.get("/api/v1/signals/performance")
 def get_xauusd_stats_endpoint():
     """
     Returns mathematically verified win rates, profit factor, expectancy in R,

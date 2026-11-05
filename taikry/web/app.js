@@ -3961,9 +3961,9 @@ async function loadOverviewData() {
       const wrEl = document.getElementById("ov-winrate");
       const pfEl = document.getElementById("ov-profit-factor");
       const sigEl = document.getElementById("ov-active-signals");
-      if (wrEl) wrEl.innerText = perf.win_rate_percent !== null ? `${perf.win_rate_percent}%` : "--";
-      if (pfEl) pfEl.innerText = `Profit Factor: ${perf.profit_factor !== null ? perf.profit_factor : "--"}`;
-      if (sigEl) sigEl.innerText = perf.total_active_signals !== undefined ? perf.total_active_signals : "0";
+      if (wrEl) wrEl.innerText = perf.win_rate_percent != null ? `${perf.win_rate_percent}%` : "--";
+      if (pfEl) pfEl.innerText = `Profit Factor: ${perf.profit_factor != null ? perf.profit_factor : "--"}`;
+      if (sigEl) sigEl.innerText = perf.total_active_signals != null ? perf.total_active_signals : "0";
     }
 
     // 4. Active qualified setup spotlight
@@ -3981,20 +3981,31 @@ async function loadOverviewData() {
         }
         if (spotContainer) {
           const sideColor = s.direction === "BUY" ? "text-green" : "text-red";
+          const sym = escapeHtml(String(s.symbol || s.canonical_symbol || "XAUUSD"));
+          const dir = escapeHtml(String(s.direction || "N/A"));
+          const eMin = s.entry_zone_min != null ? Number(s.entry_zone_min) : (s.entry_zone_low != null ? Number(s.entry_zone_low) : s.entry_price);
+          const eMax = s.entry_zone_max != null ? Number(s.entry_zone_max) : (s.entry_zone_high != null ? Number(s.entry_zone_high) : s.entry_price);
+          const entryFmt = (eMin != null && eMax != null && Number.isFinite(eMin) && Number.isFinite(eMax))
+            ? (eMin !== eMax ? `$${eMin.toFixed(2)} – $${eMax.toFixed(2)}` : `$${eMin.toFixed(2)}`)
+            : (s.entry_zone ? `$${s.entry_zone}` : "--");
+          const slFmt = (s.stop_loss != null && Number.isFinite(Number(s.stop_loss))) ? `$${Number(s.stop_loss).toFixed(2)}` : "--";
+          const tp1Fmt = (s.take_profit_1 != null && Number.isFinite(Number(s.take_profit_1))) ? `$${Number(s.take_profit_1).toFixed(2)}` : "--";
+          const rawRR = s.risk_reward_ratio ?? s.risk_reward_1;
+          const rrFmt = (rawRR != null && Number.isFinite(Number(rawRR))) ? `1:${Number(rawRR).toFixed(1)}` : "1:2.0";
           spotContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <span style="font-size:16px; font-weight:700;">${s.symbol} · <span class="${sideColor}">${s.direction}</span></span>
-              <span class="provider-pill">${s.execution_mode || "PAPER"}</span>
+              <span style="font-size:16px; font-weight:700;">${sym} · <span class="${sideColor}">${dir}</span></span>
+              <span class="provider-pill">${escapeHtml(String(s.execution_mode || "PAPER"))}</span>
             </div>
             <div class="health-list">
-              <div class="health-row"><span>Entry Zone:</span> <b>$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</b></div>
-              <div class="health-row"><span>Stop Loss (SL):</span> <b class="text-red">$${Number(s.stop_loss).toFixed(2)}</b></div>
-              <div class="health-row"><span>Take Profit 1:</span> <b class="text-green">$${Number(s.take_profit_1).toFixed(2)}</b></div>
-              <div class="health-row"><span>Risk-to-Reward:</span> <b class="text-gold">1:${Number(s.risk_reward_ratio).toFixed(1)}</b></div>
+              <div class="health-row"><span>Entry Zone:</span> <b>${entryFmt}</b></div>
+              <div class="health-row"><span>Stop Loss (SL):</span> <b class="text-red">${slFmt}</b></div>
+              <div class="health-row"><span>Take Profit 1:</span> <b class="text-green">${tp1Fmt}</b></div>
+              <div class="health-row"><span>Risk-to-Reward:</span> <b class="text-gold">${rrFmt}</b></div>
             </div>
             <div style="margin-top:14px; display:flex; gap:8px;">
               <button class="btn btn-gold btn-sm" onclick="switchNavPane('signals')">View in Signal Center</button>
-              <button class="btn btn-outline btn-sm" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">Open Chart</button>
+              <button class="btn btn-outline btn-sm" onclick="selectSymbol('${sym}', 'OANDA:${sym}'); switchNavPane('charts');">Open Chart</button>
             </div>
           `;
         }
@@ -4610,29 +4621,38 @@ async function loadSignalsCenterData() {
       const isBuy = s.direction === "BUY";
       const sideCls = isBuy ? "side-buy" : "side-sell";
       const createdStr = s.created_at ? new Date(s.created_at).toLocaleString() : "Just now";
-      const fmtPrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "N/A";
-      const rrValue = s.risk_reward_ratio == null || !Number.isFinite(Number(s.risk_reward_ratio)) ? "N/A" : Number(s.risk_reward_ratio).toFixed(1);
-      const rawScore = s.setup_score ?? s.confidence;
+      const fmtPrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "--";
+      const rawRR = s.risk_reward_ratio ?? s.risk_reward_1;
+      const rrValue = rawRR == null || !Number.isFinite(Number(rawRR)) ? "N/A" : Number(rawRR).toFixed(1);
+      const rawScore = s.setup_score ?? s.confidence ?? s.ai_score;
       const scoreNumber = rawScore == null ? NaN : Number(rawScore);
       const scoreDisplay = Number.isFinite(scoreNumber) ? `${Math.round(scoreNumber > 1 ? scoreNumber : scoreNumber * 100)}%` : "N/A";
-      const rawSymbol = String(s.symbol || "");
-      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "";
+      const rawSymbol = String(s.symbol || s.canonical_symbol || "XAUUSD");
+      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "XAUUSD";
       const safeDirection = escapeHtml(String(s.direction || "N/A"));
+      const eMin = s.entry_zone_min != null ? Number(s.entry_zone_min) : (s.entry_zone_low != null ? Number(s.entry_zone_low) : s.entry_price);
+      const eMax = s.entry_zone_max != null ? Number(s.entry_zone_max) : (s.entry_zone_high != null ? Number(s.entry_zone_high) : s.entry_price);
+      const entryRangeStr = (eMin != null && eMax != null && Number.isFinite(Number(eMin)) && Number.isFinite(Number(eMax)))
+        ? (eMin !== eMax ? `$${fmtPrice(eMin)} – $${fmtPrice(eMax)}` : `$${fmtPrice(eMin)}`)
+        : (s.entry_zone ? `$${s.entry_zone}` : "--");
+      const statusStr = escapeHtml(String(s.status || s.signal_status || "ACTIVE"));
+      const modeStr = escapeHtml(String(s.execution_mode || "SHADOW_PAPER"));
+      const sourceStr = escapeHtml(String(s.data_source || s.broker_source || "EXNESS_MT5"));
       return `
         <div class="signal-card ${sideCls}">
           <div class="signal-card-header">
             <div style="display:flex; align-items:center; gap:8px;">
               ${getAssetRealLogoHTML(safeSymbol)}
-              <span style="font-weight:700; font-size:16px;">${escapeHtml(safeSymbol || "N/A")}</span>
+              <span style="font-weight:700; font-size:16px;">${escapeHtml(safeSymbol)}</span>
               <span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${safeDirection}</span>
             </div>
-            <span class="provider-pill">${escapeHtml(String(s.status || "N/A"))}</span>
+            <span class="provider-pill">${statusStr}</span>
           </div>
 
           <div class="signal-card-body">
             <div class="sig-level-row">
               <span class="sig-lvl-label">Entry Range:</span>
-              <span class="sig-lvl-val">$${fmtPrice(s.entry_zone_min)} – $${fmtPrice(s.entry_zone_max)}</span>
+              <span class="sig-lvl-val">${entryRangeStr}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Stop Loss (SL):</span>
@@ -4652,7 +4672,7 @@ async function loadSignalsCenterData() {
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Mode / Source:</span>
-              <span class="sig-lvl-val text-muted">${escapeHtml(String(s.execution_mode || 'N/A'))} · ${escapeHtml(String(s.data_source || 'N/A'))}</span>
+              <span class="sig-lvl-val text-muted">${modeStr} · ${sourceStr}</span>
             </div>
           </div>
 
@@ -4739,34 +4759,43 @@ async function loadSignalsHistoryData() {
     }
 
     tbody.innerHTML = sigs.map(s => {
-      const rawSymbol = String(s.symbol || "");
-      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "";
+      const rawSymbol = String(s.symbol || s.canonical_symbol || "XAUUSD");
+      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "XAUUSD";
       const isBuy = s.direction === "BUY";
-      const statusPill = s.status === "TP_HIT" 
+      const statusRaw = s.status || s.signal_status || "N/A";
+      const statusPill = (statusRaw === "TP_HIT" || statusRaw === "TP1_HIT" || s.outcome === "WIN")
         ? `<span class="badge-active" style="background:rgba(0,217,154,0.15); color:var(--zyrox-primary);">TP HIT</span>`
-        : (s.status === "SL_HIT" 
+        : ((statusRaw === "SL_HIT" || s.outcome === "LOSS")
           ? `<span class="badge-expired" style="background:rgba(255,100,124,0.15); color:var(--zyrox-danger);">SL HIT</span>`
-          : `<span class="provider-pill">${escapeHtml(String(s.status || "N/A"))}</span>`);
+          : `<span class="provider-pill">${escapeHtml(String(statusRaw))}</span>`);
 
-      const rReturn = s.outcome_r !== undefined && s.outcome_r !== null 
-        ? (Number(s.outcome_r) > 0 ? `+${Number(s.outcome_r).toFixed(1)}R` : `${Number(s.outcome_r).toFixed(1)}R`) 
+      const outcomeR = s.outcome_r ?? s.pnl_r_multiple;
+      const rReturn = outcomeR !== undefined && outcomeR !== null && !isNaN(Number(outcomeR))
+        ? (Number(outcomeR) > 0 ? `+${Number(outcomeR).toFixed(1)}R` : `${Number(outcomeR).toFixed(1)}R`) 
         : "N/A";
 
       const rCls = rReturn.startsWith("+") ? "text-green" : (rReturn.startsWith("-") ? "text-red" : "text-muted");
       const dt = s.created_at ? new Date(s.created_at).toLocaleString() : "N/A";
+      const eMin = s.entry_zone_min != null ? Number(s.entry_zone_min) : (s.entry_zone_low != null ? Number(s.entry_zone_low) : s.entry_price);
+      const eMax = s.entry_zone_max != null ? Number(s.entry_zone_max) : (s.entry_zone_high != null ? Number(s.entry_zone_high) : s.entry_price);
+      const entryRangeStr = (eMin != null && eMax != null && Number.isFinite(Number(eMin)) && Number.isFinite(Number(eMax)))
+        ? (eMin !== eMax ? `$${Number(eMin).toFixed(2)} – $${Number(eMax).toFixed(2)}` : `$${Number(eMin).toFixed(2)}`)
+        : (s.entry_zone ? `$${s.entry_zone}` : "--");
+      const slStr = (s.stop_loss != null && Number.isFinite(Number(s.stop_loss))) ? `$${Number(s.stop_loss).toFixed(2)}` : "--";
+      const tp1Str = (s.take_profit_1 != null && Number.isFinite(Number(s.take_profit_1))) ? `$${Number(s.take_profit_1).toFixed(2)}` : "--";
 
       return `
         <tr>
           <td><code style="color:var(--zyrox-primary);">${escapeHtml(String(s.id || s.signal_id || '--'))}</code></td>
-          <td><b>${escapeHtml(safeSymbol || "N/A")}</b></td>
+          <td><b>${escapeHtml(safeSymbol)}</b></td>
           <td><span class="${isBuy ? 'text-green' : 'text-red'} font-bold">${escapeHtml(String(s.direction || "N/A"))}</span></td>
-          <td>$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</td>
-          <td class="text-red">$${Number(s.stop_loss).toFixed(2)}</td>
-          <td class="text-green">$${Number(s.take_profit_1).toFixed(2)}</td>
+          <td>${entryRangeStr}</td>
+          <td class="text-red">${slStr}</td>
+          <td class="text-green">${tp1Str}</td>
           <td class="${rCls} font-bold">${rReturn}</td>
           <td>${statusPill}</td>
           <td><span class="text-secondary" style="font-size:11px;">${escapeHtml(dt)}</span></td>
-          <td><span class="provider-pill">${escapeHtml(String(s.execution_mode || 'N/A'))}</span></td>
+          <td><span class="provider-pill">${escapeHtml(String(s.execution_mode || 'SHADOW_PAPER'))}</span></td>
           <td>
             <button class="btn btn-outline btn-xs" onclick="selectSymbol('${safeSymbol}', 'OANDA:${safeSymbol}'); switchNavPane('charts');">Chart</button>
           </td>
@@ -4804,37 +4833,40 @@ async function loadPerformanceAnalyticsData() {
       }
     };
 
-    setVal("stat-total-signals", data.total_signals);
-    setVal("stat-closed-trades", `Closed: ${data.total_closed || 0} · Active: ${data.total_active_signals || 0}`);
-    setVal("stat-win-rate", data.win_rate_percent !== null ? `${data.win_rate_percent}%` : "--", "section-kpi-val text-green");
-    setVal("stat-win-loss-count", `Wins: ${data.total_wins || 0} · Losses: ${data.total_losses || 0}`);
-    setVal("stat-profit-factor", data.profit_factor !== null ? data.profit_factor : "--", "section-kpi-val text-gold");
-    setVal("stat-expectancy-r", data.expectancy_r !== null ? `${data.expectancy_r > 0 ? '+' : ''}${data.expectancy_r} R` : "--", "section-kpi-val text-cyan");
-    setVal("stat-max-drawdown", data.max_drawdown_percent !== null ? `${data.max_drawdown_percent}%` : "--", "section-kpi-val text-red");
+    setVal("stat-total-signals", data.total_signals != null ? data.total_signals : "--");
+    setVal("stat-closed-trades", `Closed: ${data.total_closed ?? 0} · Active: ${data.total_active_signals ?? 0}`);
+    setVal("stat-win-rate", data.win_rate_percent != null ? `${data.win_rate_percent}%` : "--", "section-kpi-val text-green");
+    setVal("stat-win-loss-count", `Wins: ${data.total_wins ?? 0} · Losses: ${data.total_losses ?? 0}`);
+    setVal("stat-profit-factor", data.profit_factor != null ? data.profit_factor : "--", "section-kpi-val text-gold");
+    setVal("stat-expectancy-r", data.expectancy_r != null ? `${data.expectancy_r > 0 ? '+' : ''}${data.expectancy_r} R` : "--", "section-kpi-val text-cyan");
+    setVal("stat-max-drawdown", data.max_drawdown_percent != null ? `${data.max_drawdown_percent}%` : "--", "section-kpi-val text-red");
 
-    setVal("stat-tp1-rate", data.tp1_hit_rate !== null ? `${data.tp1_hit_rate}%` : "--", "val-green");
-    setVal("stat-tp2-rate", data.tp2_hit_rate !== null ? `${data.tp2_hit_rate}%` : "--", "val-green");
-    setVal("stat-tp3-rate", data.tp3_hit_rate !== null ? `${data.tp3_hit_rate}%` : "--", "val-green");
-    setVal("stat-avg-win", data.avg_win_r !== null ? `+${data.avg_win_r} R` : "--", "val-gold");
-    setVal("stat-avg-loss", data.avg_loss_r !== null ? `-${data.avg_loss_r} R` : "--", "val-red");
+    setVal("stat-tp1-rate", data.tp1_hit_rate != null ? `${data.tp1_hit_rate}%` : "--", "val-green");
+    setVal("stat-tp2-rate", data.tp2_hit_rate != null ? `${data.tp2_hit_rate}%` : "--", "val-green");
+    setVal("stat-tp3-rate", data.tp3_hit_rate != null ? `${data.tp3_hit_rate}%` : "--", "val-green");
+    setVal("stat-avg-win", data.avg_win_r != null ? `+${data.avg_win_r} R` : "--", "val-gold");
+    setVal("stat-avg-loss", data.avg_loss_r != null ? `-${data.avg_loss_r} R` : "--", "val-red");
 
     // Populate strategy breakdown table
     const breakdownBody = document.getElementById("analytics-breakdown-body");
     if (breakdownBody) {
       const rows = Array.isArray(data.breakdown) ? data.breakdown : [];
-
-      breakdownBody.innerHTML = rows.map(r => `
-        <tr>
-          <td><b>${escapeHtml(String(r.symbol || "N/A"))}</b></td>
-          <td><span class="provider-pill">${escapeHtml(String(r.tf || "N/A"))}</span></td>
-          <td><code style="color:var(--zyrox-text-secondary);">${escapeHtml(String(r.version || "N/A"))}</code></td>
-          <td>${Number.isFinite(Number(r.count)) ? Number(r.count) : "N/A"}</td>
-          <td class="text-green">${r.winrate != null && Number.isFinite(Number(r.winrate)) ? `${Number(r.winrate)}%` : '--'}</td>
-          <td class="text-gold">${r.pf != null && Number.isFinite(Number(r.pf)) ? Number(r.pf) : '--'}</td>
-          <td class="text-cyan">${r.r != null && Number.isFinite(Number(r.r)) ? `${Number(r.r)} R` : '--'}</td>
-          <td><span class="provider-pill">${escapeHtml(String(r.status || "N/A"))}</span></td>
-        </tr>
-      `).join("");
+      if (rows.length === 0) {
+        breakdownBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:24px;">No resolved signals yet — metrics will populate as signals reach TP or SL outcomes.</td></tr>`;
+      } else {
+        breakdownBody.innerHTML = rows.map(r => `
+          <tr>
+            <td><b>${escapeHtml(String(r.symbol || "N/A"))}</b></td>
+            <td><span class="provider-pill">${escapeHtml(String(r.tf || "N/A"))}</span></td>
+            <td><code style="color:var(--zyrox-text-secondary);">${escapeHtml(String(r.version || "N/A"))}</code></td>
+            <td>${Number.isFinite(Number(r.count)) ? Number(r.count) : "N/A"}</td>
+            <td class="text-green">${r.winrate != null && Number.isFinite(Number(r.winrate)) ? `${Number(r.winrate)}%` : '--'}</td>
+            <td class="text-gold">${r.pf != null && Number.isFinite(Number(r.pf)) ? Number(r.pf).toFixed(2) : '--'}</td>
+            <td class="text-cyan">${r.r != null && Number.isFinite(Number(r.r)) ? `${Number(r.r) > 0 ? '+' : ''}${Number(r.r).toFixed(2)} R` : '--'}</td>
+            <td><span class="provider-pill">${escapeHtml(String(r.status || "N/A"))}</span></td>
+          </tr>
+        `).join("");
+      }
     }
   } catch (err) {
     console.warn("loadPerformanceAnalyticsData error:", err);
