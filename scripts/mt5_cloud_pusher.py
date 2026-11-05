@@ -19,6 +19,7 @@ import json
 import hmac
 import hashlib
 import logging
+import importlib
 from typing import Dict, Any, List, Optional
 import requests
 from dotenv import load_dotenv
@@ -46,6 +47,14 @@ def compute_signature(token: str, timestamp_str: str, body_bytes: bytes) -> str:
     return hmac.new(token.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
+def _load_mt5_module() -> Any:
+    """Dynamically loads MetaTrader5 module without static analysis missing-import errors."""
+    try:
+        return importlib.import_module("MetaTrader5")
+    except ImportError:
+        return None
+
+
 class WindowsMT5CloudPusher:
     """Secure outbound MT5 telemetry transmitter."""
 
@@ -56,11 +65,16 @@ class WindowsMT5CloudPusher:
         self.session.headers.update({"User-Agent": "ZYROX-AI-Windows-MT5-Pusher/2.1.0"})
         self.last_heartbeat_time = 0.0
         self.mt5_initialized = False
+        self.mt5_api: Any = None
 
     def init_mt5_terminal(self) -> bool:
         """Initializes direct MetaTrader5 Python API connection if installed."""
+        mt5 = _load_mt5_module()
+        if mt5 is None:
+            logger.info("MetaTrader5 package not installed; will poll local HTTP bridge at %s", LOCAL_BRIDGE_URL)
+            return False
+
         try:
-            import MetaTrader5 as mt5
             if mt5.initialize():
                 account_info = mt5.account_info()
                 terminal_info = mt5.terminal_info()
@@ -71,19 +85,19 @@ class WindowsMT5CloudPusher:
                     getattr(account_info, "login", "Unknown")
                 )
                 self.mt5_initialized = True
+                self.mt5_api = mt5
                 return True
             else:
                 logger.warning("MT5 initialize() failed. Error: %s", mt5.last_error())
-        except ImportError:
-            logger.info("MetaTrader5 package not installed; will poll local HTTP bridge at %s", LOCAL_BRIDGE_URL)
+        except Exception as e:
+            logger.warning("MT5 initialize() encountered exception: %s", e)
         return False
 
     def fetch_live_tick(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Retrieves newest tick from native MT5 or fallback local bridge."""
-        if self.mt5_initialized:
+        if self.mt5_initialized and self.mt5_api is not None:
             try:
-                import MetaTrader5 as mt5
-                tick = mt5.symbol_info_tick(symbol)
+                tick = self.mt5_api.symbol_info_tick(symbol)
                 if tick:
                     spread = round(abs(tick.ask - tick.bid), 5)
                     return {
