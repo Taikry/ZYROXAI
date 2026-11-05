@@ -56,6 +56,8 @@ def test_chat_reuses_only_a_recent_quant_scan(monkeypatch):
 
 def test_chat_uses_swing_consensus_for_swing_question(monkeypatch):
     monkeypatch.setattr(consensus_engine, "_ANALYSIS_CACHE", {})
+    from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
+    monkeypatch.setattr(xauusd_signal_engine, "get_live_realtime_analysis", lambda **kwargs: None)
     calls = []
     monkeypatch.setattr(
         consensus_engine.ai_consensus_engine,
@@ -83,8 +85,14 @@ def test_unavailable_cloud_provider_is_reported_as_degraded(monkeypatch):
     )
     monkeypatch.setattr(llm_client, "_get_chat_research", lambda *_args: (None, "REFRESHING"))
     monkeypatch.setattr(llm_client, "FREELLMAPI_ENABLED", False)
-    for key in ("GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"):
-        monkeypatch.setattr(llm_client, key, None)
+    all_keys = (
+        "GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY",
+        "MANUS_API_KEY", "ORCAROUTER_API_KEY", "ANYROUTER_API_KEY"
+    )
+    for key in all_keys:
+        if hasattr(llm_client, key):
+            monkeypatch.setattr(llm_client, key, None)
 
     from taikry.data import providers, validator
 

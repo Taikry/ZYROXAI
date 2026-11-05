@@ -116,7 +116,7 @@
         </div>
 
         <!-- Action Quick-Buttons -->
-        <button class="top-action-btn btn-ask-ai" onclick="focusAIChat()" title="Open AI Chat Assistant">
+        <button class="top-action-btn btn-ask-ai" onclick="focusAIChat()" title="Open AI Chat Assistant (Alt+C)">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span id="t-top-ask-ai">Ask AI</span>
         </button>
@@ -124,7 +124,7 @@
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span id="t-top-trade">Paper Trade</span>
         </button>
-        <button class="top-action-btn btn-trade-journal" id="btn-open-trade-journal" onclick="openDedicatedJournalModal()" title="Open Trade Journal & PnL Analytics · សៀវភៅកត់ត្រាការជួញដូរ">
+        <button class="top-action-btn btn-trade-journal" id="btn-open-trade-journal" onclick="openDedicatedJournalModal()" title="Open Trade Journal (Alt+J) · សៀវភៅកត់ត្រាការជួញដូរ">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           <span id="t-top-journal">Journal</span>
         </button>
@@ -193,47 +193,47 @@
       <aside class="terminal-icon-nav" id="icon-nav-sidebar">
         <div class="nav-icon-group">
           <!-- 1. Overview -->
-          <button class="nav-icon-btn active" id="btn-nav-overview" onclick="switchNavPane('overview')" title="Overview Dashboard">
+          <button class="nav-icon-btn active" id="btn-nav-overview" onclick="switchNavPane('overview')" title="Overview Dashboard (Alt+1)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
             <span class="nav-tooltip">1. Overview</span>
           </button>
           <!-- 2. Live Markets -->
-          <button class="nav-icon-btn" id="btn-nav-markets" onclick="switchNavPane('markets')" title="Live Markets Screener">
+          <button class="nav-icon-btn" id="btn-nav-markets" onclick="switchNavPane('markets')" title="Live Markets Screener (Alt+2)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 17V9M12 20V4M6 14v-3"/></svg>
             <span class="nav-tooltip">2. Live Markets</span>
           </button>
           <!-- 3. Advanced Charts -->
-          <button class="nav-icon-btn" id="btn-nav-charts" onclick="switchNavPane('charts')" title="Advanced Interactive Charts">
+          <button class="nav-icon-btn" id="btn-nav-charts" onclick="switchNavPane('charts')" title="Advanced Interactive Charts (Alt+3)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             <span class="nav-tooltip">3. Advanced Charts</span>
           </button>
           <!-- 4. AI Market Analysis -->
-          <button class="nav-icon-btn" id="btn-nav-analysis" onclick="switchNavPane('analysis')" title="AI Market Analysis & SMC">
+          <button class="nav-icon-btn" id="btn-nav-analysis" onclick="switchNavPane('analysis')" title="AI Market Analysis (Alt+4)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
             <span class="nav-tooltip">4. AI Analysis</span>
           </button>
           <!-- 5. Signal Center -->
-          <button class="nav-icon-btn" id="btn-nav-signals" onclick="switchNavPane('signals')" title="Signal Center">
+          <button class="nav-icon-btn" id="btn-nav-signals" onclick="switchNavPane('signals')" title="Signal Center (Alt+5)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             <span class="nav-tooltip">5. Signal Center</span>
           </button>
           <!-- 6. Signal History -->
-          <button class="nav-icon-btn" id="btn-nav-history" onclick="switchNavPane('history')" title="Signal History & Audit Ledger">
+          <button class="nav-icon-btn" id="btn-nav-history" onclick="switchNavPane('history')" title="Signal History (Alt+6)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <span class="nav-tooltip">6. Signal History</span>
           </button>
           <!-- 7. Performance Analytics -->
-          <button class="nav-icon-btn" id="btn-nav-analytics" onclick="switchNavPane('analytics')" title="Performance Analytics">
+          <button class="nav-icon-btn" id="btn-nav-analytics" onclick="switchNavPane('analytics')" title="Performance Analytics (Alt+7)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             <span class="nav-tooltip">7. Performance Analytics</span>
           </button>
           <!-- 8. Economic Calendar -->
-          <button class="nav-icon-btn" id="btn-nav-calendar" onclick="switchNavPane('calendar')" title="Macro Economic Calendar">
+          <button class="nav-icon-btn" id="btn-nav-calendar" onclick="switchNavPane('calendar')" title="Macro Economic Calendar (Alt+8)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <span class="nav-tooltip">8. Economic Calendar</span>
           </button>
           <!-- 9. Watchlist -->
-          <button class="nav-icon-btn" id="btn-nav-watchlist" onclick="switchNavPane('watchlist')" title="Market Watchlist">
+          <button class="nav-icon-btn" id="btn-nav-watchlist" onclick="switchNavPane('watchlist')" title="Market Watchlist (Alt+9)">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             <span class="nav-tooltip">9. Watchlist</span>
           </button>
@@ -1722,6 +1722,7 @@
           </div>
         </div>
 
+        <div id="zyrox-mtf-heatmap-section"></div>
         <div class="section-filter-bar">
           <button class="section-filter-btn active" onclick="filterMarketsTable('ALL', this)">All Instruments (21+)</button>
           <button class="section-filter-btn" onclick="filterMarketsTable('COMMODITIES', this)">Precious Metals (Gold & Silver)</button>
@@ -3412,5 +3413,6 @@
         </div>
       </div>
     </div>
-  </body>
+    <div id="zyrox-toast-container" role="region" aria-label="Notifications" aria-live="polite"></div>
+</body>
 </html>

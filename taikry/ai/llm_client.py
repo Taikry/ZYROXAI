@@ -2198,10 +2198,11 @@ Respond strictly in JSON matching the schema.
         approved_setup=approved_setup,
         query=query,
     )
+    cloud_attempted = prov != "quant"
     return {
-        "status": "SUCCESS",
-        "ai_status": "SUCCESS",
-        "ai_warning": None,
+        "status": "DEGRADED" if cloud_attempted else "SUCCESS",
+        "ai_status": "UNAVAILABLE" if cloud_attempted else "SUCCESS",
+        "ai_warning": "Cloud AI provider unavailable. Showing deterministic quantitative analysis." if cloud_attempted else None,
         "has_photo": bool(image_base64),
         "provider": "multi_agent_fleet",
         "model": "institutional_14_agent_engine",

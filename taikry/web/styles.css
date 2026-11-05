@@ -9,7 +9,18 @@
   --zyrox-surface: #10161B;
   --zyrox-surface-raised: #151E23;
   --zyrox-border: #26333A;
-  --zyrox-primary: #10B981;
+    --zyrox-surface-elevated: #151E23;
+  --zyrox-surface-hover: #152B21;
+  --zyrox-accent: #00D99A;
+  --zyrox-gold: #D4AF37;
+  --zyrox-gold-dim: rgba(212, 175, 55, 0.12);
+  --zyrox-gold-border: rgba(212, 175, 55, 0.35);
+  --zyrox-success: #10B981;
+  --zyrox-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+  --zyrox-radius-sm: 6px;
+  --zyrox-radius-md: 10px;
+  --zyrox-radius-lg: 14px;
+--zyrox-primary: #10B981;
   --zyrox-primary-hover: #34D399;
   --zyrox-text: #F8FAFC;
   --zyrox-text-secondary: #94A3B8;
@@ -11878,4 +11889,387 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   .cockpit-journal-kpi-bar {
     grid-template-columns: repeat(2, 1fr) !important;
   }
+}
+
+
+/* ==========================================================================
+   ZYROX AI V4 — REFINED DESIGN SYSTEM & INSTITUTIONAL COMPONENTS
+   ========================================================================== */
+
+/* 1. Dedicated Toast Notification System */
+#zyrox-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+  width: calc(100vw - 40px);
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  #zyrox-toast-container {
+    top: auto;
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+.zyrox-toast {
+  pointer-events: auto;
+  background: rgba(16, 22, 27, 0.94);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--zyrox-border);
+  border-left: 4px solid var(--zyrox-accent);
+  border-radius: var(--zyrox-radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transform: translateX(110%);
+  opacity: 0;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.zyrox-toast.is-visible {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.zyrox-toast.is-hiding {
+  transform: translateX(120%);
+  opacity: 0;
+}
+
+.zyrox-toast.is-success {
+  border-left-color: var(--zyrox-success);
+}
+
+.zyrox-toast.is-error {
+  border-left-color: var(--zyrox-danger);
+}
+
+.zyrox-toast.is-warning {
+  border-left-color: var(--zyrox-warning);
+}
+
+.zyrox-toast.is-info {
+  border-left-color: var(--zyrox-info);
+}
+
+.zyrox-toast.is-signal {
+  border-left-color: var(--zyrox-accent);
+  background: rgba(10, 28, 20, 0.95);
+}
+
+.zyrox-toast.is-gold {
+  border-left-color: var(--zyrox-gold);
+  border-color: var(--zyrox-gold-border);
+  background: rgba(26, 22, 12, 0.95);
+}
+
+.zyrox-toast-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.zyrox-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.zyrox-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--zyrox-text);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zyrox-toast-sym-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 217, 154, 0.15);
+  color: var(--zyrox-accent);
+  border: 1px solid rgba(0, 217, 154, 0.3);
+}
+
+.zyrox-toast-sym-badge.is-gold {
+  background: var(--zyrox-gold-dim);
+  color: var(--zyrox-gold);
+  border-color: var(--zyrox-gold-border);
+}
+
+.zyrox-toast-message {
+  font-size: 12px;
+  color: var(--zyrox-text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.zyrox-toast-close {
+  background: none;
+  border: none;
+  color: var(--zyrox-text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.zyrox-toast-close:hover {
+  color: var(--zyrox-text);
+}
+
+.zyrox-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  width: 100%;
+  transform-origin: left;
+}
+
+/* 2. Multi-Timeframe Heatmap Matrix */
+.zyrox-mtf-matrix-card {
+  background: var(--zyrox-surface);
+  border: 1px solid var(--zyrox-border);
+  border-radius: var(--zyrox-radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.zyrox-mtf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zyrox-mtf-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--zyrox-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zyrox-mtf-legend {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--zyrox-text-muted);
+  flex-wrap: wrap;
+}
+
+.zyrox-mtf-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zyrox-mtf-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.zyrox-mtf-table-wrap {
+  overflow-x: auto;
+}
+
+.zyrox-mtf-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+.zyrox-mtf-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--zyrox-text-muted);
+  padding: 6px 8px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.zyrox-mtf-table th:first-child {
+  text-align: left;
+  width: 140px;
+}
+
+.zyrox-mtf-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.zyrox-mtf-row:hover td {
+  border-color: rgba(0, 217, 154, 0.4);
+}
+
+.zyrox-mtf-sym-cell {
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--zyrox-text);
+  background: var(--zyrox-surface-elevated);
+  border-radius: var(--zyrox-radius-sm);
+  border: 1px solid var(--zyrox-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zyrox-mtf-cell {
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--zyrox-radius-sm);
+  border: 1px solid transparent;
+  transition: transform 0.12s ease;
+}
+
+.zyrox-mtf-cell:hover {
+  transform: scale(1.05);
+}
+
+.zyrox-mtf-cell.is-strong-bull {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.zyrox-mtf-cell.is-bull {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.zyrox-mtf-cell.is-neutral {
+  background: rgba(100, 116, 139, 0.12);
+  color: #94a3b8;
+  border-color: rgba(100, 116, 139, 0.22);
+}
+
+.zyrox-mtf-cell.is-bear {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.zyrox-mtf-cell.is-strong-bear {
+  background: rgba(239, 68, 68, 0.22);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.zyrox-mtf-score-cell {
+  padding: 6px 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  border-radius: var(--zyrox-radius-sm);
+  background: var(--zyrox-surface-elevated);
+  border: 1px solid var(--zyrox-border);
+}
+
+/* 3. Staged Startup Loader & Pipeline Loader Styles */
+.zyrox-loader-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+  max-width: 380px;
+  width: 100%;
+}
+
+.zyrox-loader-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--zyrox-text-muted);
+  transition: color 0.2s;
+}
+
+.zyrox-loader-stage-item.is-done {
+  color: var(--zyrox-accent);
+}
+
+.zyrox-loader-stage-item.is-active {
+  color: var(--zyrox-text);
+  font-weight: 700;
+}
+
+.zyrox-stage-bullet {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--zyrox-surface-elevated);
+  border: 1px solid var(--zyrox-border);
+  color: var(--zyrox-text-muted);
+}
+
+.zyrox-loader-stage-item.is-done .zyrox-stage-bullet {
+  background: rgba(0, 217, 154, 0.15);
+  border-color: var(--zyrox-accent);
+  color: var(--zyrox-accent);
+}
+
+.zyrox-loader-stage-item.is-active .zyrox-stage-bullet {
+  background: var(--zyrox-accent);
+  border-color: var(--zyrox-accent);
+  color: #070A0D;
+}
+
+.zyrox-loader-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--zyrox-accent);
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile Safe-Area & Touch Target Enhancements */
+@supports (padding: max(0px)) {
+  .mobile-bottom-nav {
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+  .header {
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+  }
+}
+
+.mob-nav-item, .nav-icon-btn, .top-action-btn, .btn-xs, .btn-sm {
+  min-height: 40px;
+  min-width: 40px;
 }

@@ -61,6 +61,7 @@ class RiskValidatorAgent:
         Runs independent risk assessment.
         Returns strict institutional verdict adaptive to selected Risk Profile.
         """
+
         custom_overrides = dict(risk_options or {})
         if min_risk_reward_ratio is not None:
             custom_overrides["min_risk_reward_ratio"] = min_risk_reward_ratio
@@ -108,8 +109,10 @@ class RiskValidatorAgent:
                     ask = float(quote.get("ask"))
                     if math.isfinite(bid) and math.isfinite(ask) and bid > 0 and ask > bid:
                         spread_price = ask - bid
-                        bid_price = bid
-                        ask_price = ask
+                        if bid_price is None or ask_price is None:
+                            if verified_price > 0 and abs(verified_price - ((bid + ask) / 2.0)) / verified_price < 0.05:
+                                bid_price = bid
+                                ask_price = ask
                 except (TypeError, ValueError):
                     spread_price = None
 
@@ -134,6 +137,8 @@ class RiskValidatorAgent:
             rejection_reasons.append("Verified bid/ask spread is unavailable; execution cost cannot be checked.")
             spread_price = None
         validation_checks["spread_price"] = spread_price
+
+
 
         positions_verified = open_positions_count is not None
         if open_positions_count is None:
