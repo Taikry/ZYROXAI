@@ -9,8 +9,8 @@ $url = $env:MAKE_WEBHOOK_URL
 if (-not $url) {
     $envPath = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".env" } else { ".env" }
     if (Test-Path $envPath) {
-        Get-Content $envPath | ForEach-Object {
-            $line = $_.Trim()
+        foreach ($rawLine in (Get-Content $envPath)) {
+            $line = $rawLine.Trim()
             if ($line -match '^MAKE_WEBHOOK_URL\s*=\s*(.+)$') {
                 $url = $matches[1].Trim()
             }
