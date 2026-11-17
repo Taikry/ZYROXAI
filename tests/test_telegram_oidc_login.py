@@ -494,3 +494,28 @@ def test_12_callback_endpoint_full_flow(client):
         session_cookie = resp.cookies[SESSION_COOKIE_NAME]
         assert len(session_cookie) >= 32
 
+
+# =============================================================================
+# 13. TOKEN EXCHANGE ERROR HANDLING (OIDC SPEC ERROR RESPONSES)
+# =============================================================================
+
+def test_13_exchange_code_for_tokens_error_handling():
+    """Verify that exchange_code_for_tokens raises ValueError on error response even with HTTP 200."""
+    from taikry.saas.telegram_oidc import exchange_code_for_tokens
+    
+    mock_client = MagicMock()
+    # Telegram returns 200 OK with {"error": "invalid_grant"}
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"error": "invalid_grant", "error_description": "Authorization code expired"}
+    mock_client.post.return_value = mock_resp
+
+    with pytest.raises(ValueError, match="Telegram token exchange error: Authorization code expired"):
+        exchange_code_for_tokens(
+            code="bad_code",
+            code_verifier="verifier",
+            redirect_uri="http://localhost:8000/callback",
+            http_client=mock_client
+        )
+
+

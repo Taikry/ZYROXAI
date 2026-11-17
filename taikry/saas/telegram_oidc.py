@@ -368,17 +368,26 @@ def exchange_code_for_tokens(
         "User-Agent": "ZYROX-AI-Telegram-OIDC/2.0"
     }
 
-    if http_client:
-        resp = http_client.post(endpoint, data=payload, headers=headers)
+    auth = None
+    if TELEGRAM_LOGIN_CLIENT_ID and TELEGRAM_LOGIN_CLIENT_SECRET:
+        auth = (TELEGRAM_LOGIN_CLIENT_ID, TELEGRAM_LOGIN_CLIENT_SECRET)
+
+    def _process_response(resp: httpx.Response) -> Dict[str, Any]:
         if resp.status_code >= 400:
             raise ValueError(f"Telegram token exchange failed ({resp.status_code}): {resp.text}")
-        return resp.json()
+        data = resp.json()
+        if isinstance(data, dict) and "error" in data:
+            err_msg = data.get("error_description") or data["error"]
+            raise ValueError(f"Telegram token exchange error: {err_msg}")
+        return data
+
+    if http_client:
+        resp = http_client.post(endpoint, data=payload, headers=headers, auth=auth)
+        return _process_response(resp)
 
     with httpx.Client(timeout=15.0, follow_redirects=True) as client:
-        resp = client.post(endpoint, data=payload, headers=headers)
-        if resp.status_code >= 400:
-            raise ValueError(f"Telegram token exchange failed ({resp.status_code}): {resp.text}")
-        return resp.json()
+        resp = client.post(endpoint, data=payload, headers=headers, auth=auth)
+        return _process_response(resp)
 
 
 def validate_id_token(
