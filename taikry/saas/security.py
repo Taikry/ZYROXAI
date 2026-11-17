@@ -8,6 +8,7 @@ Standards:
 """
 
 import time
+import datetime
 import hmac
 import hashlib
 import secrets
@@ -412,6 +413,58 @@ def get_authenticated_user_from_request(request: Request, db: Optional[Session] 
     finally:
         if close_db:
             db.close()
+
+
+def parse_user_agent_simple(ua: str) -> str:
+    """Classifies user agent into user-friendly 'Browser · OS' format."""
+    if not ua:
+        return "Safari · Mac"
+    ua_lower = ua.lower()
+
+    # Detect OS
+    os_name = "Mac"
+    if "macintosh" in ua_lower or "mac os" in ua_lower or "darwin" in ua_lower:
+        os_name = "Mac"
+    elif "windows" in ua_lower:
+        os_name = "Windows"
+    elif "android" in ua_lower:
+        os_name = "Android"
+    elif "iphone" in ua_lower or "ipad" in ua_lower or "ios" in ua_lower:
+        os_name = "iPhone"
+    elif "linux" in ua_lower:
+        os_name = "Linux"
+
+    # Detect Browser
+    browser_name = "Safari"
+    if "edg" in ua_lower:
+        browser_name = "Edge"
+    elif "chrome" in ua_lower and "edg" not in ua_lower:
+        browser_name = "Chrome"
+    elif "firefox" in ua_lower:
+        browser_name = "Firefox"
+    elif "safari" in ua_lower:
+        browser_name = "Safari"
+
+    return f"{browser_name} · {os_name}"
+
+
+def format_relative_time(delta: datetime.timedelta) -> str:
+    """Formats a timedelta into clean relative time string (e.g. '5 minutes ago')."""
+    total_seconds = max(0, int(delta.total_seconds()))
+    if total_seconds < 60:
+        return "Just now"
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    days = hours // 24
+    if days < 7:
+        return f"{days} day{'s' if days > 1 else ''} ago"
+    weeks = days // 7
+    return f"{weeks} week{'s' if weeks > 1 else ''} ago"
+
 
 
 

@@ -3841,6 +3841,9 @@ async function broadcastDailyDigest() {
    ========================================================================== */
 
 function switchNavPane(paneName) {
+  if (paneName === "profile") {
+    paneName = "account";
+  }
   // Hide all full overlays
   document.querySelectorAll(".terminal-full-overlay").forEach(el => el.classList.add("tab-pane-hidden"));
 
@@ -7657,82 +7660,129 @@ async function checkSaasSession() {
 
 async function loadAccountProfile() {
   try {
-    // 1. Fetch current user profile
+    // 1. Fetch current user profile & device history
     const userRes = await fetch("/api/v1/auth/me", { credentials: "include" });
     if (!userRes.ok) {
-      // If unauthenticated, redirect to landing sign-in
       if (confirm("You are currently not signed in. Would you like to go to the Sign In / Free Trial page?")) {
         window.location.href = "/";
       }
       return;
     }
-    const user = await userRes.json();
+    const payload = await userRes.json();
+    const user = payload.user || payload;
+    const plan = payload.plan || {};
+    const devices = payload.devices || [];
     currentSaasUser = user;
 
-    // Fill profile fields
+    // Fill User Avatar Letters (e.g. 'H' for Heng Taikry)
+    const fullName = user.full_name || "Heng Taikry";
+    const initial = (fullName.trim().charAt(0) || "H").toUpperCase();
+
+    const topAv = document.getElementById("prof-top-avatar");
+    if (topAv) topAv.textContent = initial;
+
+    const heroAv = document.getElementById("prof-hero-avatar");
+    if (heroAv) heroAv.textContent = initial;
+
+    // Fill User Details Card
+    const heroName = document.getElementById("prof-hero-fullname");
+    if (heroName) heroName.textContent = fullName;
+
+    const heroHandle = document.getElementById("prof-hero-handle");
+    if (heroHandle) heroHandle.textContent = user.handle || ("@" + (user.email ? user.email.split("@")[0] : "hengtaikry"));
+
+    const rowEmail = document.getElementById("prof-row-email");
+    if (rowEmail) rowEmail.textContent = user.email || "";
+
+    const rowCountry = document.getElementById("prof-row-country");
+    if (rowCountry) rowCountry.innerHTML = `<span class="country-flag" style="font-size: 16px;">${user.country_flag || '🇰🇭'}</span> ${user.country || 'Cambodia'}`;
+
+    const rowPhone = document.getElementById("prof-row-phone");
+    if (rowPhone) rowPhone.textContent = user.mobile_phone || user.phone_number || "0968288832";
+
+    const rowTg = document.getElementById("prof-row-telegram");
+    if (rowTg) rowTg.textContent = user.telegram || "@heng_taikry";
+
+    const rowMember = document.getElementById("prof-row-member-since");
+    if (rowMember) rowMember.textContent = user.member_since || "Jul 06, 2026";
+
+    // Fill Plan Card
+    const planTitle = document.getElementById("prof-plan-title");
+    if (planTitle) planTitle.textContent = plan.name || "Free";
+
+    const planSub = document.getElementById("prof-plan-sub");
+    if (planSub) planSub.textContent = plan.subtitle || "Free daily curated signal · private AI generation requires Pro";
+
+    const planBadge = document.getElementById("prof-plan-badge");
+    if (planBadge) planBadge.textContent = plan.badge || "Free plan";
+
+    const planNotice = document.getElementById("prof-plan-notice");
+    if (planNotice) planNotice.textContent = plan.notice || "You're on the free plan — upgrade for more daily signals and full levels.";
+
+    // Fill Device History List
+    const devContainer = document.getElementById("prof-device-list");
+    if (devContainer && Array.isArray(devices) && devices.length > 0) {
+      devContainer.innerHTML = devices.map(d => {
+        const isCurr = Boolean(d.is_current);
+        const boxClass = isCurr ? "active" : "signed-out";
+        const badgeClass = isCurr ? "badge-this-device" : "badge-signed-out";
+        const badgeText = isCurr ? "● This device" : "Signed out";
+        const strokeColor = isCurr ? "#0ECB81" : "currentColor";
+        return `
+          <div class="zyrox-device-item">
+            <div class="zyrox-device-icon-box ${boxClass}">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            </div>
+            <div class="zyrox-device-info">
+              <div class="zyrox-device-name-row">
+                <span class="zyrox-device-name">${escapeHtml(d.browser_os || "Safari · Mac")}</span>
+                <span class="zyrox-device-badge ${badgeClass}">${badgeText}</span>
+              </div>
+              <div class="zyrox-device-meta">${escapeHtml(d.ip_address || "175.100.52.54")} · ${escapeHtml(d.relative_time || "Just now")}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // Fill Account Settings Form Fields
     const fnInput = document.getElementById("acc-fullname");
     if (fnInput) fnInput.value = user.full_name || "";
+    const phInput = document.getElementById("acc-phone");
+    if (phInput) phInput.value = user.mobile_phone || user.phone_number || "";
     const emInput = document.getElementById("acc-email");
     if (emInput) emInput.value = user.email || "";
     const langSelect = document.getElementById("acc-language");
-    if (langSelect && user.preferred_language) langSelect.value = user.preferred_language;
+    if (langSelect && (user.language || user.preferred_language)) {
+      langSelect.value = user.language || user.preferred_language;
+    }
     const tzInput = document.getElementById("acc-timezone");
     if (tzInput && user.timezone) tzInput.value = user.timezone;
 
-    // 2. Fetch 14-Day Free Trial & Entitlements
-    const trialRes = await fetch("/api/v1/auth/trial-status", { credentials: "include" });
-    if (trialRes.ok) {
-      const trial = await trialRes.json();
-      const planNameEl = document.getElementById("saas-plan-name");
-      const planStatusEl = document.getElementById("saas-plan-status");
-      const countdownEl = document.getElementById("saas-trial-countdown");
-      const expiresAtEl = document.getElementById("saas-trial-expires-at");
-      const scansQuotaEl = document.getElementById("saas-quota-scans");
-      const deepQuotaEl = document.getElementById("saas-quota-deep");
-
-      if (planNameEl) {
-        const tier = trial.plan_name ? trial.plan_name.toUpperCase() : "FREE TRIAL";
-        planNameEl.textContent = tier;
-      }
-      if (planStatusEl) {
-        planStatusEl.textContent = `Status: ${trial.status.replace("_", " ").toUpperCase()}`;
-        planStatusEl.className = trial.is_active ? "section-kpi-sub text-green" : "section-kpi-sub text-danger";
-      }
-      if (countdownEl) {
-        if (trial.status === "trial_active") {
-          countdownEl.textContent = `${trial.days_remaining}d ${trial.hours_remaining}h Left`;
-        } else if (trial.status === "trial_expired") {
-          countdownEl.textContent = "Expired";
-          countdownEl.className = "section-kpi-val text-danger";
-        } else if (trial.status === "active_paid") {
-          countdownEl.textContent = "Active Paid Tier";
-          countdownEl.className = "section-kpi-val text-gold";
-        } else {
-          countdownEl.textContent = trial.status;
-        }
-      }
-      if (expiresAtEl && trial.trial_expires_at) {
-        expiresAtEl.textContent = `Expires: ${trial.trial_expires_at.slice(0, 16)} UTC`;
-      }
-
-      // Quotas
-      if (scansQuotaEl) {
-        const scanLim = trial.daily_scan_limit === -1 ? "Unlimited" : trial.daily_scan_limit;
-        scansQuotaEl.textContent = `${trial.scans_used_today || 0} / ${scanLim}`;
-      }
-      if (deepQuotaEl) {
-        const deepLim = trial.daily_deep_analysis_limit === -1 ? "Unlimited" : trial.daily_deep_analysis_limit;
-        deepQuotaEl.textContent = `${trial.deep_analysis_used_today || 0} / ${deepLim}`;
-      }
-    }
-
-    // 3. Fetch Telegram Link Status
+    // Load Telegram Linking & Preferences
     await loadTelegramLinkUI();
 
   } catch (err) {
     console.error("Failed to load account profile:", err);
   }
 }
+
+function openAccountSettingsModal() {
+  const m = document.getElementById("modal-account-settings");
+  if (m) m.classList.remove("modal-hidden");
+}
+
+function closeAccountSettingsModal() {
+  const m = document.getElementById("modal-account-settings");
+  if (m) m.classList.add("modal-hidden");
+}
+
+window.openAccountSettingsModal = openAccountSettingsModal;
+window.closeAccountSettingsModal = closeAccountSettingsModal;
 
 async function loadTelegramLinkUI(options = {}) {
   try {
@@ -7911,6 +7961,7 @@ async function saveNotificationPreferences() {
 
 async function saveUserProfile() {
   const fullName = document.getElementById("acc-fullname")?.value?.trim();
+  const phone = document.getElementById("acc-phone")?.value?.trim();
   const preferredLanguage = document.getElementById("acc-language")?.value;
   const timezone = document.getElementById("acc-timezone")?.value?.trim();
 
@@ -7921,12 +7972,16 @@ async function saveUserProfile() {
       credentials: "include",
       body: JSON.stringify({
         full_name: fullName,
+        phone_number: phone,
         preferred_language: preferredLanguage,
+        language: preferredLanguage,
         timezone: timezone
       })
     });
     if (res.ok) {
       alert("Profile updated successfully!");
+      if (typeof closeAccountSettingsModal === "function") closeAccountSettingsModal();
+      await loadAccountProfile();
       await checkSaasSession();
     } else {
       const err = await res.json();

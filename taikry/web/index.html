@@ -2721,178 +2721,147 @@
         </div>
 
       </div>
+    </div>
       <!-- ==========================================================================
-           14. SAAS ACCOUNT, 14-DAY FREE TRIAL & TELEGRAM LINKING
+           14. USER PROFILE, SUBSCRIPTION PLAN & DEVICE HISTORY (V6.1 SPEC)
            ========================================================================== -->
-      <div id="tab-pane-account" class="terminal-full-overlay tab-pane-hidden">
-        <div class="overlay-header">
-          <div>
-            <div class="overlay-title">
-              <svg class="top-btn-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span>14. SaaS Account, 14-Day Free Trial & Telegram Intelligence</span>
-            </div>
-            <div class="overlay-subtitle">Live subscription entitlements, AI scan quota usage, Telegram alert linkage & credentials</div>
-          </div>
-          <div class="overlay-header-actions">
-            <a class="btn btn-outline btn-sm" href="/dashboard/billing.html">💳 Plans &amp; Billing</a>
-            <button class="btn btn-outline btn-sm" onclick="loadAccountProfile()">🔄 Refresh</button>
-            <button class="btn btn-danger btn-sm" onclick="handleUserLogout()">🚪 Sign Out</button>
-            <button class="btn-close-overlay" onclick="switchNavPane('charts')">✕ Back to Terminal</button>
-          </div>
-        </div>
+      <div id="tab-pane-account" class="terminal-full-overlay tab-pane-hidden" style="background: #070A0D; overflow-y: auto;">
+        <div class="zyrox-profile-wrapper">
 
-        <!-- KPI Grid: Trial Status & Real-Time Daily Quotas -->
-        <div class="section-kpi-grid">
-          <div class="section-kpi-card">
-            <div class="section-kpi-label">Subscription Tier</div>
-            <div class="section-kpi-val text-gold" id="saas-plan-name">14-Day Free Trial</div>
-            <div class="section-kpi-sub" id="saas-plan-status">Status: Active</div>
-          </div>
-          <div class="section-kpi-card">
-            <div class="section-kpi-label">Trial Expiration</div>
-            <div class="section-kpi-val text-green" id="saas-trial-countdown">14 Days Left</div>
-            <div class="section-kpi-sub" id="saas-trial-expires-at">Calculating UTC...</div>
-          </div>
-          <div class="section-kpi-card">
-            <div class="section-kpi-label">Daily Standard Scans</div>
-            <div class="section-kpi-val text-cyan" id="saas-quota-scans">0 / 5</div>
-            <div class="section-kpi-sub">Resets 00:00 UTC daily</div>
-          </div>
-          <div class="section-kpi-card">
-            <div class="section-kpi-label">9-Agent Deep Analysis</div>
-            <div class="section-kpi-val text-gold" id="saas-quota-deep">0 / 1</div>
-            <div class="section-kpi-sub">AnyRouter Multi-Agent Quota</div>
-          </div>
-        </div>
-
-        <!-- Profile & Entitlement Grid -->
-        <div class="overview-grid mt-20">
-          <!-- Column 1: Profile & Password -->
-          <div class="section-card">
-            <div class="section-card-title">
-              <span>👤 User Profile & Language</span>
-            </div>
-            <div class="vip-grant-form-grid">
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-fullname">Full Name</label>
-                <input type="text" class="vip-input-field" id="acc-fullname" placeholder="Trader Name">
+          <!-- Top Bar Header -->
+          <div class="zyrox-profile-topbar">
+            <button class="zyrox-profile-candlestick-btn" onclick="switchNavPane('charts')" title="Back to Charts / Terminal">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <rect x="5" y="6" width="6" height="11" rx="1" fill="#000000"/>
+                <line x1="8" y1="17" x2="8" y2="22"/>
+                <line x1="16" y1="4" x2="16" y2="8"/>
+                <rect x="13" y="8" width="6" height="8" rx="1"/>
+                <line x1="16" y1="16" x2="16" y2="20"/>
+              </svg>
+            </button>
+            <div class="zyrox-profile-topbar-title">Profile</div>
+            <div class="zyrox-profile-topbar-actions">
+              <a href="javascript:void(0)" onclick="switchNavPane('support')" class="zyrox-profile-help-link" title="Help & Support">?</a>
+              <div class="zyrox-profile-bell-btn" onclick="switchNavPane('signals')" title="Notifications & Signals">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span class="zyrox-bell-badge">3</span>
               </div>
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-email">Email Address</label>
-                <input type="email" class="vip-input-field input-readonly-dim" id="acc-email" readonly>
-              </div>
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-language">Terminal Language</label>
-                <select class="vip-input-field" id="acc-language">
-                  <option value="en">English (Institutional)</option>
-                  <option value="kh">ភាសាខ្មែរ (Khmer Natural)</option>
-                </select>
-              </div>
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-timezone">Timezone</label>
-                <input type="text" class="vip-input-field" id="acc-timezone" value="Asia/Phnom_Penh (UTC+7)">
-              </div>
-            </div>
-            <div class="mt-14">
-              <button class="btn btn-gold btn-sm" onclick="saveUserProfile()">💾 Update Profile</button>
-            </div>
-
-            <!-- Password Update Box -->
-            <div class="section-card-title mt-20 card-title-bordered">
-              <span>🔑 Change Account Password</span>
-            </div>
-            <div class="vip-grant-form-grid grid-2col-mt10">
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-old-pass">Current Password</label>
-                <input type="password" class="vip-input-field" id="acc-old-pass" placeholder="••••••••">
-              </div>
-              <div class="vip-input-wrap">
-                <label class="vip-input-label" for="acc-new-pass">New Password (Min 8 Chars)</label>
-                <input type="password" class="vip-input-field" id="acc-new-pass" placeholder="••••••••">
-              </div>
-            </div>
-            <div class="mt-12">
-              <button class="btn btn-outline btn-sm" onclick="updateUserPassword()">🛡 Change Password</button>
+              <div class="zyrox-profile-mini-avatar" id="prof-top-avatar" onclick="openAccountSettingsModal()" title="Account Settings">H</div>
             </div>
           </div>
 
-          <!-- Column 2: Telegram Account Linking & Granular Alerts -->
-          <div class="section-card">
-            <div class="section-card-title">
-              <span>✈️ Telegram Intelligence Webhook Linking</span>
-              <span class="badge badge-telegram-unlinked" id="saas-telegram-status-badge">NOT LINKED</span>
+          <!-- Card 1: YOUR PLAN -->
+          <div class="zyrox-profile-card">
+            <div class="zyrox-plan-kicker">YOUR PLAN</div>
+            <div class="zyrox-plan-title" id="prof-plan-title">Free</div>
+            <div class="zyrox-plan-sub" id="prof-plan-sub">Free daily curated signal · private AI generation requires Pro</div>
+            <div class="zyrox-plan-badge-pill" id="prof-plan-badge">Free plan</div>
+            <p class="zyrox-plan-notice" id="prof-plan-notice">You're on the free plan — upgrade for more daily signals and full levels.</p>
+            <button class="zyrox-btn-upgrade-plan" onclick="showPlansModal()">Upgrade plan</button>
+          </div>
+
+          <!-- Card 2: User Identity & Details -->
+          <div class="zyrox-profile-card">
+            <div class="zyrox-user-hero">
+              <div class="zyrox-user-avatar-large" id="prof-hero-avatar">H</div>
+              <div class="zyrox-user-hero-meta">
+                <div class="zyrox-user-hero-name" id="prof-hero-fullname">Heng Taikry</div>
+                <div class="zyrox-user-hero-handle" id="prof-hero-handle">@hengtaikry</div>
+              </div>
             </div>
-            <p class="telegram-unlinked-desc mt-12" id="saas-signal-plan-status" role="status" aria-live="polite">
-              Signal delivery requires an active plan with Telegram alerts, a linked Telegram account, and signal alerts enabled.
+            <button class="zyrox-btn-account-settings" onclick="openAccountSettingsModal()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              Account settings
+            </button>
+            <div class="zyrox-profile-rows-list">
+              <div class="zyrox-profile-row">
+                <span class="zyrox-profile-row-label">Email</span>
+                <div class="zyrox-profile-row-val-group">
+                  <span class="zyrox-profile-row-val" id="prof-row-email">hengtaikry@gmail.com</span>
+                  <span class="zyrox-verified-badge" id="prof-verified-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Verified
+                  </span>
+                </div>
+              </div>
+              <div class="zyrox-profile-row">
+                <span class="zyrox-profile-row-label">Country</span>
+                <span class="zyrox-profile-row-val" id="prof-row-country">
+                  <span class="country-flag" style="font-size: 16px;">🇰🇭</span> Cambodia
+                </span>
+              </div>
+              <div class="zyrox-profile-row">
+                <span class="zyrox-profile-row-label">Mobile phone</span>
+                <span class="zyrox-profile-row-val" id="prof-row-phone">0968288832</span>
+              </div>
+              <div class="zyrox-profile-row">
+                <span class="zyrox-profile-row-label">Telegram</span>
+                <span class="zyrox-profile-row-val" id="prof-row-telegram">@heng_taikry</span>
+              </div>
+              <div class="zyrox-profile-row">
+                <span class="zyrox-profile-row-label">Member since</span>
+                <span class="zyrox-profile-row-val" id="prof-row-member-since">Jul 06, 2026</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Device history -->
+          <div class="zyrox-profile-card">
+            <div class="zyrox-card-header-iconic">
+              <svg class="zyrox-shield-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ECB81" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span class="zyrox-card-title-text">Device history</span>
+            </div>
+            <p class="zyrox-device-explainer">
+              Recent sign-ins to your account. One device can be signed in at a time — a new login signs the previous device out.
             </p>
-            <div class="pref-checkbox-list mt-12">
-              <label class="pref-checkbox-label">
-                <input type="checkbox" id="pref-paper-trades" checked> TP/SL paper-trade alerts by email (if configured) or linked Telegram · ការជូនដំណឹង TP/SL តាម Email ឬ Telegram ដែលបានភ្ជាប់
-              </label>
-            </div>
-            <div class="mt-8">
-              <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
-            </div>
-
-            <div id="saas-telegram-unlinked-box" class="mt-12">
-              <p class="telegram-unlinked-desc">
-                A secure pairing link is prepared automatically after sign-in. Open the bot link and press Start in Telegram to confirm; the website cannot connect your Telegram account without that confirmation. / គេហទំព័របង្កើតតំណភ្ជាប់សុវត្ថិភាពដោយស្វ័យប្រវត្តិបន្ទាប់ពីចូលគណនី។ សូមបើកតំណ bot ហើយចុច Start ក្នុង Telegram ដើម្បីបញ្ជាក់។
-              </p>
-              <div class="mt-14">
-                <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">🔗 Generate a New Pairing Link</button>
+            <div class="zyrox-device-list" id="prof-device-list">
+              <div class="zyrox-device-item">
+                <div class="zyrox-device-icon-box active">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                </div>
+                <div class="zyrox-device-info">
+                  <div class="zyrox-device-name-row">
+                    <span class="zyrox-device-name">Safari · Mac</span>
+                    <span class="zyrox-device-badge badge-this-device">● This device</span>
+                  </div>
+                  <div class="zyrox-device-meta">175.100.52.54 · 5 minutes ago</div>
+                </div>
               </div>
-              <div id="saas-telegram-token-display" class="telegram-pairing-box hidden-initially">
-                <label for="saas-telegram-link-url" class="telegram-pairing-title" id="saas-telegram-pairing-label">Secure 15-Minute One-Time Pairing Link:</label>
-                <div class="flex-gap-8">
-                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field telegram-link-input" placeholder="https://t.me/..." title="Secure One-Time Telegram Pairing Link" aria-labelledby="saas-telegram-pairing-label">
-                  <button class="btn btn-outline btn-xs" onclick="copyTelegramLink()">📋 Copy</button>
-                  <a id="saas-telegram-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-xs">🚀 Open Bot</a>
+              <div class="zyrox-device-item">
+                <div class="zyrox-device-icon-box signed-out">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                </div>
+                <div class="zyrox-device-info">
+                  <div class="zyrox-device-name-row">
+                    <span class="zyrox-device-name">Safari · Mac</span>
+                    <span class="zyrox-device-badge badge-signed-out">Signed out</span>
+                  </div>
+                  <div class="zyrox-device-meta">175.100.52.244 · 1 week ago</div>
                 </div>
               </div>
             </div>
-
-            <div id="saas-telegram-linked-box" class="mt-12 hidden-initially">
-              <div class="telegram-linked-header">
-                <div>
-                  <div class="telegram-user-title" id="saas-telegram-user-display">@username</div>
-                  <div class="telegram-chatid-text" id="saas-telegram-chatid-display">Chat ID: --</div>
-                </div>
-                <button class="btn btn-danger btn-xs" onclick="unlinkTelegramAccount()">Disconnect</button>
-              </div>
-
-              <!-- Notification Preferences -->
-              <div class="mt-16">
-                <div class="pref-group-title">Granular Alert Preferences:</div>
-                <div class="pref-checkbox-list">
-                  <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
-                  </label>
-                  <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-risk" checked> Stop, Expiry & Invalidation Alerts
-                  </label>
-                  <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
-                  </label>
-                  <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-briefing" checked> Daily Morning Market Intelligence Briefing
-                  </label>
-                  <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-trial" checked> 14-Day Free Trial Expiration Reminders
-                  </label>
-                </div>
-                <div class="mt-12">
-                  <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Danger Zone: Delete Account -->
-            <div class="mt-24-bordered">
-              <div class="danger-zone-title">Danger Zone:</div>
-              <p class="danger-zone-desc">Permanently delete your account, session credentials, and associated data.</p>
-              <button class="btn btn-danger btn-xs" onclick="confirmDeleteAccount()">🗑️ Delete Account</button>
+            <div class="zyrox-device-footnote">
+              Don't recognize a sign-in? Change your password in <a href="javascript:void(0)" onclick="openAccountSettingsModal()">Account settings</a> — that keeps your account safe, and your next login signs everything else out.
             </div>
           </div>
+
         </div>
       </div>
 
@@ -3557,6 +3526,147 @@
         </div>
       </div>
     </div>
+
+    <!-- ==========================================================================
+         ACCOUNT SETTINGS & SECURITY MODAL DIALOG
+         ========================================================================== -->
+    <div class="modal-backdrop modal-hidden" id="modal-account-settings" role="dialog" aria-modal="true" aria-labelledby="acc-settings-modal-title">
+      <div class="modal-card zyrox-account-modal-card">
+        <div class="modal-header">
+          <div class="modal-title" id="acc-settings-modal-title">⚙️ <span>Account Settings & Security</span></div>
+          <button class="modal-close-btn" onclick="closeAccountSettingsModal()">✕</button>
+        </div>
+
+        <div class="zyrox-settings-content">
+          <!-- 1. Profile Details -->
+          <div class="zyrox-settings-section-title">👤 Personal Details</div>
+          <div class="vip-grant-form-grid">
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-fullname">Full Name</label>
+              <input type="text" class="vip-input-field" id="acc-fullname" placeholder="Heng Taikry">
+            </div>
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-phone">Mobile Phone</label>
+              <input type="text" class="vip-input-field" id="acc-phone" placeholder="0968288832">
+            </div>
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-email">Email Address</label>
+              <input type="email" class="vip-input-field input-readonly-dim" id="acc-email" readonly>
+            </div>
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-language">Preferred Language</label>
+              <select class="vip-input-field" id="acc-language">
+                <option value="en">English (Institutional)</option>
+                <option value="kh">ភាសាខ្មែរ (Khmer Natural)</option>
+              </select>
+            </div>
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-timezone">Timezone</label>
+              <input type="text" class="vip-input-field" id="acc-timezone" value="Asia/Phnom_Penh (UTC+7)">
+            </div>
+          </div>
+          <div class="mt-12">
+            <button class="btn btn-gold btn-sm" onclick="saveUserProfile()">💾 Save Profile Changes</button>
+          </div>
+
+          <!-- 2. Password Security -->
+          <div class="zyrox-settings-section-title">🔑 Change Account Password</div>
+          <div class="vip-grant-form-grid grid-2col-mt10">
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-old-pass">Current Password</label>
+              <input type="password" class="vip-input-field" id="acc-old-pass" placeholder="••••••••">
+            </div>
+            <div class="vip-input-wrap">
+              <label class="vip-input-label" for="acc-new-pass">New Password (Min 8 Chars)</label>
+              <input type="password" class="vip-input-field" id="acc-new-pass" placeholder="••••••••">
+            </div>
+          </div>
+          <div class="mt-12">
+            <button class="btn btn-outline btn-sm" onclick="updateUserPassword()">🛡 Change Password</button>
+          </div>
+
+          <!-- 3. Telegram Intelligence Pairing -->
+          <div class="zyrox-settings-section-title">✈️ Telegram Intelligence Webhook</div>
+          <div id="saas-telegram-status-badge-wrap" class="mb-10">
+            <span class="badge badge-telegram-unlinked" id="saas-telegram-status-badge">NOT LINKED</span>
+          </div>
+          <p class="telegram-unlinked-desc" id="saas-signal-plan-status" role="status" aria-live="polite">
+            Signal delivery requires an active plan with Telegram alerts, a linked Telegram account, and signal alerts enabled.
+          </p>
+          <div id="saas-telegram-unlinked-box" class="mt-10">
+            <p class="telegram-unlinked-desc">
+              Pair your Telegram account to receive instant institutional trade setups, invalidation alerts, and TP/SL execution notifications.
+            </p>
+            <div class="mt-10">
+              <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">🔗 Generate Telegram Pairing Link</button>
+            </div>
+            <div id="saas-telegram-token-display" class="telegram-pairing-box hidden-initially mt-10">
+              <label for="saas-telegram-link-url" class="telegram-pairing-title">One-Time Pairing Link:</label>
+              <div class="flex-gap-8 mt-6">
+                <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field telegram-link-input" placeholder="https://t.me/...">
+                <button class="btn btn-outline btn-xs" onclick="copyTelegramLink()">📋 Copy</button>
+                <a id="saas-telegram-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-xs">🚀 Open Bot</a>
+              </div>
+            </div>
+          </div>
+          <div id="saas-telegram-linked-box" class="hidden-initially mt-10">
+            <div class="telegram-linked-header">
+              <div>
+                <div class="telegram-user-title" id="saas-telegram-user-display">@username</div>
+                <div class="telegram-chatid-text" id="saas-telegram-chatid-display">Chat ID: --</div>
+              </div>
+              <button class="btn btn-danger btn-xs" onclick="unlinkTelegramAccount()">Disconnect</button>
+            </div>
+
+            <!-- Granular Alert Preferences -->
+            <div class="mt-16">
+              <div class="pref-group-title">Granular Alert Preferences:</div>
+              <div class="pref-checkbox-list">
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
+                </label>
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-risk" checked> Stop, Expiry &amp; Invalidation Alerts
+                </label>
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
+                </label>
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-briefing" checked> Daily Morning Market Intelligence Briefing
+                </label>
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-trial" checked> 14-Day Free Trial Expiration Reminders
+                </label>
+                <label class="pref-checkbox-label">
+                  <input type="checkbox" id="pref-paper-trades" checked> TP/SL paper-trade alerts
+                </label>
+              </div>
+              <div class="mt-12">
+                <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Danger Zone -->
+          <div class="zyrox-settings-section-title text-danger">⚠️ Danger Zone</div>
+          <div class="flex-between align-center" style="padding: 12px 0;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px;">Sign Out All Sessions</div>
+              <div class="text-muted text-xs">Terminate your active session and return to landing page.</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="handleUserLogout()">🚪 Sign Out</button>
+          </div>
+          <div class="flex-between align-center mt-12" style="border-top: 1px solid #1E252D; padding-top: 12px;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; color: #EF4444;">Delete Account</div>
+              <div class="text-muted text-xs">Permanently delete your account, session credentials, and data.</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteAccount()">🗑️ Delete Account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="zyrox-toast-container" role="region" aria-label="Notifications" aria-live="polite"></div>
 </body>
 </html>

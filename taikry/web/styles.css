@@ -12454,3 +12454,437 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   min-height: 40px;
   min-width: 40px;
 }
+
+/* ==========================================================================
+   ZYROX AI USER PROFILE & DEVICE HISTORY (V6.1 SPEC)
+   Matches Exact Institutional Mobile/Desktop Specification
+   ========================================================================== */
+
+.zyrox-profile-wrapper {
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 12px 64px 12px;
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  box-sizing: border-box;
+}
+
+/* Top Bar */
+.zyrox-profile-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px 18px 4px;
+}
+
+.zyrox-profile-candlestick-btn {
+  background: #FFFFFF;
+  color: #000000;
+  border: none;
+  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.zyrox-profile-candlestick-btn:hover {
+  transform: scale(1.04);
+  opacity: 0.95;
+}
+
+.zyrox-profile-topbar-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.2px;
+}
+
+.zyrox-profile-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.zyrox-profile-help-link {
+  color: #94A3B8;
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.15s;
+}
+.zyrox-profile-help-link:hover {
+  color: #FFFFFF;
+}
+
+.zyrox-profile-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #94A3B8;
+  padding: 4px;
+  transition: color 0.15s;
+}
+.zyrox-profile-bell-btn:hover {
+  color: #FFFFFF;
+}
+
+.zyrox-bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  background: #FF3B30;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 9999px;
+  padding: 0 4px;
+  border: 1.5px solid #070A0D;
+}
+
+.zyrox-profile-mini-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #F05423;
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(240, 84, 35, 0.4);
+}
+
+/* Profile Card Box */
+.zyrox-profile-card {
+  background: #111417;
+  border: 1px solid #1E2329;
+  border-radius: 20px;
+  padding: 24px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Plan Card */
+.zyrox-plan-kicker {
+  color: #E5B869;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.zyrox-plan-title {
+  color: #FFFFFF;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin-bottom: 8px;
+}
+
+.zyrox-plan-sub {
+  color: #94A3B8;
+  font-size: 14px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.zyrox-plan-badge-pill {
+  display: inline-block;
+  background: #1A2026;
+  border: 1px solid #28323C;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  color: #CBD5E1;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 18px;
+}
+
+.zyrox-plan-notice {
+  color: #94A3B8;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0 0 18px 0;
+}
+
+.zyrox-btn-upgrade-plan {
+  display: inline-block;
+  background: #FFFFFF;
+  color: #000000;
+  border: none;
+  border-radius: 9999px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.zyrox-btn-upgrade-plan:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+/* User Identity Hero */
+.zyrox-user-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.zyrox-user-avatar-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #F05423;
+  color: #FFFFFF;
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(240, 84, 35, 0.35);
+}
+
+.zyrox-user-hero-name {
+  color: #FFFFFF;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  margin-bottom: 3px;
+}
+
+.zyrox-user-hero-handle {
+  color: #94A3B8;
+  font-size: 14.5px;
+}
+
+/* Full Width White Account Settings Button */
+.zyrox-btn-account-settings {
+  width: 100%;
+  height: 44px;
+  background: #FFFFFF;
+  color: #000000;
+  border: none;
+  border-radius: 9999px;
+  font-size: 14.5px;
+  font-weight: 700;
+  margin-top: 20px;
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.zyrox-btn-account-settings:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+/* User Key-Value Rows */
+.zyrox-profile-rows-list {
+  border-top: 1px solid #1C2229;
+}
+
+.zyrox-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid #1C2229;
+}
+.zyrox-profile-row:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+.zyrox-profile-row-label {
+  color: #94A3B8;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.zyrox-profile-row-val {
+  color: #FFFFFF;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zyrox-profile-row-val-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zyrox-verified-badge {
+  background: rgba(14, 203, 129, 0.12);
+  color: #0ECB81;
+  border: 1px solid rgba(14, 203, 129, 0.3);
+  border-radius: 9999px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Device History Card */
+.zyrox-card-header-iconic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.zyrox-card-title-text {
+  color: #FFFFFF;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.zyrox-device-explainer {
+  color: #94A3B8;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0 0 20px 0;
+}
+
+.zyrox-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.zyrox-device-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.zyrox-device-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.zyrox-device-icon-box.active {
+  background: rgba(14, 203, 129, 0.08);
+  border: 1px solid rgba(14, 203, 129, 0.35);
+  color: #0ECB81;
+}
+.zyrox-device-icon-box.signed-out {
+  background: #181C22;
+  border: 1px solid #28313A;
+  color: #94A3B8;
+}
+
+.zyrox-device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.zyrox-device-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zyrox-device-name {
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zyrox-device-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+}
+.zyrox-device-badge.badge-this-device {
+  background: rgba(14, 203, 129, 0.12);
+  color: #0ECB81;
+}
+.zyrox-device-badge.badge-signed-out {
+  background: #1E252D;
+  color: #94A3B8;
+}
+
+.zyrox-device-meta {
+  color: #94A3B8;
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.zyrox-device-footnote {
+  color: #94A3B8;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 20px;
+}
+.zyrox-device-footnote a {
+  color: #FFFFFF;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Account Settings Modal Dialog */
+.zyrox-account-modal-card {
+  max-width: 580px;
+  width: 92%;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #111417;
+  border: 1px solid #232B34;
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.zyrox-settings-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #E2E8F0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: 22px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #1E252D;
+  padding-bottom: 6px;
+}
+.zyrox-settings-section-title:first-of-type {
+  margin-top: 4px;
+}
+
