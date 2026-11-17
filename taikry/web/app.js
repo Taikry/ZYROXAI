@@ -292,11 +292,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initLLMPillClickHandlers();
   setupChatDragAndDrop();
+  handleAuthRedirectParams();
 
   // Polling intervals
   setInterval(fetchHealthAndPaper, 10000);
   setInterval(fetchMacroEvents, 30000); // 30s live calendar countdown update
 });
+
+function handleAuthRedirectParams() {
+  try {
+    const url = new URL(window.location.href);
+    const authSuccess = url.searchParams.get("auth_success");
+    const isNewUser = url.searchParams.get("new_user") === "1";
+    const authError = url.searchParams.get("auth_error");
+
+    if (authSuccess === "telegram") {
+      url.searchParams.delete("auth_success");
+      url.searchParams.delete("new_user");
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+
+      const title = isKhmer ? "ចូលប្រើប្រាស់ជោគជ័យ" : "Telegram Login Successful";
+      const message = isNewUser
+        ? (isKhmer ? "សូមស្វាគមន៍មកកាន់ ZYROX AI! ការសាកល្បង Pro Trial រយៈពេល 14 ថ្ងៃត្រូវបានបើកដំណើរការ។" : "Welcome to ZYROX AI! Your 14-day Pro trial is active.")
+        : (isKhmer ? "ស្វាគមន៍ការវិលត្រឡប់មកវិញ! បានភ្ជាប់គណនី Telegram ជោគជ័យ។" : "Welcome back! Connected with your Telegram account.");
+
+      window.setTimeout(() => {
+        if (window.ZyroxToast) {
+          window.ZyroxToast.success(title, message);
+        }
+      }, 700);
+    } else if (authError) {
+      url.searchParams.delete("auth_error");
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+      window.setTimeout(() => {
+        if (window.ZyroxToast) {
+          window.ZyroxToast.error("Authentication Error", decodeURIComponent(authError));
+        }
+      }, 700);
+    }
+  } catch (e) {
+    console.debug("handleAuthRedirectParams note:", e);
+  }
+}
 
 function initLLMPillClickHandlers() {
   const pills = [
@@ -2641,21 +2678,6 @@ function renderCockpitNews() {
   }
 }
 
-function toggleCockpitCollapse() {
-  const card = document.getElementById("cockpit-widget");
-  const body = document.getElementById("cockpit-body");
-  const btn = document.getElementById("cockpit-collapse-btn");
-  if (body && card) {
-    body.classList.toggle("collapsed");
-    card.classList.toggle("collapsed");
-    const isCol = body.classList.contains("collapsed");
-    if (btn) btn.innerText = isCol ? "⌄" : "⌃";
-    try {
-      localStorage.setItem("taikry_cockpit_collapsed", isCol ? "true" : "false");
-    } catch (e) {}
-  }
-}
-
 function toggleAdvancedAccordion() {
   const panel = document.getElementById("advanced-content-panel");
   const arrow = document.getElementById("advanced-arrow");
@@ -3611,16 +3633,6 @@ function switchToDebateTab() {
   if (debateBtn) {
     switchMainTab("debate", debateBtn);
   }
-}
-
-function showPlansModal() {
-  const modal = document.getElementById("plans-spec-modal");
-  if (modal) modal.classList.remove("modal-hidden");
-}
-
-function closePlansModal() {
-  const modal = document.getElementById("plans-spec-modal");
-  if (modal) modal.classList.add("modal-hidden");
 }
 
 // Stream listener handled by centralized pollRealtimePrices
@@ -4995,10 +5007,6 @@ async function loadMT5BridgeData() {
   }
 }
 
-function testBridgeStatus() {
-  loadMT5BridgeData();
-}
-
 /* ==========================================================================
    12. SETTINGS LOADER & PERSISTENCE
    ========================================================================== */
@@ -5853,8 +5861,6 @@ async function submitChatMessage() {
       data.latency_ms ? `${data.latency_ms}ms` : null
     ].filter(Boolean).join(" · ");
 
-    const khmerSummary = stripChatEmoji(analysis.synthesis_summary_kh || "");
-    const enSummary = stripChatEmoji(analysis.synthesis_summary_en || "");
     const marketContext = data.market_context || {};
     const consensusContext = data.consensus_context || {};
     const quoteStatus = marketContext.price_freshness || "UNKNOWN";
