@@ -5737,7 +5737,7 @@ async function submitChatMessage() {
     const tp2 = trade.take_profit_2 !== null && trade.take_profit_2 !== undefined ? trade.take_profit_2 : "---";
     const rr = trade.risk_reward_ratio || "N/A";
     const confidenceValue = Number(trade.confidence);
-    const confidence = Number.isFinite(confidenceValue) && confidenceValue >= 0 && confidenceValue <= 100
+    const confidence = Number.isFinite(confidenceValue) && confidenceValue > 0 && confidenceValue <= 100
       ? `${confidenceValue}%`
       : "N/A";
 
@@ -5836,6 +5836,50 @@ Model: ${providerTag}
       `;
     }
 
+    const isApprovedTrade = (action === "BUY" || action === "SELL") && entry !== "---" && entry !== null && entry !== undefined;
+
+    let tradeBlockHtml = "";
+    if (isApprovedTrade) {
+      tradeBlockHtml = `
+        <div class="chat-setup-grid">
+          <div class="chat-setup-item">
+            <div class="chat-setup-lbl">Entry Price</div>
+            <div class="chat-setup-val val-gold">$${entry}</div>
+          </div>
+          <div class="chat-setup-item">
+            <div class="chat-setup-lbl">Stop Loss (SL)</div>
+            <div class="chat-setup-val val-red">$${sl}</div>
+          </div>
+          <div class="chat-setup-item">
+            <div class="chat-setup-lbl">Take Profit 1 (TP1)</div>
+            <div class="chat-setup-val val-green">$${tp1}</div>
+          </div>
+          <div class="chat-setup-item">
+            <div class="chat-setup-lbl">Take Profit 2 (TP2)</div>
+            <div class="chat-setup-val val-green">$${tp2}</div>
+          </div>
+          <div class="chat-setup-item chat-setup-grid-full">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="chat-setup-lbl">Risk:Reward Floor</span>
+              <span style="font-weight:800; color:#38bdf8; font-size:12px;">${rr}</span>
+              <span class="chat-setup-lbl" style="margin-left:12px;">Confidence</span>
+              <span style="font-weight:800; color:#ffd700; font-size:12px;">${confidence}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      tradeBlockHtml = `
+        <div class="chat-hold-banner" style="display:flex; justify-content:space-between; align-items:center; background:rgba(15,23,42,0.65); border:1px solid rgba(148,163,184,0.18); border-radius:6px; padding:7px 10px; margin:8px 0; font-size:11px;">
+          <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1;">
+            <span style="color:#94a3b8;">${chatIcon("shield")}</span>
+            <span><b>${isKhmer ? "ស្ថានភាពជួញដូរ" : "Trading Status"}:</b> <span style="color:#f59e0b; font-weight:700;">HOLD (${isKhmer ? "រក្សាដើមទុនជាចម្បង" : "Capital Preservation"})</span></span>
+          </div>
+          <span style="font-size:10px; color:#94a3b8; background:rgba(245,158,11,0.12); padding:2px 7px; border-radius:4px; border:1px solid rgba(245,158,11,0.25);">${isKhmer ? "គ្មាន Setup ជួញដូរទេ" : "No Active Setup"}</span>
+        </div>
+      `;
+    }
+
     let cardHtml = `
       <div class="chat-setup-card">
         <div class="chat-setup-header">
@@ -5848,34 +5892,6 @@ Model: ${providerTag}
 
         ${liveContextHtml}
         ${aiWarningHtml}
-        ${agentsFleetHtml}
-
-        <div class="chat-setup-grid">
-          <div class="chat-setup-item">
-            <div class="chat-setup-lbl">Entry Price</div>
-            <div class="chat-setup-val val-gold">${(entry !== "---" && entry !== null && entry !== undefined) ? '$' + entry : '---'}</div>
-          </div>
-          <div class="chat-setup-item">
-            <div class="chat-setup-lbl">Stop Loss (SL)</div>
-            <div class="chat-setup-val val-red">${(sl !== "---" && sl !== null && sl !== undefined) ? '$' + sl : '---'}</div>
-          </div>
-          <div class="chat-setup-item">
-            <div class="chat-setup-lbl">Take Profit 1 (TP1)</div>
-            <div class="chat-setup-val val-green">${(tp1 !== "---" && tp1 !== null && tp1 !== undefined) ? '$' + tp1 : '---'}</div>
-          </div>
-          <div class="chat-setup-item">
-            <div class="chat-setup-lbl">Take Profit 2 (TP2)</div>
-            <div class="chat-setup-val val-green">${(tp2 !== "---" && tp2 !== null && tp2 !== undefined) ? '$' + tp2 : '---'}</div>
-          </div>
-          <div class="chat-setup-item chat-setup-grid-full">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="chat-setup-lbl">Risk:Reward Floor</span>
-              <span style="font-weight:800; color:#38bdf8; font-size:12px;">${rr}</span>
-              <span class="chat-setup-lbl" style="margin-left:12px;">Confidence</span>
-              <span style="font-weight:800; color:#ffd700; font-size:12px;">${confidence}</span>
-            </div>
-          </div>
-        </div>
 
         ${khmerSummary ? `
           <div class="chat-khmer-analysis-box">
@@ -5889,6 +5905,9 @@ Model: ${providerTag}
             <b>Institutional Analysis:</b> ${escapeHtml(enSummary)}
           </div>
         ` : ""}
+
+        ${tradeBlockHtml}
+        ${agentsFleetHtml}
 
         ${data.deep_research ? `
           <div class="chat-deep-research-container" style="margin-top:10px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:12px;">
@@ -5963,12 +5982,18 @@ Model: ${providerTag}
         ` : ""}
 
         <div class="chat-setup-actions">
-          <button class="btn-chat-apply" onclick="applySetupToFastTrade('${action}', '${entry}', '${sl}', '${tp1}')" title="Send to 1-Click Fast Trade Panel">
-            ${chatIcon("apply")} បញ្ជូនទៅ Fast Trade
-          </button>
-          <button class="btn-chat-copy" onclick="copySetupToClipboard('${safeCopyText}', this)" title="Copy Trade Setup for Telegram or Notes">
-            ${chatIcon("copy")} ចម្លង Setup
-          </button>
+          ${isApprovedTrade ? `
+            <button class="btn-chat-apply" onclick="applySetupToFastTrade('${action}', '${entry}', '${sl}', '${tp1}')" title="Send to 1-Click Fast Trade Panel">
+              ${chatIcon("apply")} ${isKhmer ? "បញ្ជូនទៅ Fast Trade" : "Apply to Fast Trade"}
+            </button>
+            <button class="btn-chat-copy" onclick="copySetupToClipboard('${safeCopyText}', this)" title="Copy Trade Setup for Telegram or Notes">
+              ${chatIcon("copy")} ${isKhmer ? "ចម្លង Setup" : "Copy Setup"}
+            </button>
+          ` : `
+            <button class="btn-chat-copy" style="flex:1;" onclick="copySetupToClipboard('${safeCopyText}', this)" title="Copy Analysis">
+              ${chatIcon("copy")} ${isKhmer ? "ចម្លងការវិភាគ (Copy Analysis)" : "Copy Analysis"}
+            </button>
+          `}
         </div>
       </div>
     `;
