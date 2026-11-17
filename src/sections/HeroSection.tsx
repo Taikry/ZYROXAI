@@ -1,10 +1,9 @@
 import React from 'react';
-import { AnimatedLogo } from '../components/AnimatedLogo';
 import { TradingChart } from '../components/TradingChart';
 import { MarketTicker } from '../components/MarketTicker';
 import { NeuralOrb3D } from '../components/NeuralOrb3D';
 import { MagneticButton } from '../components/MagneticButton';
-import { MARKETS_DATA } from '../data/markets';
+import { useRealtimeMarkets } from '../hooks/useRealtimeMarkets';
 import { useLanguage } from '../hooks/useLanguage';
 import {
   Terminal,
@@ -15,8 +14,7 @@ import {
   Layers,
   Zap,
   ArrowRight,
-  TrendingUp,
-  Cpu,
+  Sparkles,
 } from 'lucide-react';
 
 interface HeroSectionProps {
@@ -25,7 +23,8 @@ interface HeroSectionProps {
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) => {
   const { isKhmer, t } = useLanguage();
-  const primaryAsset = MARKETS_DATA[0]; // XAUUSD Gold
+  const { markets } = useRealtimeMarkets();
+  const primaryAsset = markets.find((m) => m.symbol === 'XAUUSD') || markets[0];
 
   const scrollTo = (id: string) => {
     const el = document.querySelector(id);
@@ -49,7 +48,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
         <div className="flex justify-center mb-6">
           <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#090F0C]/90 border border-[#00E59B]/30 shadow-[0_0_20px_rgba(0,229,155,0.2)] text-xs font-mono text-[#F5F8F6] backdrop-blur-md">
             <span className="w-2 h-2 rounded-full bg-[#00E59B] animate-ping" />
-            <span className="text-[#39FFC0] font-bold tracking-wide">{t.hero.badge}</span>
+            <span className="text-[#39FFC0] font-bold tracking-wide">
+              {isKhmer ? 'ប្រព័ន្ធ AI ដំណើរការ' : 'SYSTEM AI ONLINE'}
+            </span>
             <span className="text-white/20">|</span>
             <div className="hidden sm:flex items-center gap-0.5 h-3">
               <span className="w-0.5 bg-[#00E59B] h-2 animate-pulse" />
@@ -57,7 +58,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
               <span className="w-0.5 bg-[#00E59B] h-1.5 animate-pulse" style={{ animationDelay: '0.4s' }} />
               <span className="w-0.5 bg-[#39FFC0] h-2.5 animate-pulse" style={{ animationDelay: '0.1s' }} />
             </div>
-            <span className="text-[#87938D] hidden sm:inline">6-Agent Consensus Online</span>
+            <span className="text-[#87938D] hidden sm:inline">14-Agent Consensus Fleet Active</span>
           </div>
         </div>
 
@@ -74,43 +75,46 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
             {t.hero.subtitle}
           </p>
 
-          {/* 3 High-Performance Magnetic CTA Buttons */}
+          {/* High-Performance CTA Buttons with Dedicated SYSTEM AI Button */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            {/* CTA 1: Launch ZYROX AI */}
+            {/* CTA 1: System AI (Primary Highlight) */}
             <MagneticButton
               variant="primary"
               size="lg"
               onClick={onLaunchTerminal}
+              className="bg-gradient-to-r from-[#00E59B] to-[#39FFC0] text-[#050807] font-extrabold shadow-[0_0_30px_rgba(0,229,155,0.45)] border-0 cursor-pointer"
             >
-              <Terminal className="w-4 h-4" />
-              <span>{t.hero.ctaLaunch}</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <Bot className="w-5 h-5 text-[#050807] animate-pulse" />
+              <span className="tracking-wide">{isKhmer ? 'ប្រព័ន្ធ AI (System AI)' : 'System AI Engine'}</span>
+              <Sparkles className="w-4 h-4 text-[#050807]" />
             </MagneticButton>
 
-            {/* CTA 2: Explore Features */}
+            {/* CTA 2: Launch Full Web Terminal */}
+            <a
+              href="/dashboard/"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#090F0C] hover:bg-[#00E59B]/10 text-sm font-mono font-bold text-[#F5F8F6] hover:text-[#39FFC0] border border-[#00E59B]/30 hover:border-[#00E59B] shadow-lg transition-all group cursor-pointer"
+            >
+              <Terminal className="w-4 h-4 text-[#00E59B] group-hover:rotate-12 transition-transform" />
+              <span>{isKhmer ? 'ផ្ទាំង Web Terminal' : 'Live Terminal'}</span>
+              <ArrowRight className="w-4 h-4 text-[#87938D] group-hover:translate-x-1 group-hover:text-[#39FFC0] transition-all" />
+            </a>
+
+            {/* CTA 3: 14 AI Agents Fleet */}
             <MagneticButton
               variant="secondary"
               size="lg"
-              onClick={() => scrollTo('#features')}
-            >
-              <Compass className="w-4 h-4 text-[#00E59B]" />
-              <span>{t.hero.ctaFeatures}</span>
-            </MagneticButton>
-
-            {/* CTA 3: Meet Our AI */}
-            <MagneticButton
-              variant="glass"
-              size="lg"
               onClick={() => scrollTo('#agents')}
             >
-              <Bot className="w-4 h-4 text-[#39FFC0]" />
-              <span>{t.hero.ctaAgents}</span>
+              <Compass className="w-4 h-4 text-[#00E59B]" />
+              <span>{isKhmer ? 'ភ្នាក់ងារ AI ទាំង ១៤' : '14 AI Agents'}</span>
             </MagneticButton>
           </div>
 
-          {/* Demo Research Note */}
+          {/* Live Data Assurance Note */}
           <p className="text-[11px] font-mono text-[#87938D] mt-4 opacity-80">
-            * {t.hero.demoNote}
+            {isKhmer
+              ? '● ទិន្នន័យទីផ្សារផ្ទាល់ Real-Time ពី OANDA v20, Binance Spot & MT5 Bridge'
+              : '● Live Institutional Feeds from OANDA v20, Binance Spot & Windows MT5 Bridge'}
           </p>
         </div>
 
@@ -119,7 +123,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
           {/* Subtle Ambient Backing Glow */}
           <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#00E59B]/25 via-[#39FFC0]/20 to-[#00B981]/25 blur-2xl opacity-70" />
 
-          {/* Main Chart Component */}
+          {/* Main Chart Component with Live Real-Time Data */}
           <TradingChart asset={primaryAsset} className="relative z-10" />
 
           {/* Floating AI Intelligence Card 1 (Top Left) */}
@@ -159,8 +163,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
         {/* Quick Institutional Telemetry Stats Grid */}
         <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
           {[
-            { val: '6 Neural Agents', label: t.hero.statsAgents, icon: <Bot className="w-4 h-4 text-[#00E59B]" /> },
-            { val: '20+ Liquid Assets', label: t.hero.statsMarkets, icon: <Activity className="w-4 h-4 text-[#39FFC0]" /> },
+            { val: '14 Neural Agents', label: isKhmer ? 'ភ្នាក់ងារ AI ឯកទេស' : '14 Specialized Agents', icon: <Bot className="w-4 h-4 text-[#00E59B]" /> },
+            { val: '21+ Liquid Assets', label: t.hero.statsMarkets, icon: <Activity className="w-4 h-4 text-[#39FFC0]" /> },
             { val: '< 50ms Processing', label: t.hero.statsLatency, icon: <Zap className="w-4 h-4 text-emerald-400" /> },
             { val: '80% Gate Consensus', label: t.hero.statsConsensus, icon: <Shield className="w-4 h-4 text-teal-400" /> },
           ].map((item, idx) => (
@@ -180,7 +184,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
         </div>
       </div>
 
-      {/* Animated Continuous Market Ticker */}
+      {/* Animated Continuous Live Market Ticker */}
       <div className="mt-16">
         <MarketTicker />
       </div>

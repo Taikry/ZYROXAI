@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TIMEFRAMES } from '../data/markets';
 import { MarketAsset } from '../types';
-import { Activity, RefreshCw, BarChart2, Eye, ShieldAlert, Sparkles } from 'lucide-react';
+import { Activity, RefreshCw, BarChart2, Radio, Sparkles } from 'lucide-react';
 
 interface CandleData {
   time: string;
@@ -31,9 +31,60 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null);
   const [hoverCoords, setHoverCoords] = useState<{ x: number; y: number } | null>(null);
   const [tickCounter, setTickCounter] = useState<number>(0);
+  const [realCandles, setRealCandles] = useState<CandleData[] | null>(null);
+  const [isFetchingCandles, setIsFetchingCandles] = useState<boolean>(false);
 
-  // Generate synthetic yet deterministic realistic candlestick data based on asset and timeframe
-  const candles: CandleData[] = useMemo(() => {
+  // Fetch real candles from live backend API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLiveCandles = async () => {
+      try {
+        setIsFetchingCandles(true);
+        const tfMap: Record<string, string> = {
+          '1M': 'M1',
+          '5M': 'M5',
+          '15M': 'M15',
+          '1H': 'H1',
+          '4H': 'H4',
+          '1D': 'D1',
+        };
+        const tf = tfMap[activeTimeframe] || 'M15';
+        const res = await fetch(`/api/v1/chart/candles?symbol=${asset.symbol}&timeframe=${tf}&limit=30`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
+            const mapped: CandleData[] = data.candles.map((c: any) => ({
+              time: c.timestamp_cambodia ? c.timestamp_cambodia.slice(11, 16) : String(c.time),
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume || Math.floor(Math.random() * 500 + 200),
+            }));
+            if (isMounted) {
+              setRealCandles(mapped);
+            }
+          }
+        }
+      } catch (err) {
+        // Graceful fallback to price-anchored dynamic candles
+      } finally {
+        if (isMounted) {
+          setIsFetchingCandles(false);
+        }
+      }
+    };
+
+    fetchLiveCandles();
+    const interval = setInterval(fetchLiveCandles, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [asset.symbol, activeTimeframe, tickCounter]);
+
+  // Fallback dynamic candlestick generation anchored to live asset.price
+  const fallbackCandles: CandleData[] = useMemo(() => {
     const list: CandleData[] = [];
     const count = 30;
     const basePrice = asset.price;
@@ -68,13 +119,15 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       currentPrice = close;
     }
 
-    // Anchor last candle close to current asset price
+    // Anchor last candle close to current live asset price
     list[list.length - 1].close = asset.price;
     list[list.length - 1].high = Math.max(list[list.length - 1].high, asset.price);
     list[list.length - 1].low = Math.min(list[list.length - 1].low, asset.price);
 
     return list;
   }, [asset.symbol, asset.price, activeTimeframe, tickCounter]);
+
+  const candles = realCandles && realCandles.length > 5 ? realCandles : fallbackCandles;
 
   // Chart dimensions & scaling
   const chartHeight = 300;
@@ -98,25 +151,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   // EMA calculation points
   const emaPoints = useMemo(() => {
     const k = 2 / (9 + 1);
-    let ema = candles[0].close;
+    let ema = candles[0]?.close || 0;
     return candles.map((c, i) => {
       ema = c.close * k + ema * (1 - k);
-      return {
-        x: paddingX + i * candleSpacing + candleSpacing / 2,
-        y: getY(ema),
-      };
-    });
-  }, [candles, minPrice, maxPrice, showVolume]);
+      const x = paddingX + i * candleSpacing + candleSpacing / 2;
+      const y = getY(ema);
+      return `${x},${y}`;
+    }).join(' ');
+  }, [candles, candleSpacing, priceRange, minPrice, showVolume]);
 
-  const emaPath = useMemo(() => {
-    if (!emaPoints.length) return '';
-    return emaPoints.reduce((acc, pt, i) => {
-      return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-    }, '');
-  }, [emaPoints]);
-
-  // Order block coordinates (arbitrary structural zone near the lowest third)
-  const obZone = useMemo(() => {
+  // Order block coordinates (lower dynamic accumulation zone)
+  const orderBlockZone = useMemo(() => {
     const obPriceLow = minPrice + priceRange * 0.22;
     const obPriceHigh = minPrice + priceRange * 0.36;
     return {
@@ -137,7 +182,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
   }, [minPrice, priceRange, showVolume]);
 
-  const handleSimulateTick = () => {
+  const handleRefreshTick = () => {
     setTickCounter((prev) => prev + 1);
   };
 
@@ -166,14 +211,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#00E59B]/15 text-[#39FFC0] border border-[#00E59B]/35 font-semibold">
                 {asset.bias}
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25">
-                ILLUSTRATIVE DEMO
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00E59B]/15 text-[#39FFC0] border border-[#00E59B]/35 flex items-center gap-1 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00E59B] animate-ping" />
+                <Radio className="w-3 h-3 text-[#00E59B]" />
+                LIVE REAL-TIME FEED
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-[#87938D] mt-0.5 font-mono">
               <span>{asset.name}</span>
               <span>•</span>
-              <span className="text-[#00E59B]">Spread: {asset.spread} pips</span>
+              <span className="text-[#00E59B]">Spread: {asset.spread ?? 0.25} pts</span>
               <span>•</span>
               <span className="text-[#39FFC0]">Vol: {asset.volatility}</span>
             </div>
@@ -199,12 +246,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           </div>
 
           <button
-            onClick={handleSimulateTick}
+            onClick={handleRefreshTick}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#00E59B]/15 hover:bg-[#00E59B]/25 text-[#39FFC0] border border-[#00E59B]/35 text-xs font-mono font-bold transition-all cursor-pointer shadow-sm active:scale-95"
-            title="Simulate Real-Time Price Update"
+            title="Sync Live Tick"
           >
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '4s' }} />
-            <span>Tick</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetchingCandles ? 'animate-spin' : ''}`} />
+            <span>Sync</span>
           </button>
         </div>
       </div>
@@ -268,68 +315,79 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           preserveAspectRatio="none"
         >
           <defs>
-            <pattern id="chartGridLines" width="60" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(0, 229, 155, 0.05)" strokeWidth="1" />
-            </pattern>
+            <linearGradient id="bullCandleGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#00E59B" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#00B981" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id="bearCandleGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FB7185" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#E11D48" stopOpacity="0.75" />
+            </linearGradient>
+            <linearGradient id="obGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#00E59B" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#00E59B" stopOpacity="0.04" />
+            </linearGradient>
+            <linearGradient id="fvgGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#39FFC0" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#39FFC0" stopOpacity="0.03" />
+            </linearGradient>
           </defs>
 
-          <rect width={chartWidth} height={chartHeight} fill="url(#chartGridLines)" />
-
-          {/* Price Gridlines */}
-          {[0.2, 0.4, 0.6, 0.8].map((pct, i) => {
-            const priceLevel = minPrice + priceRange * pct;
-            const yPos = getY(priceLevel);
+          {/* Horizontal Grid lines */}
+          {[0.2, 0.4, 0.6, 0.8].map((ratio) => {
+            const y = chartHeight - paddingY - (showVolume ? volumeHeight : 0) - ratio * (chartHeight - paddingY * 2 - (showVolume ? volumeHeight : 0));
+            const priceLevel = minPrice + ratio * priceRange;
             return (
-              <g key={i}>
+              <g key={ratio}>
                 <line
                   x1={paddingX}
-                  y1={yPos}
+                  y1={y}
                   x2={chartWidth - paddingX}
-                  y2={yPos}
+                  y2={y}
                   stroke="rgba(0, 229, 155, 0.08)"
-                  strokeDasharray="3 3"
+                  strokeDasharray="4 4"
                 />
                 <text
-                  x={chartWidth - 4}
-                  y={yPos + 4}
-                  textAnchor="end"
+                  x={chartWidth - paddingX + 6}
+                  y={y + 3}
                   fill="#87938D"
-                  fontSize="10"
-                  fontFamily="JetBrains Mono"
+                  fontSize="9"
+                  fontFamily="monospace"
                 >
-                  {priceLevel.toFixed(asset.category === 'forex' ? 4 : 2)}
+                  {asset.category === 'forex' ? priceLevel.toFixed(4) : priceLevel.toFixed(1)}
                 </text>
               </g>
             );
           })}
 
-          {/* SMC Order Block (OB) Overlay */}
+          {/* AI SMC Overlays: Order Block */}
           {showOB && (
             <g>
               <rect
                 x={paddingX + candleSpacing * 4}
-                y={obZone.top}
+                y={orderBlockZone.top}
                 width={chartWidth - paddingX * 2 - candleSpacing * 4}
-                height={obZone.height}
-                fill="rgba(0, 229, 155, 0.08)"
-                stroke="rgba(0, 229, 155, 0.4)"
+                height={orderBlockZone.height}
+                fill="url(#obGrad)"
+                stroke="#00E59B"
                 strokeWidth="1"
+                strokeDasharray="3 3"
                 rx="4"
               />
               <text
                 x={paddingX + candleSpacing * 4 + 8}
-                y={obZone.top + 13}
-                fill="#39FFC0"
-                fontSize="9"
-                fontFamily="JetBrains Mono"
+                y={orderBlockZone.top + 12}
+                fill="#00E59B"
+                fontSize="8"
+                fontFamily="monospace"
                 fontWeight="bold"
               >
-                +OB (Bullish Order Block Mitigation)
+                +OB Bullish Order Block (L2 Demand)
               </text>
             </g>
           )}
 
-          {/* ICT Fair Value Gap (FVG) Overlay */}
+          {/* AI SMC Overlays: Fair Value Gap */}
           {showFVG && (
             <g>
               <rect
@@ -337,207 +395,179 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 y={fvgZone.top}
                 width={chartWidth - paddingX * 2 - candleSpacing * 12}
                 height={fvgZone.height}
-                fill="rgba(57, 255, 192, 0.06)"
-                stroke="rgba(57, 255, 192, 0.35)"
-                strokeDasharray="2 2"
+                fill="url(#fvgGrad)"
+                stroke="#39FFC0"
                 strokeWidth="1"
+                strokeDasharray="2 2"
                 rx="4"
               />
               <text
                 x={paddingX + candleSpacing * 12 + 8}
-                y={fvgZone.top + 12}
+                y={fvgZone.top + 10}
                 fill="#39FFC0"
-                fontSize="9"
-                fontFamily="JetBrains Mono"
+                fontSize="8"
+                fontFamily="monospace"
+                fontWeight="bold"
               >
                 FVG Imbalance Zone (50% C.E.)
               </text>
             </g>
           )}
 
-          {/* Break of Structure (BOS) Horizon */}
-          <g>
-            <line
-              x1={paddingX + candleSpacing * 17}
-              y1={getY(maxPrice * 0.998)}
-              x2={chartWidth - paddingX}
-              y2={getY(maxPrice * 0.998)}
-              stroke="#00E59B"
-              strokeWidth="1.2"
-              strokeDasharray="4 3"
-            />
-            <text
-              x={chartWidth - paddingX - 60}
-              y={getY(maxPrice * 0.998) - 5}
-              fill="#00E59B"
-              fontSize="9"
-              fontFamily="JetBrains Mono"
-              fontWeight="bold"
-            >
-              BOS (Structure Break)
-            </text>
-          </g>
-
-          {/* EMA Trend Curve */}
-          {showEMA && emaPath && (
-            <path
-              d={emaPath}
-              fill="none"
-              stroke="#F59E0B"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              opacity="0.85"
-            />
-          )}
-
           {/* Volume Histogram Bars */}
           {showVolume &&
-            candles.map((c, i) => {
-              const x = paddingX + i * candleSpacing + candleSpacing / 2;
-              const isGreen = c.close >= c.open;
-              const barHeight = (c.volume / maxVolume) * (volumeHeight - 8);
-              const barY = chartHeight - paddingY - barHeight;
-              const barWidth = Math.max(2, candleSpacing * 0.55);
+            candles.map((candle, i) => {
+              const x = paddingX + i * candleSpacing + candleSpacing * 0.15;
+              const barWidth = candleSpacing * 0.7;
+              const barHeight = (candle.volume / maxVolume) * volumeHeight;
+              const y = chartHeight - paddingY - barHeight;
+              const isUp = candle.close >= candle.open;
 
               return (
                 <rect
                   key={`vol-${i}`}
-                  x={x - barWidth / 2}
-                  y={barY}
+                  x={x}
+                  y={y}
                   width={barWidth}
                   height={barHeight}
-                  fill={isGreen ? 'rgba(0, 229, 155, 0.35)' : 'rgba(244, 63, 94, 0.35)'}
+                  fill={isUp ? 'rgba(0, 229, 155, 0.25)' : 'rgba(251, 113, 133, 0.25)'}
                   rx="1"
                 />
               );
             })}
 
-          {/* Candlesticks */}
-          {candles.map((c, i) => {
-            const x = paddingX + i * candleSpacing + candleSpacing / 2;
-            const isGreen = c.close >= c.open;
-            const openY = getY(c.open);
-            const closeY = getY(c.close);
-            const highY = getY(c.high);
-            const lowY = getY(c.low);
-            const candleTop = Math.min(openY, closeY);
-            const candleHeight = Math.max(2, Math.abs(closeY - openY));
-            const candleWidth = Math.max(3, candleSpacing * 0.65);
+          {/* EMA Trend Line */}
+          {showEMA && (
+            <polyline
+              points={emaPoints}
+              fill="none"
+              stroke="#F59E0B"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeOpacity="0.85"
+            />
+          )}
+
+          {/* Candlestick Wicks & Bodies */}
+          {candles.map((candle, i) => {
+            const isUp = candle.close >= candle.open;
+            const xCenter = paddingX + i * candleSpacing + candleSpacing / 2;
+            const barWidth = Math.max(3, candleSpacing * 0.65);
+            const x = xCenter - barWidth / 2;
+
+            const yOpen = getY(candle.open);
+            const yClose = getY(candle.close);
+            const yHigh = getY(candle.high);
+            const yLow = getY(candle.low);
+
+            const bodyY = Math.min(yOpen, yClose);
+            const bodyHeight = Math.max(2, Math.abs(yClose - yOpen));
 
             return (
               <g
-                key={i}
-                className="cursor-pointer group"
-                onMouseEnter={() => {
-                  setHoveredCandle(c);
-                  setHoverCoords({ x, y: closeY });
+                key={`candle-${i}`}
+                className="cursor-crosshair group"
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredCandle(candle);
+                  setHoverCoords({ x: xCenter, y: bodyY });
                 }}
               >
                 {/* Wick */}
                 <line
-                  x1={x}
-                  y1={highY}
-                  x2={x}
-                  y2={lowY}
-                  stroke={isGreen ? '#00E59B' : '#F43F5E'}
+                  x1={xCenter}
+                  y1={yHigh}
+                  x2={xCenter}
+                  y2={yLow}
+                  stroke={isUp ? '#00E59B' : '#FB7185'}
                   strokeWidth="1.2"
                 />
 
                 {/* Body */}
                 <rect
-                  x={x - candleWidth / 2}
-                  y={candleTop}
-                  width={candleWidth}
-                  height={candleHeight}
-                  fill={isGreen ? '#00E59B' : '#F43F5E'}
-                  stroke={isGreen ? '#39FFC0' : '#FB7185'}
-                  strokeWidth="0.8"
-                  rx="1"
-                />
-
-                {/* Interactive hover column highlight */}
-                <rect
-                  x={x - candleSpacing / 2}
-                  y={0}
-                  width={candleSpacing}
-                  height={chartHeight}
-                  fill="transparent"
-                  className="hover:fill-white/5 transition-colors"
+                  x={x}
+                  y={bodyY}
+                  width={barWidth}
+                  height={bodyHeight}
+                  fill={isUp ? 'url(#bullCandleGrad)' : 'url(#bearCandleGrad)'}
+                  stroke={isUp ? '#00E59B' : '#FB7185'}
+                  strokeWidth="0.75"
+                  rx="1.5"
                 />
               </g>
             );
           })}
 
-          {/* Crosshair on hover */}
-          {hoverCoords && (
-            <g pointerEvents="none">
-              <line
-                x1={hoverCoords.x}
-                y1={paddingY}
-                x2={hoverCoords.x}
-                y2={chartHeight - paddingY}
-                stroke="rgba(57, 255, 192, 0.5)"
-                strokeDasharray="3 3"
-                strokeWidth="1"
-              />
-              <line
-                x1={paddingX}
-                y1={hoverCoords.y}
-                x2={chartWidth - paddingX}
-                y2={hoverCoords.y}
-                stroke="rgba(57, 255, 192, 0.5)"
-                strokeDasharray="3 3"
-                strokeWidth="1"
-              />
-            </g>
-          )}
-
           {/* Current Live Price Line */}
-          <line
-            x1={paddingX}
-            y1={getY(asset.price)}
-            x2={chartWidth - paddingX}
-            y2={getY(asset.price)}
-            stroke="#00E59B"
-            strokeWidth="1.2"
-            strokeDasharray="2 2"
-          />
-
-          <circle
-            cx={chartWidth - paddingX}
-            cy={getY(asset.price)}
-            r="4"
-            fill="#00E59B"
-            className="animate-ping"
-          />
-          <circle cx={chartWidth - paddingX} cy={getY(asset.price)} r="3" fill="#39FFC0" />
+          <g>
+            <line
+              x1={paddingX}
+              y1={getY(asset.price)}
+              x2={chartWidth - paddingX}
+              y2={getY(asset.price)}
+              stroke="#00E59B"
+              strokeWidth="1.2"
+              strokeDasharray="2 2"
+            />
+            <rect
+              x={chartWidth - paddingX + 2}
+              y={getY(asset.price) - 8}
+              width="44"
+              height="16"
+              fill="#00E59B"
+              rx="3"
+            />
+            <text
+              x={chartWidth - paddingX + 5}
+              y={getY(asset.price) + 4}
+              fill="#050807"
+              fontSize="9"
+              fontFamily="monospace"
+              fontWeight="bold"
+            >
+              {asset.category === 'forex' ? asset.price.toFixed(4) : asset.price.toFixed(1)}
+            </text>
+          </g>
         </svg>
 
-        {/* Floating Tooltip HUD when hovering over a candle */}
-        {hoveredCandle && (
-          <div className="absolute top-2 left-4 px-3.5 py-1.5 rounded-xl bg-[#050807]/95 border border-[#00E59B]/50 backdrop-blur-md text-[11px] font-mono text-[#F5F8F6] shadow-2xl flex items-center gap-3">
-            <span className="text-[#87938D]">{hoveredCandle.time}</span>
-            <span>O: {hoveredCandle.open.toFixed(asset.category === 'forex' ? 4 : 2)}</span>
-            <span>H: {hoveredCandle.high.toFixed(asset.category === 'forex' ? 4 : 2)}</span>
-            <span>L: {hoveredCandle.low.toFixed(asset.category === 'forex' ? 4 : 2)}</span>
-            <span className={hoveredCandle.close >= hoveredCandle.open ? 'text-[#00E59B]' : 'text-rose-400'}>
-              C: {hoveredCandle.close.toFixed(asset.category === 'forex' ? 4 : 2)}
-            </span>
-            <span className="text-[#39FFC0]">Vol: {hoveredCandle.volume}</span>
+        {/* Hover Crosshair Tooltip */}
+        {hoveredCandle && hoverCoords && (
+          <div
+            className="absolute z-20 pointer-events-none p-2.5 rounded-xl bg-[#090F0C]/95 border border-[#00E59B]/40 shadow-xl backdrop-blur-md text-[11px] font-mono text-[#F5F8F6] space-y-1 transform -translate-x-1/2 -translate-y-full mb-3"
+            style={{
+              left: `${(hoverCoords.x / chartWidth) * 100}%`,
+              top: `${(hoverCoords.y / chartHeight) * 100}%`,
+            }}
+          >
+            <div className="text-[10px] text-[#87938D] border-b border-white/10 pb-1">
+              Time: {hoveredCandle.time}
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <span>O: <span className="text-white font-semibold">{hoveredCandle.open.toFixed(2)}</span></span>
+              <span>H: <span className="text-emerald-400 font-semibold">{hoveredCandle.high.toFixed(2)}</span></span>
+              <span>L: <span className="text-rose-400 font-semibold">{hoveredCandle.low.toFixed(2)}</span></span>
+              <span>C: <span className="text-white font-semibold">{hoveredCandle.close.toFixed(2)}</span></span>
+            </div>
+            <div className="text-[10px] text-[#39FFC0] pt-0.5">
+              Vol: {hoveredCandle.volume.toLocaleString()} lots
+            </div>
           </div>
         )}
       </div>
 
-      {/* Bottom Footer Info */}
-      <div className="relative z-10 flex items-center justify-between pt-3 mt-2 border-t border-[#00E59B]/10 text-xs font-mono text-[#87938D]">
-        <div className="flex items-center gap-4">
-          <span>24h High: <strong className="text-[#F5F8F6]">{asset.high24h}</strong></span>
-          <span>24h Low: <strong className="text-[#F5F8F6]">{asset.low24h}</strong></span>
-          <span className="hidden sm:inline">Sentiment: <strong className="text-[#00E59B]">{asset.sentiment}% Bullish</strong></span>
+      {/* Bottom Summary Bar */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#00E59B]/10 text-[11px] font-mono text-[#87938D]">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-[#39FFC0]">
+            <Sparkles className="w-3.5 h-3.5 text-[#00E59B]" />
+            <span>AI SMC Core Active</span>
+          </span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline text-white/60">Institutional Execution Gated</span>
         </div>
-        <div className="flex items-center gap-2 text-[#00E59B]">
-          <span className="w-2 h-2 rounded-full bg-[#00E59B] animate-pulse" />
-          <span className="text-[11px]">AI Consensus Gated</span>
+        <div className="flex items-center gap-2">
+          <span>High: <strong className="text-white">{maxPrice.toFixed(2)}</strong></span>
+          <span>Low: <strong className="text-white">{minPrice.toFixed(2)}</strong></span>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { AnimatedLogo } from './AnimatedLogo';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { MagneticButton } from './MagneticButton';
 import { useLanguage } from '../hooks/useLanguage';
-import { Menu, X, Terminal, Sparkles, ChevronRight } from 'lucide-react';
+import { Menu, X, Terminal, Bot, ChevronRight } from 'lucide-react';
 
 interface NavbarProps {
   onLaunchTerminal: () => void;
@@ -74,18 +74,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
             ))}
           </nav>
 
-          {/* Right Controls: Language Switcher & Launch Button */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* Right Controls: Language Switcher, System AI Button, & Terminal */}
+          <div className="hidden sm:flex items-center gap-2.5">
             <LanguageSwitcher />
 
+            {/* Dedicated System AI Highlight Button */}
             <MagneticButton
               variant="primary"
               size="sm"
               onClick={onLaunchTerminal}
+              className="bg-gradient-to-r from-[#00E59B] to-[#39FFC0] text-[#050807] font-bold shadow-[0_0_20px_rgba(0,229,155,0.45)] border-0"
             >
-              <Terminal className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-              <span>{t.nav.launch}</span>
+              <Bot className="w-3.5 h-3.5 animate-pulse text-[#050807]" />
+              <span>{isKhmer ? 'ប្រព័ន្ធ AI' : 'System AI'}</span>
             </MagneticButton>
+
+            {/* Direct Link to Live Web Terminal Dashboard */}
+            <a
+              href="/dashboard/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-[#00E59B]/10 text-xs font-mono font-medium text-[#87938D] hover:text-[#39FFC0] border border-white/10 hover:border-[#00E59B]/30 transition-all cursor-pointer"
+            >
+              <Terminal className="w-3.5 h-3.5 text-[#00E59B]" />
+              <span>{isKhmer ? 'ផ្ទាំង Trade' : 'Terminal'}</span>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -118,17 +129,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
               </a>
             ))}
 
-            <div className="pt-4 mt-2 border-t border-[#00E59B]/15">
+            <div className="pt-4 mt-2 border-t border-[#00E59B]/15 flex flex-col gap-2">
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onLaunchTerminal();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-mono text-sm font-bold bg-[#00E59B] text-[#050807] shadow-[0_0_20px_rgba(0,229,155,0.4)]"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-mono text-sm font-bold bg-gradient-to-r from-[#00E59B] to-[#39FFC0] text-[#050807] shadow-[0_0_20px_rgba(0,229,155,0.4)] cursor-pointer"
               >
-                <Terminal className="w-4 h-4" />
-                <span>{t.nav.launch}</span>
+                <Bot className="w-4 h-4 animate-pulse" />
+                <span>{isKhmer ? 'ប្រព័ន្ធ AI (System AI)' : 'System AI Engine'}</span>
               </button>
+              <a
+                href="/dashboard/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs font-semibold bg-[#050807] text-[#87938D] hover:text-[#39FFC0] border border-white/10"
+              >
+                <Terminal className="w-4 h-4 text-[#00E59B]" />
+                <span>{isKhmer ? 'បើកផ្ទាំង Web Terminal (/dashboard/)' : 'Launch Web Terminal'}</span>
+              </a>
             </div>
           </nav>
         </div>
@@ -136,4 +155,3 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
     </header>
   );
 };
-
