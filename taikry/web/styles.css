@@ -10094,6 +10094,18 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   cursor: wait;
 }
 
+@keyframes zyroxLoaderFailsafeFade {
+  0%, 75% {
+    opacity: 1;
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 /* Full-screen startup is event-driven; no fake percentage is shown. */
 .zyrox-fullscreen-loader {
   position: fixed;
@@ -10112,6 +10124,7 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   text-align: center;
   opacity: 1;
   transition: opacity 220ms ease, visibility 220ms ease;
+  animation: zyroxLoaderFailsafeFade 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .zyrox-fullscreen-loader::before {
@@ -10126,10 +10139,12 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   mask-image: radial-gradient(ellipse at center, #000 8%, transparent 78%);
 }
 
-.zyrox-fullscreen-loader.is-dismissed {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
+.zyrox-fullscreen-loader.is-dismissed,
+.zyrox-fullscreen-loader[data-dismissed="true"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .zyrox-loader-brand,

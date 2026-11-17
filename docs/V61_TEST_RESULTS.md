@@ -26,6 +26,7 @@ The automated verification suite covers all critical pathways for broker quote s
 ## 2. Test Execution Details
 
 ### 2.1 Critical Broker Quote Safety (`test_v61_quote_safety.py`)
+
 ```text
 tests/test_v61_quote_safety.py::test_quote_record_forces_is_executable_false_for_non_broker_quotes PASSED
 tests/test_v61_quote_safety.py::test_engine_blocks_estimated_spread PASSED
@@ -36,6 +37,7 @@ tests/test_v61_quote_safety.py::test_engine_blocks_non_executable_or_unavailable
 ```
 
 ### 2.2 Real Authentication Flows (`test_v61_auth_flows.py`)
+
 ```text
 tests/test_v61_auth_flows.py::test_google_auth_status_unconfigured PASSED
 tests/test_v61_auth_flows.py::test_google_pkce_and_state_cache PASSED
@@ -47,6 +49,7 @@ tests/test_v61_auth_flows.py::test_phone_otp_challenge_flow_and_verification PAS
 ```
 
 ### 2.3 Durable Scheduler & Confluence Scoring (`test_v61_scheduler_and_scoring.py`)
+
 ```text
 tests/test_v61_scheduler_and_scoring.py::test_distributed_scheduler_locking PASSED
 tests/test_v61_scheduler_and_scoring.py::test_scheduler_heartbeat PASSED
@@ -55,6 +58,7 @@ tests/test_v61_scheduler_and_scoring.py::test_confluence_score_below_75_is_rejec
 ```
 
 ### 2.4 Frontend TypeScript & Vite Production Compilation
+
 ```text
 > zyrox-ai@1.0.0 build
 > tsc && vite build

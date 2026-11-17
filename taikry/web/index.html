@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/brand/zyrox-logo-icon.svg">
   <link rel="alternate icon" type="image/png" href="assets/brand/zyrox-logo-icon.png">
   <link rel="apple-touch-icon" href="assets/brand/zyrox-logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1.0">
+  <link rel="stylesheet" href="styles.css?v=6.1.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
@@ -37,37 +37,38 @@
         var loader = document.getElementById("zyrox-startup-loader");
         if (loader && !loader.classList.contains("is-dismissed")) {
           loader.setAttribute("aria-busy", "false");
+          loader.setAttribute("data-dismissed", "true");
           loader.classList.add("is-dismissed");
           loader.style.opacity = "0";
           loader.style.pointerEvents = "none";
-          setTimeout(function () {
-            if (loader) {
-              loader.style.display = "none";
-              if (loader.parentNode) {
-                loader.parentNode.removeChild(loader);
-              }
-            }
-          }, 240);
+          loader.style.display = "none";
+          if (loader.parentNode) {
+            try { loader.parentNode.removeChild(loader); } catch (e) {}
+          }
         }
       }
       window.dismissStartupLoader = dismissLoader;
 
-      // Fast-path auth callback: if returning from Telegram/Google auth, dismiss swiftly
+      // Fast-path auth callback: if returning from Telegram/Google/Phone auth, dismiss swiftly
       try {
-        if (window.location.search && (window.location.search.indexOf("auth_success") !== -1 || window.location.search.indexOf("auth_error") !== -1)) {
-          setTimeout(dismissLoader, 400);
+        if (window.location.search && (
+          window.location.search.indexOf("auth_success") !== -1 ||
+          window.location.search.indexOf("auth_error") !== -1 ||
+          window.location.search.indexOf("auth_notice") !== -1
+        )) {
+          setTimeout(dismissLoader, 100);
         }
       } catch (e) {}
 
-      // Unconditional safety failsafe: automatically dismiss after at most 2.5 seconds
-      var failsafeTimer = setTimeout(dismissLoader, 2500);
+      // Unconditional safety failsafe: automatically dismiss after at most 1.5 seconds
+      setTimeout(dismissLoader, 1500);
 
       // Dismiss on window load if document has fully settled
       window.addEventListener("load", function () {
-        setTimeout(dismissLoader, 400);
+        setTimeout(dismissLoader, 150);
       });
 
-      // Show emergency bypass button if loader is still active after 1.2s
+      // Show emergency bypass button if loader is still active after 600ms
       setTimeout(function () {
         var loader = document.getElementById("zyrox-startup-loader");
         if (loader && !loader.classList.contains("is-dismissed")) {
@@ -77,7 +78,7 @@
             actions.innerHTML = '<button type="button" class="btn btn-gold btn-sm" onclick="window.dismissStartupLoader()" style="margin-top:14px;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#02110c;border:none;">⚡ Open Dashboard / បើកផ្ទាំងបញ្ជា</button>';
           }
         }
-      }, 1200);
+      }, 600);
     })();
   </script>
 
@@ -3458,12 +3459,12 @@
   <!-- Lightweight Charts Standalone Engine -->
   <script src="lightweight-charts.standalone.production.js"></script>
   <!-- Shared accessible loading, empty, error, and activity components -->
-  <script src="ui-kit.js?v=3.1.0"></script>
+  <script src="ui-kit.js?v=6.1.1"></script>
   <!-- Taikry Professional Interactive Chart Workspace Controller -->
-  <script src="chart.js?v=3.1.0"></script>
+  <script src="chart.js?v=6.1.1"></script>
   <div id="schema-studio-root"></div>
-  <script src="app.js?v=3.1.0"></script>
-  <script src="schema_designer.js?v=3.1.0"></script>
+  <script src="app.js?v=6.1.1"></script>
+  <script src="schema_designer.js?v=6.1.1"></script>
 
     <!-- ======================================================================
          MODAL: V6 CONCEPT EXPLORER

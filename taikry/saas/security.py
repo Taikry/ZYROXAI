@@ -380,3 +380,38 @@ def get_current_super_admin(
     return user
 
 
+def get_authenticated_user_from_request(request: Request, db: Optional[Session] = None) -> Optional[User]:
+    """
+    Extracts and authenticates active User from incoming FastAPI Request using:
+    1. Authorization: Bearer <token>
+    2. X-Session-Token header
+    3. zyrox_session or session_token cookies
+    """
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    if not token:
+        token = request.headers.get("X-Session-Token", "").strip()
+    if not token:
+        token = request.cookies.get("zyrox_session") or request.cookies.get("session_token")
+    if not token or len(str(token).strip()) < 20:
+        return None
+
+    close_db = False
+    if db is None:
+        from taikry.database.session import SessionLocal
+        db = SessionLocal()
+        close_db = True
+
+    try:
+        from taikry.saas.auth_service import authenticate_session
+        return authenticate_session(db, str(token).strip())
+    except Exception:
+        return None
+    finally:
+        if close_db:
+            db.close()
+
+
+

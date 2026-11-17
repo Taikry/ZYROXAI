@@ -18,6 +18,7 @@ The **ZYROX AI V6.1** upgrade was executed directly upon the existing production
 ## 2. Core Upgrades Completed (P0 / P1 / P2)
 
 ### P0 — Critical Broker Quote Safety
+
 * **Implementation:** `taikry/trading/xauusd_signal_engine.py`, `taikry/data/providers.py`
 * **Changes:**
   * Deleted synthetic spread calculation (`spread_est = 0.25`).
@@ -31,6 +32,7 @@ The **ZYROX AI V6.1** upgrade was executed directly upon the existing production
 * **Verification:** `tests/test_v61_quote_safety.py` passed (6/6 tests).
 
 ### P0 — Real Google OAuth 2.0 PKCE Flow
+
 * **Implementation:** `taikry/saas/google_oauth.py`, `taikry/api/saas_routes.py`, `src/components/AuthModal.tsx`
 * **Changes:**
   * Full authorization code flow with S256 PKCE code challenges.
@@ -41,6 +43,7 @@ The **ZYROX AI V6.1** upgrade was executed directly upon the existing production
 * **Verification:** `tests/test_v61_auth_flows.py` passed.
 
 ### P0 — Real Phone SMS OTP Engine
+
 * **Implementation:** `taikry/saas/phone_otp.py`, `taikry/database/models.py`, `src/components/AuthModal.tsx`
 * **Changes:**
   * E.164 normalization and validation.
@@ -52,6 +55,7 @@ The **ZYROX AI V6.1** upgrade was executed directly upon the existing production
 * **Verification:** `tests/test_v61_auth_flows.py` passed.
 
 ### P1 — Durable M15 Scheduler & Confluence Scoring
+
 * **Implementation:** `taikry/monitoring/engine.py`, `taikry/notifications/telegram_service.py`
 * **Changes:**
   * Database-backed distributed lock (`scheduler_m15_lock`) to prevent duplicate runs across instances.
@@ -62,10 +66,12 @@ The **ZYROX AI V6.1** upgrade was executed directly upon the existing production
 * **Verification:** `tests/test_v61_scheduler_and_scoring.py` passed (4/4 tests).
 
 ### P1 — CI/CD Pipeline
+
 * **Implementation:** `.github/workflows/ci.yml`
 * **Features:** Automatic execution of pytest test suite, TypeScript typecheck, and Vite production build on every push and pull request.
 
 ### P2 — Dashboard Startup Loader Fix
+
 * **Implementation:** `taikry/web/index.html`, `taikry/web/app.js`
 * **Changes:**
   * Added inline fail-safe dismisser (2.5s maximum runtime, 400ms fast-path on auth callback).

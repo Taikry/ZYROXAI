@@ -34,19 +34,23 @@ The ZYROX AI fleet consists of specialized autonomous agents managed by the cent
 ## 3. Server-Sent Events (SSE) Streaming Endpoints
 
 ### 3.1 Streaming AI Chat (`/api/v1/ai/chat/stream`)
+
 * **Protocol:** HTTP/1.1 SSE (`text/event-stream`).
 * **Authentication:** Enforced via `zyrox_session` cookie or `Authorization: Bearer` header.
 * **Payload Structure:**
-  ```json
-  event: message
-  data: {"chunk": "Based on current M15 Gold market structure...", "done": false}
 
-  event: complete
-  data: {"total_tokens": 342, "latency_ms": 618.5, "model": "deepseek-chat"}
-  ```
+```json
+event: message
+data: {"chunk": "Based on current M15 Gold market structure...", "done": false}
+
+event: complete
+data: {"total_tokens": 342, "latency_ms": 618.5, "model": "deepseek-chat"}
+```
+
 * **Guarantees:** No synthetic delays. Chunks are yielded directly from the underlying LLM provider stream.
 
 ### 3.2 Registry Telemetry API (`/api/v1/agents/registry`)
+
 * **Endpoint:** `GET /api/v1/agents/registry`
 * **Response Payload:**
   * Catalog of all registered agents.

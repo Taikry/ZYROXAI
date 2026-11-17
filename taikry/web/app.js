@@ -346,7 +346,7 @@ function handleAuthRedirectParams() {
     const isNewUser = url.searchParams.get("new_user") === "1";
     const authError = url.searchParams.get("auth_error");
 
-    if (authSuccess === "telegram") {
+    if (authSuccess) {
       url.searchParams.delete("auth_success");
       url.searchParams.delete("new_user");
       window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
@@ -356,15 +356,19 @@ function handleAuthRedirectParams() {
         window.dismissStartupLoader();
       }
 
-      // Immediately refresh SaaS user profile so Telegram link and badges update
+      // Immediately refresh SaaS user profile so link badges update
       if (typeof checkSaasSession === "function") {
         checkSaasSession();
       }
 
-      const title = isKhmer ? "ចូលប្រើប្រាស់ជោគជ័យ" : "Telegram Login Successful";
+      let providerName = "Telegram";
+      if (authSuccess === "google") providerName = "Google";
+      if (authSuccess === "phone") providerName = "Phone SMS";
+
+      const title = isKhmer ? "ចូលប្រើប្រាស់ជោគជ័យ" : `${providerName} Login Successful`;
       const message = isNewUser
         ? (isKhmer ? "សូមស្វាគមន៍មកកាន់ ZYROX AI! ការសាកល្បង Pro Trial រយៈពេល 14 ថ្ងៃត្រូវបានបើកដំណើរការ។" : "Welcome to ZYROX AI! Your 14-day Pro trial is active.")
-        : (isKhmer ? "ស្វាគមន៍ការវិលត្រឡប់មកវិញ! បានភ្ជាប់គណនី Telegram ជោគជ័យ។" : "Welcome back! Connected with your Telegram account.");
+        : (isKhmer ? `ស្វាគមន៍ការវិលត្រឡប់មកវិញ! បានភ្ជាប់គណនី ${providerName} ជោគជ័យ។` : `Welcome back! Connected with your ${providerName} account.`);
 
       window.setTimeout(() => {
         if (window.ZyroxToast) {

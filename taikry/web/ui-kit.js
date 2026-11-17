@@ -386,10 +386,12 @@
       }
       if (overlay) {
         overlay.setAttribute("aria-busy", "false");
+        overlay.setAttribute("data-dismissed", "true");
         overlay.classList.add("is-dismissed");
+        overlay.style.display = "none";
         window.setTimeout(() => {
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        }, 300);
+        }, 100);
       }
     };
 

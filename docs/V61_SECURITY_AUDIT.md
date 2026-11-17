@@ -27,6 +27,7 @@ flowchart LR
 ## 2. Authentication Subsystems Security
 
 ### 2.1 Google OAuth 2.0 PKCE Flow
+
 * **Status:** `VERIFIED`
 * **Flow:** Standard Authorization Code Grant with S256 PKCE Code Challenge.
 * **State / Nonce Security:**
@@ -44,6 +45,7 @@ flowchart LR
   * When `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET` is unset, returns status `NEEDS_CONFIGURATION`. Never generates dummy sessions.
 
 ### 2.2 Phone SMS OTP Verification Engine
+
 * **Status:** `VERIFIED`
 * **Normalization:** E.164 standard formatting enforced via regex `^\+[1-9]\d{7,14}$`.
 * **OTP Generation & Cryptographic Storage:**
@@ -61,6 +63,7 @@ flowchart LR
   * When Twilio credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`) are missing, returns `NEEDS_CONFIGURATION`. Dummy bypass is strictly forbidden.
 
 ### 2.3 Telegram OIDC Login
+
 * **Status:** `VERIFIED`
 * **Flow:** Telegram Login OAuth 2.0 / OpenID Connect authorization code exchange with RS256 JWKS verification.
 * **Session Issuance:** 30-day `zyrox_session` cookie issued with `HttpOnly`, `Secure`, `SameSite=Lax`.

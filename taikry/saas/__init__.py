@@ -17,6 +17,7 @@ from taikry.saas.security import (
     get_current_user_optional,
     get_current_admin,
     get_current_super_admin,
+    get_authenticated_user_from_request,
     require_permission,
     require_role
 )

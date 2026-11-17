@@ -45,6 +45,7 @@ flowchart TD
 ## 4. Phase Breakdown & Deliverables
 
 ### Phase A — Repository Audit & Baseline Lock
+
 * **Status:** `VERIFIED`
 * **Deliverables:**
   * Git working tree inspected and clean at commit `e7735a7`.
@@ -52,6 +53,7 @@ flowchart TD
   * `docs/V61_REPOSITORY_AUDIT.md` generated documenting existing systems and gaps.
 
 ### Phase B — Critical Broker Quote Safety (P0)
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `taikry/trading/xauusd_signal_engine.py`
@@ -70,6 +72,7 @@ flowchart TD
      * `BLOCKED_DISCONNECTED_FEED`
 
 ### Phase C — Real Authentication & Security (P0)
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `taikry/saas/google_oauth.py`
@@ -95,6 +98,7 @@ flowchart TD
      * If Twilio credentials are unset, return `NEEDS_CONFIGURATION` gracefully.
 
 ### Phase D — Durable M15 Scheduler & Confluence Scoring (P1)
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `taikry/monitoring/engine.py`
@@ -124,6 +128,7 @@ flowchart TD
      * Informational cycle reports never increment the actionable signal counter.
 
 ### Phase E — Real AI Agent Telemetry (P1)
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `taikry/agents/registry.py`
@@ -135,6 +140,7 @@ flowchart TD
   3. Report actual latency, model identifier, and real reasoning summary.
 
 ### Phase F — Frontend Verification & Live/Demo Separation (P2)
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `src/sections/AgentsSection.tsx`
@@ -148,6 +154,7 @@ flowchart TD
   3. Bulletproof dashboard loader with instant failsafe dismisser.
 
 ### Phase G — GitHub Actions CI Pipeline (P1)
+
 * **Status:** `NOT_IMPLEMENTED`
 * **Target File:** `.github/workflows/ci.yml`
 * **Requirements:**
@@ -156,6 +163,7 @@ flowchart TD
   3. Execute TypeScript typecheck and Vite build (`npm run build`).
 
 ### Phase H — Audit Documentation & Remote Sync
+
 * **Status:** `IN_PROGRESS`
 * **Target Files:**
   * `docs/V61_REPOSITORY_AUDIT.md` (Created)
@@ -174,9 +182,12 @@ flowchart TD
 ## 5. Rollback Procedure
 
 In the event of an unresolvable failure or production emergency:
+
 1. Revert Git working tree to baseline tag:
+
    ```bash
    git checkout v6.0-baseline
    ```
+
 2. Re-verify tests pass on clean baseline.
 3. Deploy baseline commit `e7735a7` to remotes.

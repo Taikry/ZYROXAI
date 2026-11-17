@@ -103,34 +103,7 @@ if os.path.exists(dist_assets):
     app.mount("/assets", StaticFiles(directory=dist_assets), name="react_assets")
 
 web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
-
-
-def get_authenticated_user_from_request(request: Request):
-    """
-    Validates session token from Authorization header, X-Session-Token header,
-    or session cookies ('zyrox_session', 'session_token'). Returns active User or None.
-    """
-    token = None
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-    if not token:
-        token = request.headers.get("X-Session-Token", "").strip()
-    if not token:
-        token = request.cookies.get("zyrox_session") or request.cookies.get("session_token")
-    if not token or len(str(token).strip()) < 20:
-        return None
-
-    try:
-        from taikry.database.session import SessionLocal
-        from taikry.saas.auth_service import authenticate_session
-        db = SessionLocal()
-        try:
-            return authenticate_session(db, str(token).strip())
-        finally:
-            db.close()
-    except Exception:
-        return None
+from taikry.saas.security import get_authenticated_user_from_request
 
 
 @app.get("/", include_in_schema=False)

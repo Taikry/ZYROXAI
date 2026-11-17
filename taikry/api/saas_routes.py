@@ -45,6 +45,7 @@ from taikry.saas import (
     sign_up_user,
     login_user,
     authenticate_session,
+    get_authenticated_user_from_request,
     logout_user,
     refresh_user_session,
     verify_email_token,
