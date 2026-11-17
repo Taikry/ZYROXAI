@@ -1,6 +1,6 @@
 import asyncio
 import os
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright  # type: ignore
 
 artifact_dir = r"C:\Users\Heng Taikry\.gemini\antigravity\brain\0027cbf4-2408-4289-a06e-a2417b62a4fc"
 
