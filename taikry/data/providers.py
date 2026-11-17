@@ -65,6 +65,9 @@ def build_quote_record(
         connection_status = "STALE"
         is_executable = False
 
+    if classification != QuoteClassification.REAL_BROKER_QUOTE:
+        is_executable = False
+
     mid = price if (price is not None and price > 0) else ((bid + ask) / 2.0 if (bid > 0 and ask > 0) else 0.0)
     spread = round(ask - bid, 5) if (ask >= bid and bid > 0) else 0.0
 

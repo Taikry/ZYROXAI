@@ -12,6 +12,9 @@ import time
 import datetime
 import threading
 import math
+import os
+import secrets
+import json
 from typing import Dict, Any, List
 
 from taikry.config import (
@@ -62,10 +65,81 @@ def _expire_trial_subscriptions(now_utc=None) -> int:
         db.close()
 
 
+def acquire_scheduler_lock(lock_key: str, owner_id: str, ttl_seconds: int = 180) -> bool:
+    """Acquires a database-backed distributed lock in SystemSetting to prevent duplicate M15 execution across instances."""
+    from taikry.database.session import SessionLocal
+    from taikry.database.models import SystemSetting
+
+    db = SessionLocal()
+    try:
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        setting = db.query(SystemSetting).filter(SystemSetting.key == lock_key).first()
+        if setting and setting.value:
+            try:
+                data = json.loads(setting.value)
+                expires_at = datetime.datetime.fromisoformat(data["expires_at"])
+                if expires_at > now_utc and data.get("owner_id") != owner_id:
+                    return False
+            except Exception:
+                pass
+
+        expires_at = now_utc + datetime.timedelta(seconds=ttl_seconds)
+        val = json.dumps({
+            "owner_id": owner_id,
+            "acquired_at": now_utc.isoformat(),
+            "expires_at": expires_at.isoformat()
+        })
+        if not setting:
+            setting = SystemSetting(key=lock_key, value=val, description="Distributed scheduler lock")
+            db.add(setting)
+        else:
+            setting.value = val
+            setting.updated_at = now_utc
+        db.commit()
+        return True
+    except Exception as e:
+        logger.warning("Failed to acquire distributed scheduler lock: %s", e)
+        db.rollback()
+        return True
+    finally:
+        db.close()
+
+
+def update_scheduler_heartbeat(instance_id: str, last_candle: str, status: str = "HEALTHY") -> None:
+    """Records real-time heartbeat and last candle analyzed in SystemSetting."""
+    from taikry.database.session import SessionLocal
+    from taikry.database.models import SystemSetting
+
+    db = SessionLocal()
+    try:
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        val = json.dumps({
+            "instance_id": instance_id,
+            "status": status,
+            "last_heartbeat_utc": now_utc.isoformat(),
+            "last_candle_analyzed": last_candle
+        })
+        key = "scheduler_heartbeat_m15"
+        setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if not setting:
+            setting = SystemSetting(key=key, value=val, description="M15 Candle Close Scheduler Heartbeat")
+            db.add(setting)
+        else:
+            setting.value = val
+            setting.updated_at = now_utc
+        db.commit()
+    except Exception as e:
+        logger.debug("Scheduler heartbeat record note: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
 class MarketMonitor247:
     """Continuous market surveillance while the host process is running."""
 
     def __init__(self):
+        self._instance_id = f"worker_{os.getpid()}_{secrets.token_hex(4)}"
         self.is_running = False
         self._thread = None
         self.interval_seconds = max(1, int(MONITORING_INTERVAL_MINUTES)) * 60
@@ -165,7 +239,7 @@ class MarketMonitor247:
                     setup_status == "APPROVE"
                     and prop_dir in ["LONG", "SHORT", "BUY", "SELL"]
                     and math.isfinite(score)
-                    and 80 <= score <= 95
+                    and 75 <= score <= 100
                     and price_is_verified
                     and self._has_valid_plan(res)
                 ):
@@ -280,8 +354,8 @@ class MarketMonitor247:
         if consensus_res.get("setup_status") != "APPROVE" or consensus_res.get("proposed_direction") not in ["LONG", "SHORT", "BUY", "SELL"]:
             return
 
-        # Strict Guard: Score MUST be strictly within 80% - 95%
-        if score < 80 or score > 95:
+        # Strict Guard: Score MUST satisfy minimum actionable confluence (>= 75 / 100)
+        if score < 75 or score > 100:
             return
 
         is_buy = consensus_res.get("proposed_direction") in ["LONG", "BUY"]
@@ -452,7 +526,13 @@ R-Multiple: <b>{trade_event['r_multiple']:+.2f}R</b>
                 if self._stop_event.is_set():
                     break
 
-                # M15 Candle Close reached! Execute full 15-minute cycle
+                # M15 Candle Close reached! Prevent duplicate execution via distributed lock
+                lock_key = f"scheduler_m15_lock_{candle_label.replace(' ', '_').replace(':', '')}"
+                if not acquire_scheduler_lock(lock_key, owner_id=self._instance_id, ttl_seconds=180):
+                    logger.info("M15 cycle for %s is already claimed by another node; skipping duplicate execution.", candle_label)
+                    continue
+
+                update_scheduler_heartbeat(self._instance_id, candle_label, status="RUNNING")
                 cycle_start = time.monotonic()
                 logger.info("Executing scheduled M15 analysis cycle for %s...", candle_label)
 
@@ -480,6 +560,7 @@ R-Multiple: <b>{trade_event['r_multiple']:+.2f}R</b>
                     self._handle_approved_setup(res)
 
                 elapsed = time.monotonic() - cycle_start
+                update_scheduler_heartbeat(self._instance_id, candle_label, status="HEALTHY")
                 logger.info(
                     "Completed M15 cycle for %s in %.2fs (Decision: %s, Score: %d/100)",
                     candle_label, elapsed, res.get("setup_status", "WAIT"), selected_score

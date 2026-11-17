@@ -1078,6 +1078,8 @@ def telegram_callback_endpoint(
 # =============================================================================
 # GOOGLE OAUTH & PHONE OTP ENDPOINTS
 # =============================================================================
+# GOOGLE OAUTH 2.0 & PHONE SMS OTP AUTHENTICATION
+# =============================================================================
 
 @saas_router.get("/api/v1/auth/google/status")
 def google_auth_status_endpoint(request: Request):
@@ -1105,6 +1107,89 @@ def google_auth_login_endpoint(request: Request, return_to: Optional[str] = "/da
     return RedirectResponse(url=auth_url, status_code=303)
 
 
+@saas_router.get("/api/v1/auth/google/callback")
+def google_auth_callback_endpoint(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None
+):
+    """Handles Google OAuth authorization code callback, verifies ID token, and issues session."""
+    from taikry.saas.google_oauth import (
+        is_google_auth_configured,
+        google_state_cache,
+        get_google_redirect_uri,
+        exchange_google_code_for_tokens,
+        verify_google_id_token,
+        authenticate_or_register_google_user
+    )
+    from urllib.parse import quote
+    base_url = str(request.base_url).rstrip("/")
+    if error:
+        return RedirectResponse(url=f"/dashboard/?auth_error={quote(error)}", status_code=303)
+
+    if not code or not state:
+        return RedirectResponse(url="/dashboard/?auth_error=" + quote("Missing authorization code or state from Google callback"), status_code=303)
+
+    state_entry = google_state_cache.pop(state)
+    if not state_entry:
+        return RedirectResponse(url="/dashboard/?auth_error=" + quote("Invalid, expired, or replayed authorization session. Please try logging in again."), status_code=303)
+
+    return_to = state_entry.get("return_to", "/dashboard/")
+    expected_nonce = state_entry.get("nonce")
+    code_verifier = state_entry.get("code_verifier")
+
+    redirect_uri = get_google_redirect_uri(base_url=base_url)
+    ok, token_data = exchange_google_code_for_tokens(code, redirect_uri, code_verifier)
+    if not ok:
+        err = token_data.get("error", "Failed to exchange code with Google")
+        return RedirectResponse(url=f"/dashboard/?auth_error={quote(err)}", status_code=303)
+
+    id_token_str = token_data.get("id_token")
+    if not id_token_str:
+        return RedirectResponse(url="/dashboard/?auth_error=" + quote("Google response missing id_token"), status_code=303)
+
+    valid_token, claims_or_err = verify_google_id_token(id_token_str, expected_nonce=expected_nonce)
+    if not valid_token:
+        err = claims_or_err.get("error", "Google ID token verification failed")
+        return RedirectResponse(url=f"/dashboard/?auth_error={quote(err)}", status_code=303)
+
+    claims = claims_or_err
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")
+    current_user = get_authenticated_user_from_request(request)
+
+    db = SessionLocal()
+    try:
+        success, user, session_token, is_new, auth_err = authenticate_or_register_google_user(
+            db=db,
+            claims=claims,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            current_user=current_user
+        )
+        if not success or not session_token:
+            return RedirectResponse(url=f"/dashboard/?auth_error={quote(auth_err or 'Authentication failed')}", status_code=303)
+
+        safe_dest = return_to if (return_to.startswith("/") and not return_to.startswith("//")) else "/dashboard/"
+        sep = "&" if "?" in safe_dest else "?"
+        final_url = f"{safe_dest}{sep}auth_success=google" + ("&new_user=1" if is_new else "")
+
+        resp = RedirectResponse(url=final_url, status_code=303)
+        resp.set_cookie(
+            key="zyrox_session",
+            value=session_token,
+            max_age=30 * 86400,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/"
+        )
+        return resp
+    finally:
+        db.close()
+
+
 @saas_router.get("/api/v1/auth/phone/status")
 def phone_auth_status_endpoint():
     """Returns configuration readiness status for Phone SMS OTP."""
@@ -1116,16 +1201,77 @@ class PhoneOtpRequestPayload(BaseModel):
     phone_number: str
 
 
+class PhoneOtpVerifyPayload(BaseModel):
+    phone_number: str
+    code: str
+
+
 @saas_router.post("/api/v1/auth/phone/request-otp")
-def phone_request_otp_endpoint(payload: PhoneOtpRequestPayload):
+def phone_request_otp_endpoint(payload: PhoneOtpRequestPayload, request: Request):
     """Requests an SMS OTP or returns NEEDS_CONFIGURATION if gateway is not configured."""
-    from taikry.saas.phone_otp import is_phone_auth_configured
+    from taikry.saas.phone_otp import is_phone_auth_configured, request_phone_otp
     if not is_phone_auth_configured():
-        raise HTTPException(
-            status_code=503,
-            detail="Phone SMS OTP service is not configured on the server. Missing SMS provider credentials (NEEDS_CONFIGURATION)."
+        return {
+            "success": False,
+            "status": "NEEDS_CONFIGURATION",
+            "message": "Phone SMS OTP service is not configured on the server. Missing TWILIO credentials."
+        }
+
+    client_ip = request.client.host if request.client else None
+    db = SessionLocal()
+    try:
+        ok, msg, meta = request_phone_otp(db, payload.phone_number, client_ip=client_ip)
+        if not ok:
+            return {"success": False, "message": msg, "details": meta}
+        return {"success": True, "message": msg, "details": meta}
+    finally:
+        db.close()
+
+
+@saas_router.post("/api/v1/auth/phone/verify-otp")
+def phone_verify_otp_endpoint(payload: PhoneOtpVerifyPayload, request: Request, response: Response):
+    """Verifies submitted Phone SMS OTP code and returns authenticated session cookie."""
+    from taikry.saas.phone_otp import verify_phone_otp_challenge
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")
+    current_user = get_authenticated_user_from_request(request)
+
+    db = SessionLocal()
+    try:
+        ok, user, session_token, is_new, err_msg = verify_phone_otp_challenge(
+            db=db,
+            phone_raw=payload.phone_number,
+            code_raw=payload.code,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            current_user=current_user
         )
-    return {"success": True, "message": "OTP sent to provided phone number."}
+        if not ok or not session_token:
+            return {"success": False, "message": err_msg}
+
+        response.set_cookie(
+            key="zyrox_session",
+            value=session_token,
+            max_age=30 * 86400,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/"
+        )
+        return {
+            "success": True,
+            "message": "Phone number verified successfully.",
+            "is_new_user": is_new,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "full_name": user.full_name,
+                "role": user.role
+            }
+        }
+    finally:
+        db.close()
 
 
 # =============================================================================

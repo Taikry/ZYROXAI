@@ -31,7 +31,7 @@ from taikry.config import (
 from taikry.database.session import SessionLocal
 from taikry.data.mt5_receiver import mt5_receiver
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel, XAUUSDDailyQuotaReservation
-from taikry.data.providers import market_data_engine
+from taikry.data.providers import market_data_engine, QuoteClassification
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
 from taikry.agents.registry import agent_registry
 
@@ -1063,21 +1063,53 @@ class XAUUSDSignalEngine:
         # A single validated quote snapshot supports either the desktop MT5
         # bridge or Render's authenticated OANDA v20 provider.
         quote = market_data_engine.get_verified_quote(canonical_symbol)
-        quote_classification = str(quote.get("quote_classification") or "") if quote else "UNAVAILABLE"
+        quote_classification = str(quote.get("quote_classification") or "") if quote else QuoteClassification.UNAVAILABLE
+        is_executable = bool(quote.get("is_executable", False)) if quote else False
+
         if not quote_classification and quote:
             bid_val = float(quote.get("bid") or 0.0)
             ask_val = float(quote.get("ask") or 0.0)
             if bid_val > 0 and ask_val > bid_val:
-                quote_classification = "REAL_BROKER_QUOTE"
+                quote_classification = QuoteClassification.REAL_BROKER_QUOTE
+                is_executable = True
             else:
-                quote_classification = "UNAVAILABLE"
+                quote_classification = QuoteClassification.UNAVAILABLE
+                is_executable = False
 
-        if quote_classification in ("STALE", "DISCONNECTED", "UNAVAILABLE"):
+        if quote_classification == QuoteClassification.ESTIMATED_SPREAD:
             return {
                 "success": False,
-                "error": f"The market data feed is {quote_classification}; actionable signal generation is blocked for risk safety.",
+                "error": "The market quote has an estimated spread; actionable signal generation is blocked for risk safety.",
                 "canonical_symbol": canonical_symbol,
-                "status": f"BLOCKED_{quote_classification}_FEED"
+                "status": "BLOCKED_ESTIMATED_SPREAD"
+            }
+        elif quote_classification == QuoteClassification.REFERENCE_PRICE:
+            return {
+                "success": False,
+                "error": "The market quote is a reference price only; actionable signal generation is blocked for risk safety.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_REFERENCE_ONLY"
+            }
+        elif quote_classification == QuoteClassification.STALE:
+            return {
+                "success": False,
+                "error": "The market data feed is STALE; actionable signal generation is blocked for risk safety.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_STALE_FEED"
+            }
+        elif quote_classification == QuoteClassification.DISCONNECTED:
+            return {
+                "success": False,
+                "error": "The market data feed is DISCONNECTED; actionable signal generation is blocked for risk safety.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_DISCONNECTED_FEED"
+            }
+        elif quote_classification != QuoteClassification.REAL_BROKER_QUOTE or not is_executable:
+            return {
+                "success": False,
+                "error": f"Actionable XAUUSD signal generation requires a verified live executable broker quote (current classification: {quote_classification}).",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_NO_EXECUTABLE_QUOTE"
             }
 
         try:
@@ -1090,6 +1122,7 @@ class XAUUSDSignalEngine:
             bid = ask = quote_price = 0.0
             quote_source = ""
             quote_timestamp = None
+
         if (
             not math.isfinite(bid)
             or not math.isfinite(ask)
@@ -1098,19 +1131,12 @@ class XAUUSDSignalEngine:
             or not math.isfinite(quote_price)
             or quote_price <= 0
         ):
-            if verified_price > 0:
-                spread_est = 0.25
-                quote_price = verified_price
-                bid = round(quote_price - spread_est / 2.0, 2)
-                ask = round(quote_price + spread_est / 2.0, 2)
-                quote_source = "REFERENCE_PRICE_ESTIMATED"
-            else:
-                return {
-                    "success": False,
-                    "error": "A verified live bid/ask quote is required for XAUUSD risk validation.",
-                    "canonical_symbol": canonical_symbol,
-                    "status": "BLOCKED_MISSING_VERIFIED_SPREAD"
-                }
+            return {
+                "success": False,
+                "error": "A verified live executable bid/ask broker quote is required for XAUUSD signal generation.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_NO_EXECUTABLE_QUOTE"
+            }
         spread_price = ask - bid
         verified_price = round(quote_price, 2)
         price_source = quote_source

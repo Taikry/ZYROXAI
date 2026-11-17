@@ -593,6 +593,8 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     telegram_user_id = Column(String(64), unique=True, index=True, nullable=True)
+    google_user_id = Column(String(64), unique=True, index=True, nullable=True)
+    phone_number = Column(String(32), unique=True, index=True, nullable=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     salt = Column(String(64), nullable=False)
@@ -640,6 +642,26 @@ class VerificationToken(Base):
     expires_at = Column(DateTime, index=True, nullable=False)
     used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utc_now)
+
+
+class PhoneOTPChallenge(Base):
+    """
+    Cryptographic Phone SMS OTP challenges.
+    Stores salted SHA-256 hash of OTP code, attempts count, expiry, and phone number.
+    Never stores or logs raw OTP codes in database or responses.
+    """
+    __tablename__ = "phone_otp_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String(32), index=True, nullable=False)
+    otp_hash = Column(String(64), nullable=False)
+    salt = Column(String(64), nullable=False)
+    attempts = Column(Integer, default=0, nullable=False)
+    max_attempts = Column(Integer, default=5, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False, nullable=False)
+    client_ip = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
 
 class SubscriptionPlan(Base):

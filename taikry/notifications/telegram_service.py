@@ -2941,7 +2941,7 @@ Use <code>/vip</code> only for the separate legacy VIP Channel membership."""
         except (KeyError, TypeError, ValueError):
             return reject("Signal is missing required entry, stop, target, or score data.")
         levels = [entry, sl, tp1, tp2, tp3, score]
-        if not all(math.isfinite(value) for value in levels) or min(levels[:5]) <= 0 or not 80 <= score <= 95:
+        if not all(math.isfinite(value) for value in levels) or min(levels[:5]) <= 0 or not 75 <= score <= 100:
             return reject("Signal contains invalid price levels or score.")
         if (action_name == "BUY" and not sl < entry < tp1 < tp2 < tp3) or (action_name == "SELL" and not sl > entry > tp1 > tp2 > tp3):
             return reject("Signal price levels do not match the trade direction.")

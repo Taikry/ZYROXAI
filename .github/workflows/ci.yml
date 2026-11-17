@@ -1,0 +1,53 @@
+name: ZYROX AI V6.1 CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    name: Backend Test Suite (Pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest httpx
+
+      - name: Run V6.1 core unit tests
+        env:
+          DATABASE_URL: "sqlite:///./test_ci.db"
+          PUBLIC_APP_URL: "https://taikry-ai-trading.onrender.com"
+        run: |
+          pytest tests/test_v61_quote_safety.py tests/test_v61_auth_flows.py tests/test_v61_scheduler_and_scoring.py -v
+
+  frontend-build:
+    name: Frontend Typecheck & Build (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci || npm install
+
+      - name: TypeScript typecheck and Vite build
+        run: npm run build
