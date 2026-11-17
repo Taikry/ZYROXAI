@@ -1742,6 +1742,312 @@ def _get_chat_research(
     return None, "REFRESHING"
 
 
+def classify_chat_intent(query: str, symbol: str = "XAUUSD") -> Tuple[str, Optional[str]]:
+    """
+    Classifies the trader's query into:
+    - ("CONVERSATIONAL", <category>) for greetings, polite chat, identity, help, general question inquiries
+      ("ចុះបើសួរទូទៅ"), or trading concept questions (SMC, FVG, Order Block definitions) without active ticker trade requests.
+    - ("MARKET_ANALYSIS", None) for explicit market scans, analysis, setups, directions, pre-news research, or ticker-specific inquiries.
+    """
+    q = (query or "").strip()
+    if not q:
+        return "CONVERSATIONAL", "GREETING"
+    q_lower = q.lower().strip("?!.,;:\n\r\t\"' ")
+
+    # 1. Concept / Educational definition queries
+    concept_patterns = [
+        r"^(?:what is|what are|explain|define|meaning of|tell me about)\s+(?:an?\s+)?(fvg|fair value gap|smc|smart money concepts?|ict|inner circle trader|order blocks?|breaker blocks?|liquidity|bos|choch|discount zone|premium zone|risk management|risk reward ratio|rr ratio|leverage|margin|pip|lot size)\b",
+        r"^(?:តើ|ពន្យល់អំពី)?\s*(fvg|smc|ict|order block|breaker block|liquidity|bos|choch|ហានិភ័យ|risk management)\s*(?:ជាអ្វី|គឺជាអ្វី|មានន័យដូចម្តេច|ដំណើរការយ៉ាងដូចម្តេច)?$"
+    ]
+    for pat in concept_patterns:
+        if re.search(pat, q_lower):
+            return "CONVERSATIONAL", "CONCEPT_EDUCATION"
+
+    # 2. General inquiry about asking questions
+    general_inquiry_phrases = [
+        "ចុះបើសួរទូទៅ", "ចុះប់ើសួរទូទៅ", "សួរទូទៅ", "សួរធម្មតា", "សួរសំណួរទូទៅ", "តើសួរទូទៅបានទេ",
+        "general question", "general questions", "can i ask general questions", "can i ask a general question",
+        "can i ask anything", "ask anything", "just chat", "chit chat"
+    ]
+    if any(p in q_lower for p in general_inquiry_phrases):
+        return "CONVERSATIONAL", "GENERAL_INQUIRY"
+
+    # 3. Greetings
+    greetings = {
+        "hello", "hi", "hey", "hiya", "howdy", "hola", "sup", "yo", "good morning", "good afternoon", "good evening",
+        "how are you", "how are you doing", "how r u", "whats up", "what's up", "greetings",
+        "សួស្តី", "ជំរាបសួរ", "សួស្ដី", "សុខសប្បាយ", "សុខសប្បាយទេ", "សុខសប្បាយជាទេ", "អ្នកសុខសប្បាយទេ"
+    }
+    if q_lower in greetings or re.match(r"^(?:hello|hi|hey|hola|greetings)\s+(?:there|all|team|zyrox|ai|bot|friend)$", q_lower) or re.match(r"^(?:សួស្តី|ជំរាបសួរ|សួស្ដី)\s*(?:បាទ|ចាស|zyrox|ai)?$", q_lower):
+        return "CONVERSATIONAL", "GREETING"
+
+    # 4. Identity & Capabilities
+    identity_phrases = [
+        "who are you", "what are you", "what is zyrox", "what is zyrox ai", "what can you do", "how do you work",
+        "tell me about yourself", "introduce yourself", "help", "help me", "commands", "features", "how to use",
+        "តើអ្នកជានរណា", "អ្នកជានរណា", "តើអ្នកអាចធ្វើអ្វីបាន", "តើអ្នកអាចធ្វើអ្វីបានខ្លះ", "អ្នកអាចធ្វើអ្វី", "ជួយខ្ញុំ", "របៀបប្រើ", "តើ zyrox ជាអ្វី"
+    ]
+    if any(q_lower == p or q_lower == p + "?" or q_lower == p + "!" for p in identity_phrases):
+        return "CONVERSATIONAL", "IDENTITY_HELP"
+
+    # 5. Courtesies / Gratitude
+    courtesies = {
+        "thank you", "thanks", "thx", "thank u", "appreciate it", "great", "awesome", "perfect", "cool", "nice", "good job",
+        "ok", "okay", "bye", "goodbye", "see you", "cya", "yes", "no",
+        "អរគុណ", "អរគុណច្រើន", "ល្អណាស់", "លាហើយ", "បាទ", "ចាស", "យល់ព្រម"
+    }
+    if q_lower in courtesies or re.match(r"^(?:thank you|thanks)\s+(?:very much|a lot|so much)?$", q_lower):
+        return "CONVERSATIONAL", "COURTESY_GRATITUDE"
+
+    # 6. Check explicit Market/Trade keywords
+    tickers = {"xauusd", "gold", "btcusdt", "btc", "ethusdt", "eth", "eurusd", "gbpusd", "usdjpy", "audusd", "usdcad", "usdchf", "nzdusd", "usoil", "oil", "spx", "nasdaq", "us30", "dxy"}
+    trade_verbs = {
+        "buy", "sell", "long", "short", "entry", "sl", "tp", "target", "stop loss", "take profit",
+        "signal", "setup", "consensus", "scan", "analyze", "forecast", "trend", "pre-news", "research",
+        "calendar", "catalyst", "fomc", "cpi", "nfp", "gdp", "bias", "regime", "order flow", "liquidity",
+        "zones", "blocks", "risk", "audit", "limits", "server limits", "account limits",
+        "ទិញ", "លក់", "វិភាគ", "ស្កេន", "ស្រាវជ្រាវ", "សេណារីយ៉ូ", "ហានិភ័យ", "ព័ត៌មាន", "ក្រាហ្វិក"
+    }
+
+    words = set(re.findall(r"[a-zA-Z0-9_\u1780-\u17FF]+", q_lower))
+    has_ticker = bool(words & tickers)
+    has_trade_action = any(w in q_lower for w in trade_verbs)
+    if has_ticker or has_trade_action:
+        return "MARKET_ANALYSIS", None
+
+    # If completely generic short conversational phrase with no market context
+    if len(q_lower) < 50:
+        return "CONVERSATIONAL", "GENERAL_FALLBACK"
+
+    return "MARKET_ANALYSIS", None
+
+
+def _build_conversational_response(
+    query: str,
+    category: str,
+    symbol: str,
+    timeframe: str,
+    provider: str,
+    history_context: str,
+    t_start: float
+) -> Dict[str, Any]:
+    """
+    Handles conversational, greeting, identity, and general educational inquiries without forcing
+    a heavy trading signal, consensus scan, or HOLD setup card.
+    Provides natural bilingual responses (Khmer & English) and quick suggestion chips.
+    """
+    sym = (symbol or "XAUUSD").upper()
+    tf = timeframe or "15m"
+
+    # High quality deterministic text
+    if category == "GREETING":
+        kh_text = (
+            f"សួស្តីបាទ! ខ្ញុំគឺ ZYROX AI ជាជំនួយការ Multi-Agent Market Copilot សម្រាប់ទីផ្សារហិរញ្ញវត្ថុ។ "
+            f"តើខ្ញុំអាចជួយសម្រួលអ្វីដល់ការជួញដូររបស់លោកអ្នកនៅថ្ងៃនេះ? លោកអ្នកអាចសួរអំពីការវិភាគបច្ចេកទេសទីផ្សារ "
+            f"({sym}, Crypto, Forex), ព័ត៌មានម៉ាក្រូសេដ្ឋកិច្ច (11-Agent Pre-News Research), គំនិតជួញដូរ SMC/ICT "
+            f"ឬចុចប៊ូតុងកាមេរ៉ាដើម្បី Upload រូបភាពក្រាហ្វិក (Screenshot) មកឱ្យខ្ញុំវិភាគបានគ្រប់ពេលវេលា។"
+        )
+        en_text = (
+            f"Hello! I am ZYROX AI, your institutional Multi-Agent Market Copilot. "
+            f"How can I assist your trading today? You can ask me for real-time market structure on {sym}, Crypto, or Forex, "
+            f"run 11-agent pre-news research, evaluate SMC/ICT order flow, or upload any chart screenshot for instant multimodal vision analysis."
+        )
+    elif category == "GENERAL_INQUIRY":
+        kh_text = (
+            "ពិតជាបានបាទ! លោកអ្នកអាចសួរខ្ញុំនូវរាល់សំណួរទូទៅបានគ្រប់ពេលវេលា មិនថាសំណួរទាក់ទងនឹងបច្ចេកទេសជួញដូរ "
+            "(SMC, ICT, FVG, Order Block, Market Structure), របៀបគ្រប់គ្រងហានិភ័យ (Risk Management & Capital Protection), "
+            "ព័ត៌មានសេដ្ឋកិច្ចពិភពលោក (FOMC, CPI, NFP) ឬសំណួរទូទៅអំពីរបៀបដំណើរការរបស់ប្រព័ន្ធ ZYROX AI។ "
+            "ខ្ញុំត្រៀមខ្លួនជាស្រេចក្នុងការឆ្លើយតប និងជួយសម្រួលដល់លោកអ្នកជានិច្ច!"
+        )
+        en_text = (
+            "Absolutely! You can ask me any general question at any time — whether it is about trading concepts "
+            "(SMC, ICT, FVG, Order Blocks, Liquidity), institutional risk management rules, global macroeconomic events "
+            "(FOMC, CPI, NFP), or how the ZYROX AI multi-agent platform works. I am here to help you around the clock."
+        )
+    elif category == "IDENTITY_HELP":
+        kh_text = (
+            "ខ្ញុំគឺ ZYROX AI ជាប្រព័ន្ធជំនួយការជួញដូរកម្រិតស្ថាប័ន (Institutional Market Copilot) "
+            "ដែលរួមបញ្ចូលកងកម្លាំងភ្នាក់ងារ AI ចំនួន ១៤ ភ្នាក់ងារ (14-Agent Fleet) និងប្រព័ន្ធស្រាវជ្រាវព័ត៌មានមុនពេលចេញ "
+            "១១ ភ្នាក់ងារ (11-Agent Pre-News Engine) ដើម្បីជួយវិភាគរចនាសម្ព័ន្ធទីផ្សារ ផ្ទៀងផ្ទាត់ហានិភ័យ និងការពារដើមទុនរបស់អ្នកជួញដូរ។"
+        )
+        en_text = (
+            "I am ZYROX AI, an institutional-grade Multi-Agent Market Copilot. I synthesize data from 14 specialist AI agents "
+            "and an 11-agent pre-news deep research fleet to provide real-time market structure, verified quotes, SMC/ICT analysis, "
+            "and rigorous capital preservation guidance."
+        )
+    elif category == "COURTESY_GRATITUDE":
+        kh_text = (
+            "មិនអីទេបាទ! ខ្ញុំរីករាយណាស់ដែលបានជួយលោកអ្នក។ ប្រសិនបើលោកអ្នកត្រូវការវិភាគទីផ្សារ ឬមានសំណួរបន្ថែម "
+            "សូមកុំស្ទាក់ស្ទើរក្នុងការសួរខ្ញុំគ្រប់ពេលវេលា!"
+        )
+        en_text = (
+            "You are very welcome! I am always here to assist. Whenever you are ready to analyze a chart or have any market questions, "
+            "feel free to ask."
+        )
+    elif category == "CONCEPT_EDUCATION":
+        q_low = query.lower()
+        if "fvg" in q_low or "fair value gap" in q_low:
+            kh_text = (
+                "Fair Value Gap (FVG) គឺជាគម្លាតតម្លៃដែលកើតឡើងនៅពេលទីផ្សារមានចលនារុញច្រានខ្លាំង (Imbalance) រវាងទៀន ៣ ដើម "
+                "ដែលបន្សល់ទុកនូវកន្លែងគ្មានការជួញដូរពេញលេញ។ ស្ថាប័នធំៗច្រើនតែរុញតម្លៃឱ្យត្រឡប់មកបំពេញតំបន់ FVG នេះវិញ (Rebalance Liquidity) "
+                "មុនពេលបន្តដំណើរតាមទិសដៅដើម។"
+            )
+            en_text = (
+                "A Fair Value Gap (FVG) is a 3-candle price imbalance created by aggressive institutional momentum where price moves too rapidly "
+                "for two-sided trade execution. Institutional algorithms frequently retrace price back into the FVG to rebalance liquidity before continuation."
+            )
+        elif "order block" in q_low or "ob" in q_low:
+            kh_text = (
+                "Order Block (OB) គឺជាទៀនចុងក្រោយមុនពេលមានចលនារុញច្រានយ៉ាងខ្លាំងរបស់ស្ថាប័ន (Impulsive Move)។ "
+                "វាតំណាងឱ្យតំបន់ដែលស្ថាប័នធំៗបានដាក់បញ្ជាទិញ ឬលក់ក្នុងទំហំធំ ហើយច្រើនតែដើរតួជា Support ឬ Resistance ដ៏រឹងមាំនៅពេលតម្លៃត្រឡប់មកដល់។"
+            )
+            en_text = (
+                "An Order Block (OB) represents the final opposing candle before a powerful institutional expansion impulse. "
+                "It marks the institutional footstep where large participants accumulated positions and frequently serves as high-probability support or resistance."
+            )
+        else:
+            kh_text = (
+                "SMC (Smart Money Concepts) និង ICT (Inner Circle Trader) គឺជាវិធីសាស្ត្រវិភាគទីផ្សារដោយតាមដានចលនារបស់ស្ថាប័នធំៗ "
+                "(Institutional Order Flow) តាមរយៈតំបន់សំខាន់ៗដូចជា Order Blocks, Fair Value Gaps (FVG), Liquidity Sweeps, "
+                "និង Market Structure Shift (MSS/BOS) ដើម្បីបញ្ចៀសការចាញ់បោកនៃទីផ្សារ (Liquidity Traps)។"
+            )
+            en_text = (
+                "Smart Money Concepts (SMC) and ICT focus on tracking institutional order flow, key liquidity sweeps, "
+                "Fair Value Gaps (FVGs), Order Blocks, and market structure breaks to align execution with major institutional participants."
+            )
+    else:
+        kh_text = (
+            f"ខ្ញុំបានទទួលសាររបស់លោកអ្នកហើយ! ខ្ញុំគឺ ZYROX AI Market Copilot។ តើលោកអ្នកចង់ឱ្យខ្ញុំជួយវិភាគ {sym} "
+            f"ពិនិត្យព័ត៌មានម៉ាក្រូ ឬ Upload រូបភាពក្រាហ្វិកដែរឬទេ?"
+        )
+        en_text = (
+            f"I have received your message! I am ZYROX AI Market Copilot. Would you like me to analyze {sym}, "
+            f"review macro news, or evaluate a chart screenshot?"
+        )
+
+    used_provider = "zyrox_copilot"
+    used_model = "market_assistant"
+
+    # Attempt fast cloud LLM for dynamic answers if configured
+    if provider != "quant":
+        llm_conv_prompt = f"""{history_context}Trader Message: {query}
+Inquiry Category: {category}
+System Role: You are ZYROX AI, an institutional Market Copilot and trading intelligence system.
+Language Requirements:
+1. Provide a natural, friendly, respectful answer in Natural Khmer (ភាសាខ្មែរ) in synthesis_summary_kh.
+   - If greeting: Greet the user warmly, introduce yourself as ZYROX AI Market Copilot, and invite them to explore live market analysis, 11-agent pre-news research, SMC/ICT structure, or upload chart screenshots.
+   - If asking about general questions ("ចុះបើសួរទូទៅ", "general questions"): Reassure them that they can ask ANY question (general questions, trading concepts, risk management, macro economics, or platform features).
+   - If asking about a trading concept (SMC, FVG, Order Block, Risk): Explain the institutional concept clearly.
+2. Provide a matching clear institutional summary in English in synthesis_summary_en.
+3. Do NOT provide trading prices (Entry, Stop Loss, Take Profit) and do NOT output BUY/SELL/HOLD trades for general chat.
+
+Respond strictly in JSON:
+{{
+  "smart_analysis": {{
+    "synthesis_summary_kh": "<Khmer answer>",
+    "synthesis_summary_en": "<English answer>"
+  }}
+}}
+"""
+        # Try Groq or Gemini
+        try:
+            if GROQ_API_KEY and provider in {"auto", "groq"}:
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": "openai/gpt-oss-120b",
+                        "messages": [
+                            {"role": "system", "content": "You are ZYROX AI, an elite institutional Market Copilot. Output JSON strictly."},
+                            {"role": "user", "content": llm_conv_prompt}
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.3,
+                        "max_tokens": 800
+                    },
+                    timeout=3.5
+                )
+                if resp.status_code == 200:
+                    parsed = _extract_json_from_response(resp.json()["choices"][0]["message"]["content"])
+                    if parsed and isinstance(parsed.get("smart_analysis"), dict):
+                        sa = parsed["smart_analysis"]
+                        if sa.get("synthesis_summary_kh"):
+                            kh_text = sa["synthesis_summary_kh"]
+                        if sa.get("synthesis_summary_en"):
+                            en_text = sa["synthesis_summary_en"]
+                        used_provider = "groq"
+                        used_model = "openai/gpt-oss-120b"
+            elif GEMINI_API_KEY and provider in {"auto", "gemini"} and used_provider == "zyrox_copilot":
+                resp = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{"parts": [{"text": llm_conv_prompt}]}],
+                        "generationConfig": {"response_mime_type": "application/json", "temperature": 0.3}
+                    },
+                    timeout=3.5
+                )
+                if resp.status_code == 200:
+                    cand = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+                    parsed = _extract_json_from_response(cand)
+                    if parsed and isinstance(parsed.get("smart_analysis"), dict):
+                        sa = parsed["smart_analysis"]
+                        if sa.get("synthesis_summary_kh"):
+                            kh_text = sa["synthesis_summary_kh"]
+                        if sa.get("synthesis_summary_en"):
+                            en_text = sa["synthesis_summary_en"]
+                        used_provider = "gemini"
+                        used_model = "gemini-2.5-flash"
+        except Exception as exc:
+            logger.debug("Conversational cloud LLM notice: %s", exc)
+
+    suggested_chips = [
+        {"label_kh": f"📊 វិភាគ {sym}", "label_en": f"📊 Analyze {sym}", "prompt": f"Analyze {sym} market structure"},
+        {"label_kh": "🔬 Pre-News Research", "label_en": "🔬 Pre-News Research", "prompt": f"Pre-news deep research report for {sym}"},
+        {"label_kh": "🏛️ SMC / ICT Structure", "label_en": "🏛️ SMC / ICT Structure", "prompt": "Institutional ICT / SMC zones, FVG, liquidity sweeps and order blocks"},
+        {"label_kh": "📷 ផ្ញើរូបភាពក្រាហ្វិក", "label_en": "📷 Upload Chart", "action": "upload_photo"}
+    ]
+
+    total_lat = int((time.time() - t_start) * 1000)
+    return {
+        "status": "SUCCESS",
+        "ai_status": "SUCCESS",
+        "is_conversational": True,
+        "query_type": "CONVERSATIONAL",
+        "conversational_category": category,
+        "has_photo": False,
+        "provider": used_provider,
+        "model": used_model,
+        "latency_ms": total_lat,
+        "symbol": sym,
+        "timeframe": tf,
+        "market_context": None,
+        "consensus_context": None,
+        "agents": [],
+        "agent_run_summary": None,
+        "smart_analysis": {
+            "synthesis_summary_en": en_text,
+            "synthesis_summary_kh": kh_text,
+            "agents": []
+        },
+        "trade_execution": {
+            "action": "NONE",
+            "setup_status": "CONVERSATIONAL",
+            "entry_price": None,
+            "stop_loss": None,
+            "take_profit_1": None,
+            "take_profit_2": None,
+            "risk_reward_ratio": "N/A",
+            "confidence": None
+        },
+        "evidence_sections": None,
+        "deep_research": None,
+        "deep_research_status": "NOT_REQUESTED",
+        "suggested_chips": suggested_chips
+    }
+
+
+
 def chat_with_real_ai(
     query: str,
     symbol: str = "XAUUSD",
@@ -1778,6 +2084,23 @@ def chat_with_real_ai(
         + "\n\n"
         if safe_history else ""
     )
+
+    t_start = time.time()
+
+    # Fast Path: Check if query is conversational greeting, identity, general question, or educational concept
+    if not image_base64:
+        intent, category = classify_chat_intent(query, sym)
+        if intent == "CONVERSATIONAL":
+            logger.info("Handling conversational query '%s' (%s) as Market Copilot", query[:60], category)
+            return _build_conversational_response(
+                query=query,
+                category=category or "GREETING",
+                symbol=sym,
+                timeframe=tf,
+                provider=prov,
+                history_context=history_context,
+                t_start=t_start,
+            )
 
     # Capture the newest verified quote and its actual provider timestamp.
     price_val = None

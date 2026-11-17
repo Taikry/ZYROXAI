@@ -5574,18 +5574,37 @@ function stripChatEmojiFromMarkup(value) {
   return String(value ?? "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\u20E3]/gu, "");
 }
 
-function startChatThinkingAnimation(typingMsg, hasPhoto) {
+function isClientConversationalQuery(raw) {
+  if (!raw) return false;
+  const q = String(raw).trim().toLowerCase().replace(/[?!.,;:\n\r\t"' ]+$/g, "");
+  const greetings = [
+    "hello", "hi", "hey", "hola", "greetings", "good morning", "good afternoon", "good evening",
+    "how are you", "who are you", "what can you do", "help", "thanks", "thank you",
+    "what is fvg", "what is smc", "what is order block", "what is risk management",
+    "សួស្តី", "ជំរាបសួរ", "សួស្ដី", "សុខសប្បាយ", "សុខសប្បាយទេ", "ចុះបើសួរទូទៅ", "ចុះប់ើសួរទូទៅ",
+    "សួរទូទៅ", "សួរធម្មតា", "តើសួរទូទៅបានទេ", "តើអ្នកជានរណា", "អរគុណ", "អរគុណច្រើន", "តើ fvg ជាអ្វី", "តើ smc ជាអ្វី"
+  ];
+  return greetings.some(g => q === g || q.startsWith(g + " ") || q.startsWith(g + "?") || q.startsWith(g + "!") || q.startsWith(g + "។"));
+}
+
+function startChatThinkingAnimation(typingMsg, hasPhoto, isConversational = false) {
   const phases = hasPhoto
     ? [
       { en: "Preparing image and live quote…", kh: "កំពុងរៀបចំរូបភាព និងតម្លៃថ្មី…" },
       { en: "Reading chart structure…", kh: "កំពុងអានរចនាសម្ព័ន្ធក្រាហ្វិក…" },
       { en: "Checking risk and response…", kh: "កំពុងផ្ទៀងផ្ទាត់ហានិភ័យ និងចម្លើយ…" },
     ]
-    : [
-      { en: "Verifying live quote…", kh: "កំពុងផ្ទៀងផ្ទាត់តម្លៃទីផ្សារថ្មី…" },
-      { en: "Refreshing multi-agent scan…", kh: "កំពុងធ្វើស្កេន Multi-Agent ថ្មី…" },
-      { en: "Validating setup and risk…", kh: "កំពុងផ្ទៀងផ្ទាត់ Setup និងហានិភ័យ…" },
-    ];
+    : (isConversational
+      ? [
+        { en: "Reading your question…", kh: "កំពុងអានសំណួររបស់លោកអ្នក…" },
+        { en: "Consulting intelligence system…", kh: "កំពុងពិគ្រោះប្រព័ន្ធឆ្លាតវៃ…" },
+        { en: "Composing clear answer…", kh: "កំពុងរៀបចំចម្លើយយ៉ាងក្បោះក្បាយ…" },
+      ]
+      : [
+        { en: "Verifying live quote…", kh: "កំពុងផ្ទៀងផ្ទាត់តម្លៃទីផ្សារថ្មី…" },
+        { en: "Refreshing multi-agent scan…", kh: "កំពុងធ្វើស្កេន Multi-Agent ថ្មី…" },
+        { en: "Validating setup and risk…", kh: "កំពុងផ្ទៀងផ្ទាត់ Setup និងហានិភ័យ…" },
+      ]);
   const startedAt = Date.now();
   const phaseText = typingMsg.querySelector("[data-chat-phase]");
   const timerText = typingMsg.querySelector("[data-chat-timer]");
@@ -5660,25 +5679,44 @@ async function submitChatMessage() {
 
   // Typing / AI Processing Bubble
   const provider = document.getElementById("ai-chat-provider-select")?.value || "auto";
+  const isClientConversational = !photoToSend && isClientConversationalQuery(query);
   const typingMsg = document.createElement("div");
   typingMsg.className = "chat-msg chat-msg-ai";
+
+  const thinkingAuthor = isClientConversational
+    ? `ZYROX AI <span class="chat-author-divider">/</span> MARKET COPILOT`
+    : `ZYROX AI <span class="chat-author-divider">/</span> LIVE ANALYSIS`;
+
+  const thinkingSubtitle = isClientConversational
+    ? (isKhmer ? "ជំនួយការឆ្លាតវៃ ZYROX AI" : "Market Copilot Intelligence")
+    : `${escapeHtml(currentSymbol)} · ${escapeHtml(currentTimeframe || "15m")} · ${photoToSend ? "VISION" : "LIVE SCAN"}`;
+
+  const thinkingSteps = isClientConversational
+    ? `
+      <span data-chat-step="0">${chatIcon("user")}<b>${isKhmer ? "សំណួរ" : "INPUT"}</b></span>
+      <span data-chat-step="1">${chatIcon("pulse")}<b>${isKhmer ? "កំពុងគិត" : "THINKING"}</b></span>
+      <span data-chat-step="2">${chatIcon("send")}<b>${isKhmer ? "រៀបចំចម្លើយ" : "REPLY"}</b></span>
+    `
+    : `
+      <span data-chat-step="0">${chatIcon("pulse")}<b>${isKhmer ? "តម្លៃថ្មី" : "LIVE QUOTE"}</b></span>
+      <span data-chat-step="1">${chatIcon("scan")}<b>${isKhmer ? "ស្កេន AI" : "AI SCAN"}</b></span>
+      <span data-chat-step="2">${chatIcon("shield")}<b>${isKhmer ? "ផ្ទៀងផ្ទាត់" : "RISK CHECK"}</b></span>
+    `;
 
   typingMsg.innerHTML = `
     <div class="chat-avatar chat-avatar-ai"><img src="assets/brand/zyrox-logo-icon.svg" alt="" aria-hidden="true"></div>
     <div class="chat-bubble chat-bubble-thinking">
-      <div class="chat-author">ZYROX AI <span class="chat-author-divider">/</span> LIVE ANALYSIS</div>
+      <div class="chat-author">${thinkingAuthor}</div>
       <div class="chat-text">
         <div class="chat-thinking-card" role="status" aria-live="polite" aria-busy="true">
           <div class="chat-thinking-top">
             <span class="chat-thinking-radar">${chatIcon("pulse", "chat-thinking-pulse")}</span>
-            <div class="chat-thinking-copy"><b data-chat-phase></b><span>${escapeHtml(currentSymbol)} · ${escapeHtml(currentTimeframe || "15m")} · ${photoToSend ? "VISION" : "LIVE SCAN"}</span></div>
+            <div class="chat-thinking-copy"><b data-chat-phase></b><span>${thinkingSubtitle}</span></div>
             <time class="chat-thinking-timer" data-chat-timer>00:00</time>
           </div>
           <div class="chat-thinking-progress"><span></span></div>
           <div class="chat-thinking-steps">
-            <span data-chat-step="0">${chatIcon("pulse")}<b>${isKhmer ? "តម្លៃថ្មី" : "LIVE QUOTE"}</b></span>
-            <span data-chat-step="1">${chatIcon("scan")}<b>${isKhmer ? "ស្កេន AI" : "AI SCAN"}</b></span>
-            <span data-chat-step="2">${chatIcon("shield")}<b>${isKhmer ? "ផ្ទៀងផ្ទាត់" : "RISK CHECK"}</b></span>
+            ${thinkingSteps}
           </div>
         </div>
       </div>
@@ -5687,7 +5725,7 @@ async function submitChatMessage() {
   `;
   stream.appendChild(typingMsg);
   stream.scrollTop = stream.scrollHeight;
-  const stopChatThinking = startChatThinkingAnimation(typingMsg, Boolean(photoToSend));
+  const stopChatThinking = startChatThinkingAnimation(typingMsg, Boolean(photoToSend), isClientConversational);
 
   let requestTimeoutId = null;
   try {
@@ -5719,16 +5757,82 @@ async function submitChatMessage() {
     const trade = data.trade_execution || {};
     const analysis = data.smart_analysis || {};
 
+    const isConversational = Boolean(
+      data.is_conversational ||
+      data.query_type === "CONVERSATIONAL" ||
+      (trade.action === "NONE" && !data.has_photo && (!data.agents || data.agents.length === 0))
+    );
+
+    const khmerSummary = stripChatEmoji(analysis.synthesis_summary_kh || "");
+    const enSummary = stripChatEmoji(analysis.synthesis_summary_en || "");
+
     const assistantHistoryText = [
-      stripChatEmoji(analysis.synthesis_summary_en),
-      stripChatEmoji(analysis.synthesis_summary_kh),
-      `Trade: ${(trade.action || "HOLD").toUpperCase()} · Entry ${trade.entry_price ?? "N/A"} · SL ${trade.stop_loss ?? "N/A"} · TP1 ${trade.take_profit_1 ?? "N/A"}`
+      enSummary,
+      khmerSummary,
+      isConversational ? null : `Trade: ${(trade.action || "HOLD").toUpperCase()} · Entry ${trade.entry_price ?? "N/A"} · SL ${trade.stop_loss ?? "N/A"} · TP1 ${trade.take_profit_1 ?? "N/A"}`
     ].filter(Boolean).join("\n").slice(0, 2000);
     chatConversationHistory.push(
       { role: "user", content: payload.query.slice(0, 2000) },
       { role: "assistant", content: assistantHistoryText }
     );
     chatConversationHistory = chatConversationHistory.slice(-8);
+
+    if (isConversational) {
+      const authorEl = typingMsg.querySelector(".chat-author");
+      if (authorEl) {
+        authorEl.innerHTML = `ZYROX AI <span class="chat-author-divider">/</span> MARKET COPILOT`;
+      }
+
+      const providerTag = [
+        data.provider ? data.provider.toUpperCase() : "ZYROX COPILOT",
+        data.model || "Market Intelligence",
+        data.latency_ms ? `${data.latency_ms}ms` : null
+      ].filter(Boolean).join(" · ");
+
+      const cardHtml = `
+        <div class="chat-conversational-card">
+          <div class="chat-conversational-header">
+            <div class="chat-conversational-lockup">
+              <img src="assets/brand/zyrox-logo-icon.svg" alt="" aria-hidden="true" width="20" height="20">
+              <span><b>ZYROX AI</b> <small>/ MARKET COPILOT</small></span>
+            </div>
+            <span class="chat-provider-pill">${escapeHtml(providerTag)}</span>
+          </div>
+
+          <div class="chat-conversational-body">
+            ${khmerSummary ? `
+              <div class="chat-conversational-khmer">
+                ${escapeHtml(khmerSummary)}
+              </div>
+            ` : ""}
+            ${enSummary ? `
+              <div class="chat-conversational-en">
+                <b>Institutional Copilot:</b> ${escapeHtml(enSummary)}
+              </div>
+            ` : ""}
+          </div>
+
+          <div class="chat-conversational-chips">
+            <button class="chat-conv-chip" onclick="sendQuickPrompt('Analyze ' + (currentSymbol || 'XAUUSD') + ' market structure')">
+              ${chatIcon("scan")} <span>${isKhmer ? "វិភាគ " + (currentSymbol || "XAUUSD") : "Analyze " + (currentSymbol || "XAUUSD")}</span>
+            </button>
+            <button class="chat-conv-chip" onclick="sendQuickPrompt('Pre-news deep research report for ' + (currentSymbol || 'XAUUSD'))">
+              ${chatIcon("research")} <span>${isKhmer ? "ស្រាវជ្រាវព័ត៌មាន (Pre-News)" : "Pre-News Deep Research"}</span>
+            </button>
+            <button class="chat-conv-chip" onclick="sendQuickPrompt('Institutional ICT / SMC zones, FVG, liquidity sweeps and order blocks')">
+              ${chatIcon("target")} <span>${isKhmer ? "រចនាសម្ព័ន្ធ SMC / ICT" : "SMC / ICT Structure"}</span>
+            </button>
+            <button class="chat-conv-chip" onclick="triggerPhotoUpload()">
+              ${chatIcon("photo")} <span>${isKhmer ? "ផ្ញើរូបក្រាហ្វិក (Upload Chart)" : "Upload Chart Photo"}</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      typingMsg.querySelector(".chat-text").innerHTML = stripChatEmojiFromMarkup(cardHtml);
+      stream.scrollTop = stream.scrollHeight;
+      return;
+    }
 
     const action = (trade.action || "HOLD").toUpperCase();
     const entry = trade.entry_price !== null && trade.entry_price !== undefined ? trade.entry_price : "---";
