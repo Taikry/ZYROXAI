@@ -3,6 +3,11 @@ import urllib.request
 import urllib.error
 import sys
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 def send_webhook(symbol="XAUUSD", timeframe="M5", action="analyze", test="true"):
     url = os.getenv("MAKE_WEBHOOK_URL", "").strip()

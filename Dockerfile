@@ -1,8 +1,24 @@
+# ==========================================
+# Stage 1: Frontend Asset Compilation (Vite + React)
+# ==========================================
+FROM node:22-slim AS frontend-builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json* ./
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+# ==========================================
+# Stage 2: Production Python Backend Runtime
+# ==========================================
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Run the application as an unprivileged user in production.
+# Run the application as an unprivileged user in production
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
 # Install system dependencies
@@ -16,10 +32,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=app:app . .
+COPY --from=frontend-builder --chown=app:app /build/dist ./dist
 
-# SQLite uses a file in the working directory by default. COPY changes the
-# ownership of copied files, but not necessarily the /app directory created by
-# WORKDIR, so the unprivileged runtime user must own that directory too.
+# SQLite and runtime permission handling
 RUN chown app:app /app
 
 ENV PYTHONUNBUFFERED=1

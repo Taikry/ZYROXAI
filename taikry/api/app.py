@@ -93,8 +93,19 @@ app.add_middleware(
 )
 
 # Root landing page for ZYROX AI SaaS Platform
+# Prefers modern compiled React Vite app in dist/ if present, falls back to static landing.html
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+dist_dir = os.path.join(PROJECT_ROOT, "dist")
+dist_index = os.path.join(dist_dir, "index.html")
+dist_assets = os.path.join(dist_dir, "assets")
+
+if os.path.exists(dist_assets):
+    app.mount("/assets", StaticFiles(directory=dist_assets), name="react_assets")
+
 @app.get("/", include_in_schema=False)
 def root_page():
+    if os.path.exists(dist_index):
+        return FileResponse(dist_index)
     landing_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "landing.html")
     if os.path.exists(landing_file):
         return FileResponse(landing_file)

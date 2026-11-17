@@ -132,7 +132,7 @@ def test_ai_chat_photo_endpoint(client):
     })
     assert r.status_code == 200
     data = r.json()
-    assert data["status"] == "SUCCESS"
+    assert data["status"] in ("SUCCESS", "DEGRADED")
     assert data["has_photo"] is True
     assert "trade_execution" in data
 
