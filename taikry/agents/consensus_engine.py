@@ -1004,6 +1004,37 @@ class AIConsensusEngine:
             {"agent_statuses": agent_statuses},
         )
 
+        # Transparent 100-Point Confluence Scoring Engine (ZYROX V3.1)
+        try:
+            from taikry.trading.confluence_scorer import calculate_confluence_scores
+            confluence_res = calculate_confluence_scores(
+                symbol=symbol,
+                timeframe=setup_timeframe,
+                market_data={
+                    "price": verified_price,
+                    "spread": data_quality_out.get("spread") or data_quality_out.get("spread_price"),
+                    "is_fresh": data_quality_ok,
+                    "price_source": price_source
+                },
+                technical_data=agent1_out,
+                ict_smc_data=agent2_out,
+                macro_news_data=agent3_out,
+                orderflow_data=orderflow_dict,
+                risk_validation=risk_out,
+                min_score_threshold=min_ai_score_threshold
+            )
+            confluence_payload = confluence_res.to_dict()
+        except Exception as c_err:
+            confluence_payload = {
+                "buy_score": 0,
+                "sell_score": 0,
+                "selected_score": 0,
+                "status": "WAIT",
+                "grade": "WEAK",
+                "category_breakdown": {},
+                "error": str(c_err)
+            }
+
         out_dict = {
             "symbol": symbol,
             "trade_style": trade_style,
@@ -1022,6 +1053,9 @@ class AIConsensusEngine:
             "proposed_direction": proposed_dir,
             "ai_score": ai_score,
             "confidence_score": ai_score,
+            "confluence_score": confluence_payload,
+            "confluence_buy_score": confluence_payload.get("buy_score", 0),
+            "confluence_sell_score": confluence_payload.get("sell_score", 0),
             "score_explanation": "Weighted directional support from all available signal-voting agents; heuristic score, not a calibrated win probability.",
             "setup_grade": "HIGH_CONVICTION" if ai_score >= 80 else "STANDARD",
             "entry_price": entry_price,

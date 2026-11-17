@@ -487,6 +487,44 @@ class XAUUSDDailyReportRecord(Base):
     created_at = Column(DateTime, default=_utc_now)
 
 
+class FifteenMinuteMarketReport(Base):
+    """
+    Persistent log of every scheduled 15-minute M15 candle close analysis cycle for XAUUSD Gold.
+    Stores complete 100-point confluence breakdown, multi-agent reasons, and bilingual reports.
+    Guarantees historical transparency including cycles where the decision is WAIT or HOLD.
+    """
+    __tablename__ = "fifteen_minute_market_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candle_close_utc = Column(String(32), unique=True, index=True, nullable=False)  # e.g. "2026-11-17 11:15:00 UTC"
+    cycle_timestamp = Column(DateTime, default=_utc_now, index=True)
+    symbol = Column(String(20), default="XAUUSD", index=True, nullable=False)
+    timeframe = Column(String(10), default="M15", nullable=False)
+    decision_status = Column(String(16), default="WAIT", index=True, nullable=False)  # WAIT, HOLD, BUY, SELL
+    market_bias = Column(String(32), default="NEUTRAL")
+    confluence_buy_score = Column(Integer, default=0)
+    confluence_sell_score = Column(Integer, default=0)
+    selected_score = Column(Integer, default=0)
+    score_grade = Column(String(32), default="WEAK")
+    is_actionable = Column(Boolean, default=False)
+    market_price = Column(Float, nullable=True)
+    spread = Column(Float, nullable=True)
+    entry_price = Column(Float, nullable=True)
+    stop_loss = Column(Float, nullable=True)
+    take_profit_1 = Column(Float, nullable=True)
+    take_profit_2 = Column(Float, nullable=True)
+    take_profit_3 = Column(Float, nullable=True)
+    risk_reward = Column(String(32), nullable=True)
+    category_scores = Column(JSON, nullable=True)
+    supporting_reasons = Column(JSON, nullable=True)
+    contradicting_reasons = Column(JSON, nullable=True)
+    missing_confirmations = Column(JSON, nullable=True)
+    report_en = Column(Text, nullable=True)
+    report_kh = Column(Text, nullable=True)
+    telegram_dispatched = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=_utc_now)
+
+
 class VIPSubscriptionModel(Base):
     """
     Persistent model for Tiered VIP Telegram Subscriptions.

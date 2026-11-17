@@ -49,8 +49,8 @@ CAMBODIA_TZ = zoneinfo.ZoneInfo("Asia/Phnom_Penh")
 # Default Operational Parameters
 DEFAULT_DAILY_LIMIT = 4
 DEFAULT_MIN_RR = MIN_RISK_REWARD_RATIO
-DEFAULT_MIN_SCORE = 80
-DEFAULT_MAX_SCORE = 95
+DEFAULT_MIN_SCORE = int(os.getenv("MIN_AI_SCORE_THRESHOLD", "75"))
+DEFAULT_MAX_SCORE = int(os.getenv("MAX_AI_SCORE_THRESHOLD", "100"))
 DEFAULT_MAX_ENTRY_DEVIATION_POINTS = 3.5  # Max allowable price drift from entry
 DEFAULT_SIGNAL_EXPIRY_HOURS = 6
 
@@ -780,15 +780,33 @@ class XAUUSDSignalEngine:
                 "rejection_reason": f"Risk Arbiter veto: {'; '.join(str(reason) for reason in reasons)}"
             }
 
+        # Evaluate 100-point transparent confluence score across 8 standard categories
+        from taikry.trading.confluence_scorer import calculate_confluence_scores
+        timeframe_label = "M15"
+        confluence_res = calculate_confluence_scores(
+            symbol=symbol,
+            timeframe=timeframe_label,
+            market_data={"price": verified_price, "spread": spread_price, "is_fresh": quote_is_valid},
+            technical_data=agent_outputs.get("technical_analyst", {}),
+            ict_smc_data=agent_outputs.get("ict_smc_analyst", {}),
+            macro_news_data=agent_outputs.get("macro_analyst", {}),
+            orderflow_data=agent_outputs.get("orderflow_cvd_analyst", {}),
+            risk_validation=risk_report,
+            min_score_threshold=self.min_score,
+            min_rr_threshold=self.min_rr,
+        )
+
         # Measure directional support against all participating agents. Do not
         # add an artificial floor; the configured quality gate handles it.
         raw_score = 100.0 * max(buy_weight, sell_weight) / total_participant_weight if total_participant_weight else 0.0
-        score = max(0, min(self.max_score, int(round(raw_score))))
+        fallback_score = max(0, min(self.max_score, int(round(raw_score))))
+        score = max(confluence_res.selected_score, fallback_score) if confluence_res.selected_score > 0 else fallback_score
         if score < self.min_score:
             return {
                 "decision": "WAIT",
                 "score": score,
-                "rejection_reason": f"Measured directional support {score}/100 is below the configured minimum {self.min_score}/100.",
+                "confluence_breakdown": confluence_res.to_dict(),
+                "rejection_reason": f"Measured confluence score {score}/100 is below the configured minimum {self.min_score}/100.",
                 "evidence": all_evidence
             }
 
@@ -880,6 +898,7 @@ class XAUUSDSignalEngine:
         return {
             "decision": proposed_direction,
             "score": score,
+            "confluence_breakdown": confluence_res.to_dict(),
             "trade_style": str(trade_style).upper(),
             "entry_method": "LIVE_ASK" if proposed_direction == "BUY" and quote_is_valid else ("LIVE_BID" if proposed_direction == "SELL" and quote_is_valid else "VERIFIED_MIDPOINT"),
             "entry_price": entry,

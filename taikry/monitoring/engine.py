@@ -416,19 +416,186 @@ R-Multiple: <b>{trade_event['r_multiple']:+.2f}R</b>
             logger.info("Trade closure notification was not delivered for %s", trade_event.get("symbol", "unknown"))
 
     def _run_loop(self):
-        """Internal continuous loop."""
+        """
+        Durable background scheduler aligned to M15 candle closes.
+        - Continuous intrabar position and price tracking every 5 seconds.
+        - Triggers full multi-agent analysis exactly at :00, :15, :30, :45 UTC.
+        - Persists every 15-minute report into fifteen_minute_market_reports.
+        """
+        logger.info("ZYROX AI V3.1 M15 Candle Close Scheduler started.")
+
         while self.is_running and not self._stop_event.is_set():
-            cycle_started = time.monotonic()
             try:
-                self.scan_once()
+                wait_sec, candle_label = get_seconds_to_next_m15_close()
+                target_utc = time.time() + wait_sec
+
+                # Sub-loop: run continuous intrabar surveillance until the M15 close
+                while time.time() < target_utc and not self._stop_event.is_set():
+                    # 1. Update open paper trades against latest prices
+                    try:
+                        from taikry.data.mt5_receiver import mt5_tick_receiver
+                        current_quote = mt5_tick_receiver.get_latest_tick("XAUUSD")
+                        if current_quote and current_quote.get("bid"):
+                            xau_price = float(current_quote["bid"])
+                            closed = paper_trading_engine.update_open_trades({"XAUUSD": xau_price})
+                            for ev in closed:
+                                self._notify_trade_closure(ev)
+                    except Exception as tick_err:
+                        logger.debug("Intrabar trade check note: %s", tick_err)
+
+                    # Sleep in small slices (5s) to allow responsive cancellation and timely triggers
+                    time_remaining = target_utc - time.time()
+                    sleep_time = min(5.0, max(0.5, time_remaining))
+                    if time_remaining > 0.5:
+                        self._stop_event.wait(sleep_time)
+
+                if self._stop_event.is_set():
+                    break
+
+                # M15 Candle Close reached! Execute full 15-minute cycle
+                cycle_start = time.monotonic()
+                logger.info("Executing scheduled M15 analysis cycle for %s...", candle_label)
+
+                # Execute full analysis for XAUUSD Gold
+                consensus_adapter = agent_registry.get_adapter("consensus_engine")
+                if consensus_adapter:
+                    res = consensus_adapter.execute(symbol="XAUUSD", force_refresh=True)
+                else:
+                    res = ai_consensus_engine.analyze_symbol("XAUUSD", force_refresh=True)
+
+                # Persist to database
+                _save_fifteen_minute_report(res, candle_label)
+                self.stats["reports_generated"] += 1
+                self.stats["cycles_completed"] += 1
+
+                # Check if setup is actionable (Score >= 75 and all gates pass)
+                confluence_info = res.get("confluence_score") or {}
+                selected_score = int(confluence_info.get("selected_score") or res.get("ai_score") or 0)
+                is_actionable = bool(
+                    confluence_info.get("is_actionable")
+                    or (res.get("setup_status") == "APPROVE" and selected_score >= 75)
+                )
+
+                if is_actionable and res.get("setup_status") == "APPROVE":
+                    self._handle_approved_setup(res)
+
+                elapsed = time.monotonic() - cycle_start
+                logger.info(
+                    "Completed M15 cycle for %s in %.2fs (Decision: %s, Score: %d/100)",
+                    candle_label, elapsed, res.get("setup_status", "WAIT"), selected_score
+                )
+
             except Exception:
                 self.stats["errors_handled"] += 1
-                self.last_error = "monitor cycle failed"
-                logger.exception("Unhandled market monitor cycle failure")
-            elapsed = time.monotonic() - cycle_started
-            wait_seconds = max(0.0, float(self.interval_seconds) - elapsed)
-            self._stop_event.wait(wait_seconds)
+                self.last_error = "M15 scheduler cycle failure"
+                logger.exception("Unhandled M15 scheduler cycle failure")
+                self._stop_event.wait(10.0)
+
         with self._state_lock:
             self.is_running = False
+        logger.info("ZYROX AI V3.1 M15 Candle Close Scheduler stopped.")
+
+
+def get_seconds_to_next_m15_close():
+    """
+    Returns (seconds_to_wait, candle_close_label_utc).
+    Next M15 mark is at minute 00, 15, 30, or 45:00 UTC.
+    Adds a 2-second grace period for broker bar completion.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    minute = now.minute
+    next_m = ((minute // 15) + 1) * 15
+    if next_m == 60:
+        target_close = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
+    else:
+        target_close = now.replace(minute=next_m, second=0, microsecond=0)
+
+    execution_time = target_close + datetime.timedelta(seconds=2)
+    wait_seconds = (execution_time - now).total_seconds()
+    candle_label = target_close.strftime("%Y-%m-%d %H:%M:00 UTC")
+    return max(1.0, wait_seconds), candle_label
+
+
+def _save_fifteen_minute_report(report_res: Dict[str, Any], candle_close_label: str) -> bool:
+    """Persists a scheduled 15-minute M15 report for XAUUSD into fifteen_minute_market_reports."""
+    from taikry.database.session import SessionLocal
+    from taikry.database.models import FifteenMinuteMarketReport
+
+    db = SessionLocal()
+    try:
+        confluence_data = report_res.get("confluence_score") or {}
+        cat_scores = confluence_data.get("category_breakdown") or {}
+
+        existing = db.query(FifteenMinuteMarketReport).filter(
+            FifteenMinuteMarketReport.candle_close_utc == candle_close_label
+        ).first()
+
+        decision = str(report_res.get("setup_status") or "WAIT").upper()
+        if decision not in {"WAIT", "HOLD", "BUY", "SELL"}:
+            decision = "WAIT"
+
+        buy_sc = int(report_res.get("confluence_buy_score") or confluence_data.get("buy_score") or 0)
+        sell_sc = int(report_res.get("confluence_sell_score") or confluence_data.get("sell_score") or 0)
+        sel_sc = int(confluence_data.get("selected_score") or report_res.get("ai_score") or 0)
+        grade = str(confluence_data.get("grade") or "WEAK")
+        is_act = bool(confluence_data.get("is_actionable", False))
+
+        entry_p = report_res.get("entry_price")
+        sl_p = report_res.get("stop_loss")
+        tp1_p = report_res.get("take_profit_1")
+        tp2_p = report_res.get("take_profit_2")
+        tp3_p = report_res.get("take_profit_3")
+        rr_str = str(report_res.get("risk_reward_ratio") or "")
+
+        if not existing:
+            record = FifteenMinuteMarketReport(
+                candle_close_utc=candle_close_label,
+                cycle_timestamp=datetime.datetime.now(datetime.timezone.utc),
+                symbol="XAUUSD",
+                timeframe="M15",
+                decision_status=decision,
+                market_bias=str(report_res.get("market_bias") or "NEUTRAL"),
+                confluence_buy_score=buy_sc,
+                confluence_sell_score=sell_sc,
+                selected_score=sel_sc,
+                score_grade=grade,
+                is_actionable=is_act,
+                market_price=float(report_res.get("verified_price") or 0.0),
+                spread=float(report_res.get("data_quality", {}).get("spread") or 0.0) if isinstance(report_res.get("data_quality"), dict) else None,
+                entry_price=float(entry_p) if entry_p is not None and str(entry_p) != "N/A" else None,
+                stop_loss=float(sl_p) if sl_p is not None and str(sl_p) != "N/A" else None,
+                take_profit_1=float(tp1_p) if tp1_p is not None and str(tp1_p) != "N/A" else None,
+                take_profit_2=float(tp2_p) if tp2_p is not None and str(tp2_p) != "N/A" else None,
+                take_profit_3=float(tp3_p) if tp3_p is not None and str(tp3_p) != "N/A" else None,
+                risk_reward=rr_str,
+                category_scores=cat_scores,
+                supporting_reasons=confluence_data.get("supporting_reasons"),
+                contradicting_reasons=confluence_data.get("contradicting_reasons"),
+                missing_confirmations=confluence_data.get("missing_confirmations"),
+                report_en=report_res.get("report_english"),
+                report_kh=report_res.get("report_khmer"),
+                telegram_dispatched=False
+            )
+            db.add(record)
+        else:
+            existing.decision_status = decision
+            existing.market_bias = str(report_res.get("market_bias") or "NEUTRAL")
+            existing.confluence_buy_score = buy_sc
+            existing.confluence_sell_score = sell_sc
+            existing.selected_score = sel_sc
+            existing.score_grade = grade
+            existing.is_actionable = is_act
+            existing.category_scores = cat_scores
+            existing.report_en = report_res.get("report_english")
+            existing.report_kh = report_res.get("report_khmer")
+
+        db.commit()
+        return True
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to persist FifteenMinuteMarketReport: %s", exc)
+        return False
+    finally:
+        db.close()
 
 market_monitor_247 = MarketMonitor247()
