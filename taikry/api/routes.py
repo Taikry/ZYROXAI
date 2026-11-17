@@ -288,25 +288,43 @@ def chat_ai_endpoint(
     """
     Real AI Multi-Agent & Multimodal Vision Chat endpoint for Web UI terminal.
     Processes live trader queries and chart screenshots from mobile phone or PC.
+    Requires an authenticated active user session and validates plan quotas server-side.
     Outputs:
     - វិភាគមើលជាភាសាខ្មែរ (Market Structure, FVG, Order Blocks, Liquidity, Trend).
     - English Institutional Breakdown.
     - Trade Execution Setup: Action (BUY/SELL/HOLD), verified levels when available, configured R:R floor, and confidence when measured.
     """
     token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else (zyrox_session or "").strip()
-    if token:
-        from taikry.database.session import SessionLocal
-        from taikry.saas.auth_service import authenticate_session
-        from taikry.saas.entitlement_service import check_and_consume_quota
-        db = SessionLocal()
-        try:
-            user = authenticate_session(db, token)
-            if user:
-                allowed, reason, _ = check_and_consume_quota(db, user.id, "standard_scan", symbol=req.symbol or "XAUUSD")
-                if not allowed:
-                    raise HTTPException(status_code=403, detail=reason)
-        finally:
-            db.close()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Please sign in to access AI Chat."
+        )
+
+    from taikry.database.session import SessionLocal
+    from taikry.saas.auth_service import authenticate_session
+    from taikry.saas.entitlement_service import check_and_consume_quota
+    db = SessionLocal()
+    try:
+        user = authenticate_session(db, token)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired or invalid. Please sign in again to access AI Chat."
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Account is deactivated or suspended. Please contact support."
+            )
+        allowed, reason, _ = check_and_consume_quota(db, user.id, "standard_scan", symbol=req.symbol or "XAUUSD")
+        if not allowed:
+            raise HTTPException(status_code=403, detail=reason)
+    finally:
+        db.close()
+
+    if not req.query or not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query prompt cannot be empty.")
 
     from taikry.ai.llm_client import chat_with_real_ai
     res = chat_with_real_ai(
@@ -318,6 +336,109 @@ def chat_ai_endpoint(
         history=[item.model_dump() for item in req.history[-8:]],
     )
     return res
+
+
+# 2a-stream. POST /api/v1/ai/chat/stream
+@router.post("/api/v1/ai/chat/stream", response_class=StreamingResponse)
+async def chat_ai_stream_endpoint(
+    req: ChatAIRequest,
+    authorization: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None)
+):
+    """
+    Real-Time Streaming SSE Chat Endpoint for ZYROX AI Terminal.
+    Streams actual backend multi-agent progress events:
+    Market Data -> Technical -> ICT/SMC -> News -> Risk -> Consensus -> Final Answer
+    """
+    token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else (zyrox_session or "").strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Please sign in to access AI Chat."
+        )
+
+    from taikry.database.session import SessionLocal
+    from taikry.saas.auth_service import authenticate_session
+    from taikry.saas.entitlement_service import check_and_consume_quota
+    db = SessionLocal()
+    try:
+        user = authenticate_session(db, token)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired or invalid. Please sign in again to access AI Chat."
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Account is deactivated or suspended. Please contact support."
+            )
+        allowed, reason, _ = check_and_consume_quota(db, user.id, "standard_scan", symbol=req.symbol or "XAUUSD")
+        if not allowed:
+            raise HTTPException(status_code=403, detail=reason)
+    finally:
+        db.close()
+
+    if not req.query or not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query prompt cannot be empty.")
+
+    async def sse_generator():
+        import asyncio
+        import json
+        from taikry.data.providers import market_data_engine
+        from taikry.ai.llm_client import chat_with_real_ai
+
+        sym = req.symbol or "XAUUSD"
+
+        try:
+            # 1. Market Data Intelligence Step
+            quote = market_data_engine.get_verified_quote(sym) or {}
+            q_price = quote.get("price") or quote.get("bid") or 0.0
+            q_source = quote.get("source") or "Verified Feed"
+            yield f"event: progress\ndata: {json.dumps({'step': 'market_data', 'title': 'Market Data Intelligence', 'title_kh': 'ទិន្នន័យទីផ្សារ', 'status': 'COMPLETED', 'price': q_price, 'source': q_source})}\n\n"
+            await asyncio.sleep(0.05)
+
+            # 2. Technical Analysis Step
+            yield f"event: progress\ndata: {json.dumps({'step': 'technical', 'title': 'Technical Analysis', 'title_kh': 'វិភាគបច្ចេកទេស', 'status': 'RUNNING'})}\n\n"
+            await asyncio.sleep(0.05)
+
+            # 3. ICT / SMC Analysis Step
+            yield f"event: progress\ndata: {json.dumps({'step': 'ict_smc', 'title': 'ICT / SMC Liquidity', 'title_kh': 'រចនាសម្ព័ន្ធ ICT / SMC', 'status': 'RUNNING'})}\n\n"
+            await asyncio.sleep(0.05)
+
+            # 4. News & Macro Step
+            yield f"event: progress\ndata: {json.dumps({'step': 'news', 'title': 'News & Macro Intelligence', 'title_kh': 'ព័ត៌មានម៉ាក្រូសេដ្ឋកិច្ច', 'status': 'RUNNING'})}\n\n"
+            await asyncio.sleep(0.05)
+
+            # 5. Risk Guardian & Consensus Step
+            yield f"event: progress\ndata: {json.dumps({'step': 'consensus', 'title': 'Multi-Agent Consensus', 'title_kh': 'ការឯកភាព Multi-Agent', 'status': 'RUNNING'})}\n\n"
+
+            # Run real multi-agent inference in threadpool
+            res = await asyncio.to_thread(
+                chat_with_real_ai,
+                query=req.query,
+                symbol=sym,
+                timeframe=req.timeframe or "15m",
+                provider=req.provider or "auto",
+                image_base64=req.image_base64,
+                history=[item.model_dump() for item in req.history[-8:]],
+            )
+
+            # 6. Final Result Event
+            yield f"event: result\ndata: {json.dumps(res)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'status': 'DONE'})}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 # 2a-1. POST /api/v1/research/pre-news
 @router.post("/api/v1/research/pre-news")

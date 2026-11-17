@@ -63,10 +63,14 @@ class MT5BridgeReceiver:
             logger.warning("[MT5_BRIDGE] Inbound request rejected: MT5_BRIDGE_ENABLED is False")
             return False
 
-        expected_token = MT5_BRIDGE_TOKEN or "zyrox_mt5_bridge_secure_token_change_me"
+        if not MT5_BRIDGE_TOKEN or not MT5_BRIDGE_TOKEN.strip():
+            logger.error("[MT5_BRIDGE] Inbound request rejected: MT5_BRIDGE_TOKEN is not configured on server (fail closed)")
+            return False
+
+        expected_token = MT5_BRIDGE_TOKEN.strip()
 
         # Constant-time token comparison
-        if not hmac.compare_digest(str(token).strip(), str(expected_token).strip()):
+        if not token or not hmac.compare_digest(str(token).strip(), expected_token):
             logger.warning("[MT5_BRIDGE] Inbound request rejected: invalid auth token")
             return False
 

@@ -20,6 +20,9 @@ import pytest
 from fastapi.testclient import TestClient
 from taikry.api.app import app
 from taikry.ai.llm_client import chat_with_real_ai, _extract_and_standardize_agents
+from taikry.database.session import SessionLocal
+from taikry.database.models import User
+from taikry.saas.auth_service import sign_up_user, login_user
 
 
 @pytest.fixture
@@ -27,10 +30,24 @@ def client():
     return TestClient(app)
 
 
-def test_ai_chat_multi_agent_fleet_xauusd(client):
+@pytest.fixture
+def auth_header():
+    db = SessionLocal()
+    email = "test_chat_agent_user@zyrox.ai"
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        sign_up_user(db, email, "Password123!", "Chat Test User")
+    ok, _, data = login_user(db, email, "Password123!")
+    db.close()
+    assert ok
+    return {"Authorization": f"Bearer {data['session_token']}"}
+
+
+def test_ai_chat_multi_agent_fleet_xauusd(client, auth_header):
     """Verifies that chat with XAUUSD incorporates all registered AI agents."""
     resp = client.post(
         "/api/v1/ai/chat",
+        headers=auth_header,
         json={
             "query": "Analyze XAUUSD with all AI agents",
             "symbol": "XAUUSD",
@@ -80,10 +97,11 @@ def test_ai_chat_multi_agent_fleet_xauusd(client):
     assert smart.get("synthesis_summary_kh")
 
 
-def test_ai_chat_multi_agent_khmer_query(client):
+def test_ai_chat_multi_agent_khmer_query(client, auth_header):
     """Verifies that natural Khmer queries are correctly processed with agent telemetry."""
     resp = client.post(
         "/api/v1/ai/chat",
+        headers=auth_header,
         json={
             "query": "វិភាគមើលទីផ្សារមាស XAUUSD និងប្រាប់ពីទិសដៅ AI ទាំងអស់",
             "symbol": "XAUUSD",

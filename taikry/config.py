@@ -172,6 +172,14 @@ MIN_CONFIDENCE_THRESHOLD = int(os.getenv("MIN_CONFIDENCE_THRESHOLD", "80"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("BACKOFF_BASE_SECONDS", "2.0"))
 
+# ZYROX AI V6 Confirmed Production Admin Settings
+MARKET_SYMBOL = os.getenv("MARKET_SYMBOL", "XAUUSD").strip().upper()
+ANALYSIS_INTERVAL_MINUTES = int(os.getenv("ANALYSIS_INTERVAL_MINUTES", "15"))
+MINIMUM_BUY_SCORE = int(os.getenv("MINIMUM_BUY_SCORE", "75"))
+MINIMUM_SELL_SCORE = int(os.getenv("MINIMUM_SELL_SCORE", "75"))
+TELEGRAM_DAILY_SIGNAL_LIMIT = int(os.getenv("TELEGRAM_DAILY_SIGNAL_LIMIT", "4"))
+AUTO_TRADE_EXECUTION = os.getenv("AUTO_TRADE_EXECUTION", "false").lower() in ("true", "1", "yes")
+
 # Research & Paper Trading Risk Limits (Configurable limits, no guarantees)
 def _finite_env_float(name: str, default: float, minimum: float, maximum: Optional[float] = None) -> float:
     """Read a finite bounded numeric setting, falling back safely on invalid input."""

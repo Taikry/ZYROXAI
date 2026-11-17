@@ -4,7 +4,7 @@ FastAPI Application Entry Point for TAIKRY AI MARKET INTELLIGENCE PRO
 import os
 import threading
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
@@ -102,6 +102,37 @@ dist_assets = os.path.join(dist_dir, "assets")
 if os.path.exists(dist_assets):
     app.mount("/assets", StaticFiles(directory=dist_assets), name="react_assets")
 
+web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
+
+
+def get_authenticated_user_from_request(request: Request):
+    """
+    Validates session token from Authorization header, X-Session-Token header,
+    or session cookies ('zyrox_session', 'session_token'). Returns active User or None.
+    """
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    if not token:
+        token = request.headers.get("X-Session-Token", "").strip()
+    if not token:
+        token = request.cookies.get("zyrox_session") or request.cookies.get("session_token")
+    if not token or len(str(token).strip()) < 20:
+        return None
+
+    try:
+        from taikry.database.session import SessionLocal
+        from taikry.saas.auth_service import authenticate_session
+        db = SessionLocal()
+        try:
+            return authenticate_session(db, str(token).strip())
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+
 @app.get("/", include_in_schema=False)
 def root_page():
     if os.path.exists(dist_index):
@@ -111,31 +142,77 @@ def root_page():
         return FileResponse(landing_file)
     return RedirectResponse(url="/dashboard/", status_code=307)
 
+
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/dashboard/", include_in_schema=False)
+@app.get("/dashboard/index.html", include_in_schema=False)
+def dashboard_gate(request: Request):
+    """
+    Server-side authentication gate for the trading terminal dashboard.
+    Redirects unauthenticated visitors to login modal/landing page.
+    """
+    user = get_authenticated_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/?auth=signin&return_to=/dashboard/", status_code=303)
+    index_file = os.path.join(web_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return RedirectResponse(url="/", status_code=303)
+
+
 @app.get("/admin", include_in_schema=False)
-def admin_page():
+def admin_page(request: Request):
+    user = get_authenticated_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/?auth=signin&return_to=/admin", status_code=303)
+    db = SessionLocal()
+    try:
+        from taikry.saas.security import has_role
+        if not has_role(db, user.id, ["admin", "super_admin"]) and str(user.role or "").strip().lower() not in ("admin", "super_admin"):
+            return RedirectResponse(url="/dashboard/", status_code=303)
+    finally:
+        db.close()
     admin_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "admin.html")
     if os.path.exists(admin_file):
         return FileResponse(admin_file)
-    return RedirectResponse(url="/dashboard/", status_code=307)
+    return RedirectResponse(url="/dashboard/", status_code=303)
+
 
 @app.get("/super-admin", include_in_schema=False)
-def super_admin_page():
+def super_admin_page(request: Request):
+    user = get_authenticated_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/?auth=signin&return_to=/super-admin", status_code=303)
+    db = SessionLocal()
+    try:
+        from taikry.saas.security import get_user_roles
+        roles = get_user_roles(db, user.id)
+        if "super_admin" not in roles and str(user.role or "").strip().lower() != "super_admin":
+            return RedirectResponse(url="/dashboard/", status_code=303)
+    finally:
+        db.close()
     super_admin_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "super_admin.html")
     if os.path.exists(super_admin_file):
         return FileResponse(super_admin_file)
-    return RedirectResponse(url="/dashboard/", status_code=307)
+    return RedirectResponse(url="/dashboard/", status_code=303)
+
 
 @app.get("/billing", include_in_schema=False)
-def billing_page():
+def billing_page(request: Request):
+    user = get_authenticated_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/?auth=signin&return_to=/billing", status_code=303)
     billing_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "billing.html")
     if os.path.exists(billing_file):
         return FileResponse(billing_file)
-    return RedirectResponse(url="/dashboard/billing.html", status_code=307)
+    return RedirectResponse(url="/dashboard/billing.html", status_code=303)
+
 
 # Fast keep-alive ping for cloud free tier monitors (e.g. UptimeRobot, Cron-Job)
 @app.get("/ping", tags=["System"])
 def ping():
     return {"status": "pong", "app": APP_NAME, "version": APP_VERSION}
+
 
 # Include API routes
 app.include_router(api_router)
@@ -145,8 +222,7 @@ app.include_router(schema_router)
 app.include_router(payments_router)
 app.include_router(v6_router)
 
-# Mount web dashboard if directory exists
-web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
+# Mount web dashboard static assets (html=False enforces server-side gate on index)
 if os.path.exists(web_dir):
-    app.mount("/dashboard", StaticFiles(directory=web_dir, html=True), name="dashboard")
+    app.mount("/dashboard", StaticFiles(directory=web_dir, html=False), name="dashboard")
 

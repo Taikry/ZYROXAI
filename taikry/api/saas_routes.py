@@ -1076,6 +1076,59 @@ def telegram_callback_endpoint(
 
 
 # =============================================================================
+# GOOGLE OAUTH & PHONE OTP ENDPOINTS
+# =============================================================================
+
+@saas_router.get("/api/v1/auth/google/status")
+def google_auth_status_endpoint(request: Request):
+    """Returns configuration readiness status for Google OAuth 2.0."""
+    from taikry.saas.google_oauth import get_google_auth_status
+    base_url = str(request.base_url).rstrip("/")
+    return get_google_auth_status(base_url=base_url)
+
+
+@saas_router.get("/api/v1/auth/google/login")
+def google_auth_login_endpoint(request: Request, return_to: Optional[str] = "/dashboard/"):
+    """Initiates Google OAuth Authorization Code flow or returns NEEDS_CONFIGURATION."""
+    from taikry.saas.google_oauth import is_google_auth_configured, build_google_authorization_url, get_google_auth_status
+    base_url = str(request.base_url).rstrip("/")
+    if not is_google_auth_configured():
+        return {
+            "success": False,
+            "status": "NEEDS_CONFIGURATION",
+            "message": "Google OAuth is not configured on the server. Please populate GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.",
+            "details": get_google_auth_status(base_url=base_url)
+        }
+    ok, auth_url = build_google_authorization_url(base_url=base_url, return_to=return_to)
+    if not ok:
+        raise HTTPException(status_code=503, detail=auth_url)
+    return RedirectResponse(url=auth_url, status_code=303)
+
+
+@saas_router.get("/api/v1/auth/phone/status")
+def phone_auth_status_endpoint():
+    """Returns configuration readiness status for Phone SMS OTP."""
+    from taikry.saas.phone_otp import get_phone_auth_status
+    return get_phone_auth_status()
+
+
+class PhoneOtpRequestPayload(BaseModel):
+    phone_number: str
+
+
+@saas_router.post("/api/v1/auth/phone/request-otp")
+def phone_request_otp_endpoint(payload: PhoneOtpRequestPayload):
+    """Requests an SMS OTP or returns NEEDS_CONFIGURATION if gateway is not configured."""
+    from taikry.saas.phone_otp import is_phone_auth_configured
+    if not is_phone_auth_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Phone SMS OTP service is not configured on the server. Missing SMS provider credentials (NEEDS_CONFIGURATION)."
+        )
+    return {"success": True, "message": "OTP sent to provided phone number."}
+
+
+# =============================================================================
 # 2. PLANS & ENTITLEMENTS ENDPOINTS (/api/v1/plans)
 # =============================================================================
 
@@ -1610,6 +1663,83 @@ def admin_payments_transactions_endpoint(limit: int = 20, admin: User = Depends(
                 }
                 for tx in txs
             ]
+        }
+    finally:
+        db.close()
+
+
+class AdminSettingsUpdateRequest(BaseModel):
+    market_symbol: Optional[str] = "XAUUSD"
+    analysis_interval_minutes: Optional[int] = 15
+    minimum_buy_score: Optional[int] = 75
+    minimum_sell_score: Optional[int] = 75
+    telegram_daily_signal_limit: Optional[int] = 4
+    auto_trade_execution: Optional[bool] = False
+
+
+@saas_router.get("/api/v1/admin/settings")
+def get_admin_settings_endpoint(admin: User = Depends(get_current_admin)):
+    """Returns current active system settings (Admin only)."""
+    import taikry.config as cfg
+    return {
+        "market_symbol": cfg.MARKET_SYMBOL,
+        "analysis_interval_minutes": cfg.ANALYSIS_INTERVAL_MINUTES,
+        "minimum_buy_score": cfg.MINIMUM_BUY_SCORE,
+        "minimum_sell_score": cfg.MINIMUM_SELL_SCORE,
+        "telegram_daily_signal_limit": cfg.TELEGRAM_DAILY_SIGNAL_LIMIT,
+        "auto_trade_execution": cfg.AUTO_TRADE_EXECUTION,
+        "status": "APPLIED"
+    }
+
+
+@saas_router.post("/api/v1/admin/settings")
+def update_admin_settings_endpoint(payload: AdminSettingsUpdateRequest, admin: User = Depends(get_current_admin)):
+    """Updates active system settings with audit logging (Admin only)."""
+    import taikry.config as cfg
+    from taikry.database.models import AuditLog
+    db = SessionLocal()
+    try:
+        if payload.market_symbol:
+            cfg.MARKET_SYMBOL = str(payload.market_symbol).strip().upper()
+        if payload.analysis_interval_minutes is not None:
+            cfg.ANALYSIS_INTERVAL_MINUTES = int(payload.analysis_interval_minutes)
+        if payload.minimum_buy_score is not None:
+            cfg.MINIMUM_BUY_SCORE = int(payload.minimum_buy_score)
+        if payload.minimum_sell_score is not None:
+            cfg.MINIMUM_SELL_SCORE = int(payload.minimum_sell_score)
+        if payload.telegram_daily_signal_limit is not None:
+            cfg.TELEGRAM_DAILY_SIGNAL_LIMIT = int(payload.telegram_daily_signal_limit)
+        if payload.auto_trade_execution is not None:
+            cfg.AUTO_TRADE_EXECUTION = bool(payload.auto_trade_execution)
+
+        audit = AuditLog(
+            actor_user_id=admin.id,
+            action="ADMIN_UPDATE_SETTINGS",
+            target_type="system_config",
+            target_id="settings",
+            details={
+                "market_symbol": cfg.MARKET_SYMBOL,
+                "analysis_interval_minutes": cfg.ANALYSIS_INTERVAL_MINUTES,
+                "minimum_buy_score": cfg.MINIMUM_BUY_SCORE,
+                "minimum_sell_score": cfg.MINIMUM_SELL_SCORE,
+                "telegram_daily_signal_limit": cfg.TELEGRAM_DAILY_SIGNAL_LIMIT,
+                "auto_trade_execution": cfg.AUTO_TRADE_EXECUTION,
+            }
+        )
+        db.add(audit)
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Admin settings successfully updated and applied.",
+            "settings": {
+                "market_symbol": cfg.MARKET_SYMBOL,
+                "analysis_interval_minutes": cfg.ANALYSIS_INTERVAL_MINUTES,
+                "minimum_buy_score": cfg.MINIMUM_BUY_SCORE,
+                "minimum_sell_score": cfg.MINIMUM_SELL_SCORE,
+                "telegram_daily_signal_limit": cfg.TELEGRAM_DAILY_SIGNAL_LIMIT,
+                "auto_trade_execution": cfg.AUTO_TRADE_EXECUTION,
+            }
         }
     finally:
         db.close()

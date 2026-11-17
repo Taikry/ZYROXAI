@@ -42,7 +42,7 @@ class AgentMetadata(BaseModel):
     configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
     last_successful_execution: Optional[str] = None
-    execution_state: str = "IDLE"  # IDLE, QUEUED, RUNNING, COMPLETED, FAILED, SKIPPED
+    execution_state: str = "IDLE"  # IDLE, QUEUED, RUNNING, COMPLETED, FAILED, SKIPPED, BLOCKED
     current_task: Optional[str] = None
     last_task: Optional[str] = None
     last_started_at: Optional[str] = None

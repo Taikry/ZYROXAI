@@ -178,11 +178,16 @@ export const AgentsSection: React.FC = () => {
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-6 h-6 text-[#00E59B]" />
                 <div>
-                  <span className="text-xs font-mono font-bold text-[#F5F8F6] block">
-                    Cryptographic Multi-Agent Consensus Confirmed: 6/6 Unanimous Approval
-                  </span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00E59B]/20 text-[#00E59B] border border-[#00E59B]/40">
+                      DEMO ARCHITECTURE PREVIEW
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#F5F8F6]">
+                      Multi-Agent 100-Point Confluence Scoring Gate
+                    </span>
+                  </div>
                   <span className="text-[11px] text-[#87938D]">
-                    Consensus Score: 96.4% • Invalidation Buffer Protected • Ready for Automated Dispatch
+                    Institutional Gate: Score &ge; 75/100 required for actionable BUY/SELL &bull; Missing data scores 0 points &bull; Max 4 signals/day
                   </span>
                 </div>
               </div>

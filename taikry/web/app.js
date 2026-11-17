@@ -5748,20 +5748,74 @@ async function submitChatMessage() {
 
     const controller = new AbortController();
     requestTimeoutId = window.setTimeout(() => controller.abort(), 60000);
-    const resp = await fetch("/api/v1/ai/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      signal: controller.signal,
-      body: JSON.stringify(payload)
-    });
 
-    if (!resp.ok) {
-      const errJson = await resp.json().catch(() => ({}));
-      throw new Error(errJson.detail || `API HTTP ${resp.status}`);
+    let data = null;
+    try {
+      const streamResp = await fetch("/api/v1/ai/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify(payload)
+      });
+
+      if (streamResp.ok && streamResp.body) {
+        const reader = streamResp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop();
+
+          for (const chunk of parts) {
+            if (!chunk.trim()) continue;
+            const eventMatch = chunk.match(/^event:\s*([^\r\n]+)/m);
+            const dataMatch = chunk.match(/^data:\s*(.+)$/ms);
+            const evType = eventMatch ? eventMatch[1].trim() : "message";
+            const rawJson = dataMatch ? dataMatch[1].trim() : "{}";
+
+            try {
+              const parsed = JSON.parse(rawJson);
+              if (evType === "progress") {
+                const phaseEl = typingMsg.querySelector("[data-chat-phase]");
+                if (phaseEl && (parsed.title || parsed.title_kh)) {
+                  phaseEl.textContent = isKhmer ? (parsed.title_kh || parsed.title) : parsed.title;
+                }
+              } else if (evType === "result") {
+                data = parsed;
+              } else if (evType === "error") {
+                throw new Error(parsed.error || "Streaming error from backend");
+              }
+            } catch (pErr) {
+              if (evType === "error") throw pErr;
+            }
+          }
+        }
+      }
+    } catch (streamErr) {
+      console.warn("SSE stream fallback note:", streamErr);
     }
 
-    const data = await resp.json();
+    if (!data) {
+      const resp = await fetch("/api/v1/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const errJson = await resp.json().catch(() => ({}));
+        throw new Error(errJson.detail || `API HTTP ${resp.status}`);
+      }
+
+      data = await resp.json();
+    }
     const trade = data.trade_execution || {};
     const analysis = data.smart_analysis || {};
 

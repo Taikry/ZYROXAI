@@ -24,6 +24,70 @@ from taikry.config import (
 
 logger = logging.getLogger("taikry.providers")
 
+
+class QuoteClassification:
+    """Explicit market quote classifications required by ZYROX AI V6."""
+    REAL_BROKER_QUOTE = "REAL_BROKER_QUOTE"
+    REFERENCE_PRICE = "REFERENCE_PRICE"
+    ESTIMATED_SPREAD = "ESTIMATED_SPREAD"
+    STALE = "STALE"
+    DISCONNECTED = "DISCONNECTED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+def build_quote_record(
+    symbol: str,
+    provider: str,
+    bid: float,
+    ask: float,
+    price: Optional[float] = None,
+    source_timestamp: Optional[Any] = None,
+    classification: str = QuoteClassification.REAL_BROKER_QUOTE,
+    connection_status: str = "CONNECTED",
+    source: str = "EXNESS_MT5",
+    is_executable: bool = True,
+    symbol_mapping: Optional[str] = None
+) -> Dict[str, Any]:
+    """Constructs a fully classified, audited market quote record."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    ts = source_timestamp or now_utc
+    if isinstance(ts, (int, float)):
+        ts = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+    elif isinstance(ts, str):
+        try:
+            ts = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            ts = now_utc
+
+    data_age = (now_utc - ts).total_seconds() if ts else 0.0
+    if data_age > 30.0 and classification == QuoteClassification.REAL_BROKER_QUOTE:
+        classification = QuoteClassification.STALE
+        connection_status = "STALE"
+        is_executable = False
+
+    mid = price if (price is not None and price > 0) else ((bid + ask) / 2.0 if (bid > 0 and ask > 0) else 0.0)
+    spread = round(ask - bid, 5) if (ask >= bid and bid > 0) else 0.0
+
+    return {
+        "symbol": str(symbol).upper(),
+        "provider": provider,
+        "bid": round(bid, 5) if bid > 0 else 0.0,
+        "ask": round(ask, 5) if ask > 0 else 0.0,
+        "mid": round(mid, 5) if mid > 0 else 0.0,
+        "price": round(mid, 5) if mid > 0 else 0.0,
+        "spread": spread,
+        "source_timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+        "received_timestamp": now_utc.isoformat(),
+        "timestamp": ts,
+        "data_age_seconds": round(max(0.0, data_age), 2),
+        "connection_status": connection_status,
+        "quote_quality": classification,
+        "quote_classification": classification,
+        "is_executable": is_executable,
+        "source": source,
+        "symbol_mapping": symbol_mapping or symbol
+    }
+
 YAHOO_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "application/json"
@@ -896,39 +960,76 @@ class MultiProviderMarketData:
         Returns an authenticated broker bid/ask quote from MT5, OANDA, or Binance.
         When external desktop bridge is on standby, constructs an institutional
         verified bid/ask quote from the live verified reference price and the asset's
-        institutional spread profile.
+        institutional spread profile, explicitly classified as QuoteClassification.ESTIMATED_SPREAD
+        with is_executable=False so synthetic spreads never masquerade as real broker execution quotes.
         """
         sym = str(symbol or "").upper()
         # 1. MT5 Windows Bridge (Primary authentic broker quote)
         mt5_price, mt5_source, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
-        if mt5_fresh and mt5_price > 0:
+        if mt5_price > 0 and mt5_tick:
             try:
                 bid = float(mt5_tick.get("bid", 0.0))
                 ask = float(mt5_tick.get("ask", 0.0))
+                ts = mt5_tick.get("received_at") or datetime.datetime.now(datetime.timezone.utc)
                 if bid > 0 and ask > bid:
-                    return {
-                        "symbol": sym,
-                        "price": (bid + ask) / 2.0,
-                        "bid": bid,
-                        "ask": ask,
-                        "spread": ask - bid,
-                        "timestamp": mt5_tick.get("received_at") or datetime.datetime.now(datetime.timezone.utc),
-                        "source": "EXNESS_MT5",
-                        "provider": mt5_tick.get("broker") or "Exness MT5",
-                    }
+                    classification = QuoteClassification.REAL_BROKER_QUOTE if mt5_fresh else QuoteClassification.STALE
+                    connection_status = "CONNECTED" if mt5_fresh else "STALE"
+                    return build_quote_record(
+                        symbol=sym,
+                        provider=mt5_tick.get("broker") or "Exness MT5",
+                        bid=bid,
+                        ask=ask,
+                        price=(bid + ask) / 2.0,
+                        source_timestamp=ts,
+                        classification=classification,
+                        connection_status=connection_status,
+                        source="EXNESS_MT5",
+                        is_executable=mt5_fresh,
+                        symbol_mapping=sym
+                    )
             except (TypeError, ValueError):
                 pass
 
         # 2. OANDA v20 REST / Streaming Quote
         quote = self.oanda.get_latest_quote(sym)
         if quote:
-            return quote
+            bid = float(quote.get("bid", 0.0))
+            ask = float(quote.get("ask", 0.0))
+            if bid > 0 and ask > bid:
+                return build_quote_record(
+                    symbol=sym,
+                    provider="OANDA",
+                    bid=bid,
+                    ask=ask,
+                    price=(bid + ask) / 2.0,
+                    source_timestamp=quote.get("timestamp"),
+                    classification=QuoteClassification.REAL_BROKER_QUOTE,
+                    connection_status="CONNECTED",
+                    source="OANDA_V20",
+                    is_executable=True,
+                    symbol_mapping=quote.get("instrument") or sym
+                )
 
         # 3. Binance Spot Ticker (Crypto order book)
         if get_symbol_config(sym).get("category") == "Crypto":
             quote = self.binance.get_latest_quote(sym)
             if quote:
-                return quote
+                bid = float(quote.get("bid", 0.0))
+                ask = float(quote.get("ask", 0.0))
+                if bid > 0 and ask > bid:
+                    return build_quote_record(
+                        symbol=sym,
+                        provider="Binance Spot",
+                        bid=bid,
+                        ask=ask,
+                        price=(bid + ask) / 2.0,
+                        source_timestamp=quote.get("timestamp"),
+                        classification=QuoteClassification.REAL_BROKER_QUOTE,
+                        connection_status="CONNECTED",
+                        source="BINANCE_SPOT",
+                        is_executable=True,
+                        symbol_mapping=quote.get("symbol") or sym
+                    )
 
         # 4. Verified Institutional Spread Floor (derived from verified market reference price)
         price, source, timestamp = self.get_verified_price(sym)
@@ -959,19 +1060,21 @@ class MultiProviderMarketData:
             ask = round(price + half_spread, decimals)
             if ask <= bid:
                 ask = round(bid + spread_val, decimals)
-            calc_spread = round(ask - bid, decimals)
-            provider_name = cfg.get("provider_display") or f"{source} (Institutional)"
+            provider_name = cfg.get("provider_display") or f"{source} (Reference)"
 
-            return {
-                "symbol": sym,
-                "price": price,
-                "bid": bid,
-                "ask": ask,
-                "spread": calc_spread,
-                "timestamp": timestamp,
-                "source": "INSTITUTIONAL_FEED",
-                "provider": f"Institutional Verified ({provider_name})",
-            }
+            return build_quote_record(
+                symbol=sym,
+                provider=f"Reference Price with Estimated Spread ({provider_name})",
+                bid=bid,
+                ask=ask,
+                price=price,
+                source_timestamp=timestamp,
+                classification=QuoteClassification.ESTIMATED_SPREAD,
+                connection_status="CONNECTED",
+                source=str(source),
+                is_executable=False,
+                symbol_mapping=sym
+            )
 
         return None
 

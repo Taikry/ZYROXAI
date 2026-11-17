@@ -1063,6 +1063,23 @@ class XAUUSDSignalEngine:
         # A single validated quote snapshot supports either the desktop MT5
         # bridge or Render's authenticated OANDA v20 provider.
         quote = market_data_engine.get_verified_quote(canonical_symbol)
+        quote_classification = str(quote.get("quote_classification") or "") if quote else "UNAVAILABLE"
+        if not quote_classification and quote:
+            bid_val = float(quote.get("bid") or 0.0)
+            ask_val = float(quote.get("ask") or 0.0)
+            if bid_val > 0 and ask_val > bid_val:
+                quote_classification = "REAL_BROKER_QUOTE"
+            else:
+                quote_classification = "UNAVAILABLE"
+
+        if quote_classification in ("STALE", "DISCONNECTED", "UNAVAILABLE"):
+            return {
+                "success": False,
+                "error": f"The market data feed is {quote_classification}; actionable signal generation is blocked for risk safety.",
+                "canonical_symbol": canonical_symbol,
+                "status": f"BLOCKED_{quote_classification}_FEED"
+            }
+
         try:
             bid = float(quote.get("bid")) if quote else 0.0
             ask = float(quote.get("ask")) if quote else 0.0
@@ -1086,7 +1103,7 @@ class XAUUSDSignalEngine:
                 quote_price = verified_price
                 bid = round(quote_price - spread_est / 2.0, 2)
                 ask = round(quote_price + spread_est / 2.0, 2)
-                quote_source = "INSTITUTIONAL_FEED"
+                quote_source = "REFERENCE_PRICE_ESTIMATED"
             else:
                 return {
                     "success": False,
