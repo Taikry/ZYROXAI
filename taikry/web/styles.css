@@ -7623,13 +7623,17 @@ html, body {
 
 .mobile-more-card {
   width: 100%;
-  max-width: 500px;
-  background: rgba(13, 20, 36, 0.98);
+  max-width: 560px;
+  max-height: 85vh;
+  max-height: 85dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(9, 15, 12, 0.98);
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(0, 217, 154, 0.25);
   border-bottom: none;
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.9);
   padding: 16px 18px max(env(safe-area-inset-bottom, 16px), 24px) 18px;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -7675,17 +7679,42 @@ html, body {
   color: #fff;
 }
 
+.mobile-more-section-title {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--zyrox-primary, #00D99A);
+  margin: 10px 0 2px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 217, 154, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-more-section-title:first-child {
+  margin-top: 0;
+}
+
 .mobile-more-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
+}
+
+@media (max-width: 360px) {
+  .mobile-more-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mobile-more-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
@@ -7700,14 +7729,14 @@ html, body {
 
 .mobile-more-btn:hover,
 .mobile-more-btn:active {
-  background: rgba(56, 189, 248, 0.15);
-  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(0, 217, 154, 0.12);
+  border-color: rgba(0, 217, 154, 0.4);
   color: #fff;
   transform: translateY(-1px);
 }
 
 .mobile-more-btn .mm-icon {
-  font-size: 18px;
+  font-size: 17px;
   flex-shrink: 0;
 }
 
@@ -9701,7 +9730,13 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
   }
   .overlay-content-card,
   .modal-dialog,
-  .plans-modal-content {
+  .plans-modal-content,
+  .modal-card,
+  .modal-card-wide,
+  .v6-modal-card-wide,
+  .zyrox-journal-modal-card,
+  .dev-modal-card,
+  .bridge-modal-card {
     width: calc(100vw - 20px) !important;
     max-width: 720px !important;
     max-height: calc(100dvh - 30px) !important;
@@ -9710,6 +9745,10 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
     border-radius: 14px !important;
     margin: auto !important;
     box-sizing: border-box !important;
+  }
+  .modal-backdrop {
+    padding: 8px !important;
+    z-index: 10010 !important;
   }
   .overlay-header {
     flex-wrap: wrap !important;

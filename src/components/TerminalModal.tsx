@@ -62,33 +62,33 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose })
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-10 bg-black/85 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 md:p-10 bg-black/85 backdrop-blur-md animate-fade-in">
       {/* Modal Card */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl bg-[#090F0C] border border-[#00E59B]/40 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9),0_0_30px_rgba(0,229,155,0.2)] overflow-hidden">
+      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl sm:rounded-3xl bg-[#090F0C] border border-[#00E59B]/40 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9),0_0_30px_rgba(0,229,155,0.2)] overflow-hidden">
         {/* Top Terminal Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#00E59B]/20 bg-[#050807]/90">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-rose-500/80" />
-              <span className="w-3 h-3 rounded-full bg-amber-500/80" />
-              <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+        <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-[#00E59B]/20 bg-[#050807]/90 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
             </div>
-            <div className="h-4 w-px bg-white/10" />
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-[#00E59B] animate-pulse" />
-              <span className="font-mono text-xs font-bold text-[#F5F8F6]">
-                ZYROX SYSTEM AI — 14-AGENT CONSENSUS FLEET
+            <div className="h-4 w-px bg-white/10 hidden sm:block" />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Bot className="w-4 h-4 text-[#00E59B] animate-pulse shrink-0" />
+              <span className="font-mono text-[11px] sm:text-xs font-bold text-[#F5F8F6] truncate">
+                ZYROX SYSTEM AI
               </span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#00E59B]/15 text-[#39FFC0] border border-[#00E59B]/30 font-semibold flex items-center gap-1">
+            <span className="text-[9px] sm:text-[10px] font-mono px-2 py-0.5 rounded bg-[#00E59B]/15 text-[#39FFC0] border border-[#00E59B]/30 font-semibold flex items-center gap-1 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[#00E59B] animate-ping" />
-              SYSTEM AI ACTIVE
+              ACTIVE
             </span>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[#87938D] hover:text-[#F5F8F6] hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[#87938D] hover:text-[#F5F8F6] hover:bg-white/5 transition-colors cursor-pointer shrink-0"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -96,7 +96,7 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6">
           {/* Header Description */}
           <div>
             <h3 className="text-xl font-bold text-[#F5F8F6] flex items-center gap-2">

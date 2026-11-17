@@ -3276,17 +3276,85 @@
         <button type="button" class="mobile-more-close" onclick="closeMobileMoreSheet()" title="Close menu">✕</button>
       </div>
       <div class="mobile-more-grid">
-        <button type="button" class="mobile-more-btn" onclick="switchNavPane('debate'); closeMobileMoreSheet();">
-          <span class="mm-icon">🏛️</span>
-          <span class="mm-text">AI Debate (4 Agents)</span>
+        <!-- 1. VIP & Account -->
+        <div class="mobile-more-section-title">👑 VIP & Account</div>
+        <button type="button" class="mobile-more-btn" onclick="showPlansModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">👑</span>
+          <span class="mm-text">VIP Plans & Quotas</span>
         </button>
-        <button type="button" class="mobile-more-btn" onclick="switchNavPane('training'); closeMobileMoreSheet();">
-          <span class="mm-icon">🧠</span>
-          <span class="mm-text">Self-Training & Stats</span>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('account'); closeMobileMoreSheet();">
+          <span class="mm-icon">👤</span>
+          <span class="mm-text">SaaS Account & Trial</span>
         </button>
-        <button type="button" class="mobile-more-btn" onclick="switchNavPane('autofix'); closeMobileMoreSheet();">
-          <span class="mm-icon">🛡️</span>
-          <span class="mm-text">Sentinel Auto-Fix</span>
+        <button type="button" class="mobile-more-btn" onclick="window.location.href='/api/v1/auth/telegram/login'; closeMobileMoreSheet();">
+          <span class="mm-icon">✈️</span>
+          <span class="mm-text">Telegram Login (OIDC)</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openDeveloperModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">👨‍💻</span>
+          <span class="mm-text">Architect: Heng Taikry</span>
+        </button>
+
+        <!-- 2. Pro Trading Tools & Modals -->
+        <div class="mobile-more-section-title">📓 Pro Trading Tools</div>
+        <button type="button" class="mobile-more-btn" onclick="openDedicatedJournalModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">📓</span>
+          <span class="mm-text">Trade Journal & PnL</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openV6ConceptExplorerModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">🔬</span>
+          <span class="mm-text">V6 Concept Explorer</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openMT5BridgeModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">🔌</span>
+          <span class="mm-text">Windows MT5 Bridge</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openSchemaStudio(); closeMobileMoreSheet();">
+          <span class="mm-icon">📐</span>
+          <span class="mm-text">Schema Studio DB</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openPairModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">🔍</span>
+          <span class="mm-text">Search Universe (All)</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="triggerScan(); closeMobileMoreSheet();">
+          <span class="mm-icon">⚡</span>
+          <span class="mm-text">Scan Market Now</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="armCurrentAlert(); closeMobileMoreSheet();">
+          <span class="mm-icon">🔔</span>
+          <span class="mm-text">Set Price Alert</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="toggleLanguage(); closeMobileMoreSheet();">
+          <span class="mm-icon">🌐</span>
+          <span class="mm-text">ភាសាខ្មែរ / English</span>
+        </button>
+
+        <!-- 3. Navigation & Market Analytics -->
+        <div class="mobile-more-section-title">📊 Navigation & Analytics</div>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('overview'); closeMobileMoreSheet();">
+          <span class="mm-icon">📊</span>
+          <span class="mm-text">Dashboard Overview</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('markets'); closeMobileMoreSheet();">
+          <span class="mm-icon">📈</span>
+          <span class="mm-text">Live Markets Screener</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('signals'); closeMobileMoreSheet();">
+          <span class="mm-icon">⚡</span>
+          <span class="mm-text">Signal Center</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('history'); closeMobileMoreSheet();">
+          <span class="mm-icon">📜</span>
+          <span class="mm-text">Signal History</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('analytics'); closeMobileMoreSheet();">
+          <span class="mm-icon">🎯</span>
+          <span class="mm-text">Performance Analytics</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('calendar'); closeMobileMoreSheet();">
+          <span class="mm-icon">📅</span>
+          <span class="mm-text">Economic Calendar</span>
         </button>
         <button type="button" class="mobile-more-btn" onclick="togglePortfolioDrawer(); closeMobileMoreSheet();">
           <span class="mm-icon">💼</span>
@@ -3296,17 +3364,43 @@
           <span class="mm-icon">🌐</span>
           <span class="mm-text">Macro News & Cal</span>
         </button>
-        <button type="button" class="mobile-more-btn" onclick="openDeveloperModal(); closeMobileMoreSheet();">
-          <span class="mm-icon">👨‍💻</span>
-          <span class="mm-text">Architect: Heng Taikry</span>
+
+        <!-- 4. AI Multi-Agent Consensus -->
+        <div class="mobile-more-section-title">🧠 Multi-Agent AI Suite</div>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('debate'); closeMobileMoreSheet();">
+          <span class="mm-icon">🏛️</span>
+          <span class="mm-text">AI Debate (4 Agents)</span>
         </button>
-        <button type="button" class="mobile-more-btn" onclick="toggleLanguage(); closeMobileMoreSheet();">
-          <span class="mm-icon">🌐</span>
-          <span class="mm-text">ភាសាខ្មែរ / English</span>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('training'); closeMobileMoreSheet();">
+          <span class="mm-icon">🧠</span>
+          <span class="mm-text">Self-Training & ML</span>
         </button>
-        <button type="button" class="mobile-more-btn" onclick="openPairModal(); closeMobileMoreSheet();">
-          <span class="mm-icon">🔍</span>
-          <span class="mm-text">Search Universe</span>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('autofix'); closeMobileMoreSheet();">
+          <span class="mm-icon">🛡️</span>
+          <span class="mm-text">Sentinel Auto-Fix</span>
+        </button>
+
+        <!-- 5. System, Settings & Support -->
+        <div class="mobile-more-section-title">⚙️ Settings & System</div>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('telegram'); closeMobileMoreSheet();">
+          <span class="mm-icon">✈️</span>
+          <span class="mm-text">Telegram Alerts & Bot</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('mt5'); closeMobileMoreSheet();">
+          <span class="mm-icon">💻</span>
+          <span class="mm-text">MT5 Connection</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('settings'); closeMobileMoreSheet();">
+          <span class="mm-icon">⚙️</span>
+          <span class="mm-text">Terminal Settings</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('admin'); closeMobileMoreSheet();">
+          <span class="mm-icon">🛡️</span>
+          <span class="mm-text">Admin Console</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('support'); closeMobileMoreSheet();">
+          <span class="mm-icon">💬</span>
+          <span class="mm-text">Support Desk</span>
         </button>
       </div>
     </div>

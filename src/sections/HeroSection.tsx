@@ -158,6 +158,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchTerminal }) =>
               </span>
             </div>
           </div>
+
+          {/* Mobile/Tablet Compact Intelligence Badges */}
+          <div className="flex lg:hidden flex-wrap items-center justify-center gap-2.5 mt-3 relative z-20">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#090F0C]/90 border border-[#00E59B]/30 text-[11px] text-[#F5F8F6] shadow-sm">
+              <Layers className="w-3.5 h-3.5 text-[#00E59B]" />
+              <span>ICT 15M Bullish OB + FVG</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#090F0C]/90 border border-[#39FFC0]/30 text-[11px] text-[#F5F8F6] shadow-sm">
+              <Shield className="w-3.5 h-3.5 text-[#39FFC0]" />
+              <span>Risk Verified: R:R 1:3.5</span>
+            </div>
+          </div>
         </div>
 
         {/* Quick Institutional Telemetry Stats Grid */}

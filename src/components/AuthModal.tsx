@@ -105,8 +105,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-md bg-[#090F0C] border border-[#00E59B]/30 rounded-2xl p-6 sm:p-8 shadow-[0_0_50px_rgba(0,229,155,0.15)] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-md max-h-[92vh] overflow-y-auto bg-[#090F0C] border border-[#00E59B]/30 rounded-2xl p-5 sm:p-8 shadow-[0_0_50px_rgba(0,229,155,0.15)] my-auto">
         {/* Glow accent */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#00E59B]/10 rounded-full blur-3xl pointer-events-none" />
 

@@ -100,6 +100,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal, onOpenAuth }) 
               <span>{isKhmer ? 'ចូល Telegram' : 'Telegram Login'}</span>
             </button>
 
+            {/* General Sign In / Free Trial */}
+            <button
+              onClick={() => onOpenAuth && onOpenAuth('signin')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-mono font-medium text-[#F5F8F6] border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+              title={isKhmer ? 'ចូលគណនី' : 'Sign In'}
+            >
+              <LogIn className="w-3.5 h-3.5 text-[#00E59B]" />
+              <span>{isKhmer ? 'ចូលគណនី' : 'Sign In'}</span>
+            </button>
+
             {/* Direct Link to Live Web Terminal Dashboard */}
             <a
               href="/dashboard/"
@@ -161,6 +171,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal, onOpenAuth }) 
               >
                 <Send className="w-4 h-4" />
                 <span>{isKhmer ? 'បន្តជាមួយ Telegram (OIDC)' : 'Continue with Telegram'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenAuth) onOpenAuth('signin');
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs font-semibold bg-white/5 hover:bg-[#00E59B]/10 text-[#F5F8F6] border border-white/10 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 text-[#00E59B]" />
+                <span>{isKhmer ? 'ចូលគណនី / ចុះឈ្មោះ (Email/Password)' : 'Sign In / Register'}</span>
               </button>
               <a
                 href="/dashboard/"
