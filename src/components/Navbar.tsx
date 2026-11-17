@@ -3,13 +3,14 @@ import { AnimatedLogo } from './AnimatedLogo';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { MagneticButton } from './MagneticButton';
 import { useLanguage } from '../hooks/useLanguage';
-import { Menu, X, Terminal, Bot, ChevronRight } from 'lucide-react';
+import { Menu, X, Terminal, Bot, ChevronRight, Send, LogIn } from 'lucide-react';
 
 interface NavbarProps {
   onLaunchTerminal: () => void;
+  onOpenAuth?: (mode?: 'signin' | 'signup') => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal, onOpenAuth }) => {
   const { isKhmer, t } = useLanguage();
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -89,6 +90,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
               <span>{isKhmer ? 'ប្រព័ន្ធ AI' : 'System AI'}</span>
             </MagneticButton>
 
+            {/* Telegram Login Button */}
+            <button
+              onClick={() => onOpenAuth ? onOpenAuth('signin') : (window.location.href = '/api/v1/auth/telegram/login')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-xs font-mono font-medium text-[#229ED9] hover:text-[#52c1f7] border border-[#229ED9]/30 hover:border-[#229ED9]/60 transition-all cursor-pointer"
+              title={isKhmer ? 'ចូលប្រើប្រាស់តាម Telegram' : 'Continue with Telegram'}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'ចូល Telegram' : 'Telegram Login'}</span>
+            </button>
+
             {/* Direct Link to Live Web Terminal Dashboard */}
             <a
               href="/dashboard/"
@@ -139,6 +150,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onLaunchTerminal }) => {
               >
                 <Bot className="w-4 h-4 animate-pulse" />
                 <span>{isKhmer ? 'ប្រព័ន្ធ AI (System AI)' : 'System AI Engine'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenAuth) onOpenAuth('signin');
+                  else window.location.href = '/api/v1/auth/telegram/login';
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-mono text-sm font-bold bg-[#229ED9] hover:bg-[#28a8e6] text-white shadow-[0_4px_15px_rgba(34,158,217,0.35)] cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>{isKhmer ? 'បន្តជាមួយ Telegram (OIDC)' : 'Continue with Telegram'}</span>
               </button>
               <a
                 href="/dashboard/"

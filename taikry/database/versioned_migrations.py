@@ -28,6 +28,7 @@ def _migration_steps(database_engine) -> List[Migration]:
     from taikry.database.migrate_user_risk_settings_unique import run_migration as user_risk_settings_unique
     from taikry.database.migrate_v6_models import run_migration as v6_technical_intelligence
     from taikry.database.migrate_v7_rbac import run_migration as v7_saas_multi_tenant_rbac
+    from taikry.database.migrate_telegram_oidc import run_migration as telegram_oidc_login
 
     return [
         ("0001_telegram_system", "Telegram delivery and signal provenance schema", lambda: telegram_system(database_engine)),
@@ -42,6 +43,7 @@ def _migration_steps(database_engine) -> List[Migration]:
         ("0010_user_risk_settings_unique", "Enforce one risk settings row per authenticated user", lambda: user_risk_settings_unique(database_engine)),
         ("0011_v6_technical_intelligence", "V6 regime results, concept detections, and best setup ledger", lambda: v6_technical_intelligence(database_engine)),
         ("0012_v7_saas_multi_tenant_rbac", "V7 multi-tenant RBAC, permissions, system settings, and feature flags", lambda: v7_saas_multi_tenant_rbac(database_engine)),
+        ("0013_telegram_oidc_login", "Telegram Login OIDC stable subject schema and index", lambda: telegram_oidc_login(database_engine)),
     ]
 
 

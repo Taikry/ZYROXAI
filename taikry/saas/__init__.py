@@ -64,4 +64,17 @@ from taikry.saas.admin_service import (
     admin_get_audit_logs
 )
 from taikry.saas.billing_adapter import billing_adapter
+from taikry.saas.telegram_oidc import (
+    is_telegram_login_configured,
+    get_configured_bot_username,
+    get_default_redirect_uri,
+    get_telegram_login_status,
+    build_telegram_authorization_url,
+    exchange_code_for_tokens,
+    validate_id_token,
+    authenticate_or_create_telegram_user,
+    issue_telegram_session,
+    auth_state_store,
+    jwks_cache
+)
 

@@ -132,6 +132,14 @@ TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_WEBHOOK_SECRET = _credential("TELEGRAM_WEBHOOK_SECRET")
 
+# Telegram Login OpenID Connect (OIDC) Authorization Code Flow with PKCE
+TELEGRAM_LOGIN_CLIENT_ID = _credential("TELEGRAM_LOGIN_CLIENT_ID")
+TELEGRAM_LOGIN_CLIENT_SECRET = _credential("TELEGRAM_LOGIN_CLIENT_SECRET")
+TELEGRAM_LOGIN_REDIRECT_URI = os.getenv("TELEGRAM_LOGIN_REDIRECT_URI", "").strip()
+TELEGRAM_LOGIN_ISSUER = os.getenv("TELEGRAM_LOGIN_ISSUER", "https://oauth.telegram.org").strip()
+TELEGRAM_LOGIN_JWKS_URI = os.getenv("TELEGRAM_LOGIN_JWKS_URI", "https://oauth.telegram.org/.well-known/jwks.json").strip()
+TELEGRAM_LOGIN_BOT_USERNAME = os.getenv("TELEGRAM_LOGIN_BOT_USERNAME", "zyroxloginbot").strip().lstrip("@")
+
 # Signal Delivery Policy:
 # Telegram strictly dispatches primary AI signals (capped at 4/4 per day); lifecycle transitions (TP/SL/BE) are kept in local UI/database only
 TELEGRAM_SEND_LIFECYCLE_EVENTS: bool = os.getenv("TELEGRAM_SEND_LIFECYCLE_EVENTS", "false").strip().lower() in ("true", "1", "yes")

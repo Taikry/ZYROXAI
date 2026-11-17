@@ -20,6 +20,7 @@ from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Depends, Header, Cookie, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -79,7 +80,16 @@ from taikry.saas import (
     has_permission,
     has_role,
     get_user_roles,
-    get_user_permissions
+    get_user_permissions,
+    is_telegram_login_configured,
+    get_telegram_login_status,
+    build_telegram_authorization_url,
+    exchange_code_for_tokens,
+    validate_id_token,
+    authenticate_or_create_telegram_user,
+    issue_telegram_session,
+    auth_state_store,
+    get_default_redirect_uri
 )
 
 saas_router = APIRouter()
@@ -858,6 +868,209 @@ def delete_account_endpoint(payload: DeleteAccountRequest, response: Response, u
         ok = delete_user_account(db, user.id, payload.reason)
         response.delete_cookie(key=SESSION_COOKIE_NAME)
         return {"success": True, "message": "Account deleted successfully."}
+    finally:
+        db.close()
+
+
+# =============================================================================
+# TELEGRAM OPENID CONNECT (OIDC) AUTHENTICATION ENDPOINTS
+# =============================================================================
+
+@saas_router.get("/api/v1/auth/telegram/status")
+def telegram_login_status_endpoint(request: Request):
+    """
+    Returns public status of the Telegram Login OpenID Connect integration,
+    including configuration readiness and allowed callback URLs for BotFather.
+    """
+    base_url = str(request.base_url).rstrip("/")
+    return get_telegram_login_status(base_url=base_url)
+
+
+@saas_router.get("/api/v1/auth/telegram/login")
+def telegram_login_endpoint(
+    request: Request,
+    return_to: Optional[str] = "/dashboard/",
+    format: Optional[str] = None
+):
+    """
+    Initiates Telegram OpenID Connect Authorization Code Flow with PKCE (S256).
+    Generates cryptographically secure state, nonce, and code_verifier, and redirects to Telegram.
+    If Telegram Login is not configured, returns NEEDS_CONFIGURATION with setup instructions.
+    """
+    base_url = str(request.base_url).rstrip("/")
+    if not is_telegram_login_configured():
+        status_info = get_telegram_login_status(base_url=base_url)
+        if format == "json" or "application/json" in request.headers.get("accept", ""):
+            return {
+                "success": False,
+                "status": "NEEDS_CONFIGURATION",
+                "message": (
+                    "Telegram Login Bot is not yet configured. "
+                    "Please set TELEGRAM_LOGIN_CLIENT_ID and TELEGRAM_LOGIN_CLIENT_SECRET in .env."
+                ),
+                "details": status_info
+            }
+        return RedirectResponse(
+            url=f"/dashboard/?auth_notice=telegram_needs_configuration&bot={quote(status_info.get('bot_username', 'zyroxloginbot'))}",
+            status_code=303
+        )
+
+    # Sanitize return_to
+    safe_return_to = "/dashboard/"
+    if return_to and (return_to.startswith("/") and not return_to.startswith("//")):
+        safe_return_to = return_to
+
+    auth_url, state = build_telegram_authorization_url(
+        base_url=base_url,
+        return_to=safe_return_to
+    )
+
+    if format == "json" or "application/json" in request.headers.get("accept", ""):
+        return {
+            "success": True,
+            "status": "READY",
+            "auth_url": auth_url,
+            "state": state
+        }
+
+    return RedirectResponse(url=auth_url, status_code=303)
+
+
+@saas_router.get("/api/v1/auth/telegram/callback")
+def telegram_callback_endpoint(
+    request: Request,
+    response: Response,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+    current_user_opt: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Handles Telegram OpenID Connect callback:
+    - Enforces single-use atomic state pop (prevents replay attacks)
+    - Verifies PKCE code_verifier with backend token endpoint
+    - Validates ID token signature via Telegram JWKS, audience, issuer, expiration, nonce
+    - Identifies account by stable subject (sub), NOT username
+    - Creates or retrieves canonical ZYROX AI account and grants trial
+    - Establishes secure 30-day session and sets HttpOnly cookie
+    - Redirects to dashboard
+    """
+    # 1. Check for error returned by provider
+    if error:
+        err_msg = error_description or error or "Telegram login was cancelled or failed"
+        logger.warning(f"Telegram login provider error: {error}: {error_description}")
+        return RedirectResponse(
+            url=f"/dashboard/?auth_error={quote(err_msg)}",
+            status_code=303
+        )
+
+    # 2. Check for missing code or state
+    if not code or not state:
+        logger.warning("Telegram callback invoked without code or state parameter")
+        return RedirectResponse(
+            url="/dashboard/?auth_error=" + quote("Missing authorization code or state from Telegram callback"),
+            status_code=303
+        )
+
+    # 3. Retrieve and pop state atomically (Anti-replay protection)
+    state_entry = auth_state_store.pop(state)
+    if not state_entry:
+        logger.warning(f"Telegram callback rejected: state '{state}' is invalid, expired, or already used (replay attack prevented)")
+        return RedirectResponse(
+            url="/dashboard/?auth_error=" + quote("Invalid, expired, or replayed authorization session. Please try logging in again."),
+            status_code=303
+        )
+
+    expected_nonce = state_entry.get("nonce")
+    code_verifier = state_entry.get("code_verifier")
+    redirect_uri = state_entry.get("redirect_uri") or get_default_redirect_uri(str(request.base_url).rstrip("/"))
+    return_to = state_entry.get("return_to", "/dashboard/")
+
+    # 4. Exchange authorization code for tokens on backend
+    try:
+        token_resp = exchange_code_for_tokens(
+            code=code,
+            code_verifier=code_verifier,
+            redirect_uri=redirect_uri
+        )
+    except Exception as exchange_err:
+        logger.error(f"Telegram token exchange failed: {exchange_err}")
+        return RedirectResponse(
+            url="/dashboard/?auth_error=" + quote(f"Failed to exchange authorization code with Telegram: {exchange_err}"),
+            status_code=303
+        )
+
+    id_token = token_resp.get("id_token")
+    if not id_token:
+        logger.error("Telegram token response missing id_token")
+        return RedirectResponse(
+            url="/dashboard/?auth_error=" + quote("Telegram returned an invalid token response missing id_token"),
+            status_code=303
+        )
+
+    # 5. Cryptographically validate ID Token using JWKS & claims
+    try:
+        claims = validate_id_token(
+            id_token=id_token,
+            expected_nonce=expected_nonce
+        )
+    except Exception as val_err:
+        logger.error(f"Telegram ID token validation failed: {val_err}")
+        return RedirectResponse(
+            url="/dashboard/?auth_error=" + quote(f"Security validation failed for Telegram ID token: {val_err}"),
+            status_code=303
+        )
+
+    # 6. Retrieve or create canonical user account by stable Telegram subject (sub)
+    db = SessionLocal()
+    try:
+        ip = request.client.host if request.client else "unknown"
+        ua = request.headers.get("user-agent")
+
+        success, msg, user, is_new = authenticate_or_create_telegram_user(
+            db=db,
+            claims=claims,
+            current_user=current_user_opt,
+            ip_address=ip
+        )
+
+        if not success or not user:
+            logger.error(f"User authentication/creation failed: {msg}")
+            return RedirectResponse(
+                url="/dashboard/?auth_error=" + quote(msg),
+                status_code=303
+            )
+
+        # 7. Establish 30-day session
+        raw_session_token, expires_utc = issue_telegram_session(
+            db=db,
+            user=user,
+            ip_address=ip,
+            user_agent=ua
+        )
+
+        # 8. Redirect with secure session cookie
+        is_secure = (
+            request.url.scheme == "https"
+            or os.getenv("ENVIRONMENT", "production").lower() == "production"
+        )
+        safe_destination = return_to if (return_to.startswith("/") and not return_to.startswith("//")) else "/dashboard/"
+        delim = "&" if "?" in safe_destination else "?"
+        dest_url = f"{safe_destination}{delim}auth_success=telegram"
+        if is_new:
+            dest_url += "&new_user=1"
+
+        redirect_resp = RedirectResponse(url=dest_url, status_code=303)
+        redirect_resp.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=raw_session_token,
+            httponly=True,
+            samesite="lax",
+            secure=is_secure,
+            max_age=30 * 86400
+        )
+        return redirect_resp
     finally:
         db.close()
 

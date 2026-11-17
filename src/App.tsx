@@ -4,6 +4,7 @@ import { ParticleBackground } from './components/ParticleBackground';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { TerminalModal } from './components/TerminalModal';
+import { AuthModal } from './components/AuthModal';
 import { ScrollToTop } from './components/ScrollToTop';
 import { HeroSection } from './sections/HeroSection';
 import { MarketSection } from './sections/MarketSection';
@@ -18,6 +19,13 @@ import { Bot, Sparkles } from 'lucide-react';
 const MainApp: React.FC = () => {
   const { isKhmer } = useLanguage();
   const [terminalOpen, setTerminalOpen] = useState<boolean>(false);
+  const [authOpen, setAuthOpen] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  const handleOpenAuth = (mode?: 'signin' | 'signup') => {
+    setAuthMode(mode || 'signin');
+    setAuthOpen(true);
+  };
 
   return (
     <div className={`min-h-screen bg-[#050807] text-[#F5F8F6] relative selection:bg-[#00E59B]/20 selection:text-[#39FFC0] ${isKhmer ? 'font-khmer' : ''}`}>
@@ -25,7 +33,10 @@ const MainApp: React.FC = () => {
       <ParticleBackground />
 
       {/* Navigation Header */}
-      <Navbar onLaunchTerminal={() => setTerminalOpen(true)} />
+      <Navbar
+        onLaunchTerminal={() => setTerminalOpen(true)}
+        onOpenAuth={handleOpenAuth}
+      />
 
       {/* Main Sections */}
       <main className="relative z-10">
@@ -46,6 +57,13 @@ const MainApp: React.FC = () => {
       <TerminalModal
         isOpen={terminalOpen}
         onClose={() => setTerminalOpen(false)}
+      />
+
+      {/* Authentication & Telegram Login Modal */}
+      <AuthModal
+        isOpen={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialMode={authMode}
       />
 
       {/* Floating System AI Quick Action Button */}
