@@ -28,7 +28,7 @@ import logging
 import datetime
 from threading import Lock
 from typing import Dict, Any, Optional, Tuple, List
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode, quote, urlsplit
 
 import jwt
 import httpx
@@ -315,7 +315,12 @@ def build_telegram_authorization_url(
         return_to=return_to
     )
 
+    parsed_redirect = urlsplit(redirect_uri)
+    origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+
     params = {
+        "bot_id": TELEGRAM_LOGIN_CLIENT_ID,
+        "origin": origin,
         "client_id": TELEGRAM_LOGIN_CLIENT_ID,
         "redirect_uri": redirect_uri,
         "response_type": "code",
