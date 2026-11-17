@@ -27,7 +27,7 @@
 
 ## 2. Market Data Flow & Integrity Controls
 
-```
+```text
 [Exness MT5 Windows Bridge] ---------> Classified as REAL_BROKER_QUOTE (Executable)
                                               |
 [OANDA v20 / GoldAPI / 12Data] ------> Classified as REFERENCE_PRICE (Comparative)
@@ -57,11 +57,13 @@
 For production activation on Render or dedicated VPS, the following environment variables must be populated in the Render Dashboard or `.env`:
 
 ### 3.1 Market Data & Broker
+
 - `MT5_BRIDGE_TOKEN`: Cryptographically strong random token for the MT5 Windows Bridge.
 - `OANDA_API_KEY`: API access token from OANDA fxTrade practice or live account.
 - `GOLD_API_KEY`: API key from GoldAPI.io.
 
 ### 3.2 Authentication & Security
+
 - `JWT_SECRET_KEY`: 256-bit secret for signing application JWT tokens.
 - `TELEGRAM_LOGIN_CLIENT_ID`: Telegram Login widget / Bot ID from `@BotFather`.
 - `TELEGRAM_LOGIN_CLIENT_SECRET`: Telegram Login secret key from `@BotFather`.
@@ -70,5 +72,6 @@ For production activation on Render or dedicated VPS, the following environment 
 - `GOOGLE_CLIENT_SECRET`: Google Cloud Console OAuth 2.0 Client Secret (optional).
 
 ### 3.3 Artificial Intelligence Fleet
+
 - `GROQ_API_KEY`: API key from console.groq.com.
 - `ANYROUTER_API_KEY`: API key from AnyRouter dashboard.

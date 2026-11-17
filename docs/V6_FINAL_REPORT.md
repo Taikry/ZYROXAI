@@ -44,6 +44,7 @@ This final production report documents the successful implementation of the **ZY
 ## 3. Files Changed & Created
 
 ### Created Files
+
 - `docs/V6_REPOSITORY_AUDIT.md`
 - `docs/V6_SECURITY_AUDIT.md`
 - `docs/V6_IMPLEMENTATION_PLAN.md`
@@ -56,6 +57,7 @@ This final production report documents the successful implementation of the **ZY
 - `tests/test_v6_p0_security.py`
 
 ### Modified Files
+
 - `taikry/api/app.py` (Dashboard server-side auth gate, admin/super-admin/billing protection)
 - `taikry/api/routes.py` (Enforced authentication on `/api/v1/ai/chat`, added `/api/v1/ai/chat/stream`)
 - `taikry/api/saas_routes.py` (Google & Phone OTP endpoints, `/api/v1/admin/settings` GET/POST)

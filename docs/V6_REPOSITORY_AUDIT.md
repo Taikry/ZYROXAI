@@ -42,21 +42,25 @@ The repository is built on a high-performance **FastAPI (Python 3.12)** backend 
 ## 3. High-Priority Deficiencies & Vulnerabilities
 
 ### A. Dashboard Authentication Gate Missing on Static Mount
+
 - **Location:** `taikry/api/app.py:151`
 - **Issue:** `app.mount("/dashboard", StaticFiles(directory=web_dir, html=True), name="dashboard")` serves `index.html` to any unauthenticated client without session cookie verification.
 - **Remediation:** Implement server-side route handlers for `/dashboard`, `/dashboard/`, and `/dashboard/index.html` that validate the session via `authenticate_session(db, token)` and redirect unauthenticated requests to `/?auth=signin&return_to=/dashboard/`.
 
 ### B. AI Chat Anonymous Fallback Bypass
+
 - **Location:** `taikry/api/routes.py:282-320`
 - **Issue:** If `Authorization` header and `zyrox_session` cookie are absent, `chat_ai_endpoint` silently bypasses authentication and quota consumption, running LLM inference for anonymous users.
 - **Remediation:** Enforce mandatory server-side authentication; raise `HTTPException(status_code=401, detail="Authentication required")` for unauthenticated requests.
 
 ### C. MT5 Insecure Default Secret & Open Fallback
+
 - **Location:** `taikry/data/mt5_receiver.py:66`
 - **Issue:** Falls back to hardcoded token `"zyrox_mt5_bridge_secure_token_change_me"` if `MT5_BRIDGE_TOKEN` is unset, exposing live bridge endpoints to unauthorized payloads.
 - **Remediation:** Fail closed immediately if `MT5_BRIDGE_TOKEN` is missing or empty. Compare tokens using `hmac.compare_digest`.
 
 ### D. Quote Classification & Synthetic Spreads
+
 - **Location:** `taikry/data/providers.py`, `taikry/trading/xauusd_signal_engine.py`
 - **Issue:** Reference prices (e.g., Yahoo Finance) may be labeled as executable bid/ask without explicit classification.
 - **Remediation:** Enforce explicit quote classifications: `REAL_BROKER_QUOTE`, `REFERENCE_PRICE`, `ESTIMATED_SPREAD`, `STALE`, `DISCONNECTED`, `UNAVAILABLE`. Never label estimated spreads as real broker quotes.

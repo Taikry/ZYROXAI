@@ -11,7 +11,7 @@
 
 The ZYROX AI platform is architected for continuous 24/7 high-availability deployment on **Render**:
 
-```
+```text
                                   [Internet]
                                       |
                                       v

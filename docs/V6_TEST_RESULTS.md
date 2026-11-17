@@ -17,7 +17,7 @@
 | `tests/test_v6_engine.py` | V6 Market Regime, SMC concepts, trade levels | `PASSING` | 16 / 16 | BOS, CHoCH, FVG, Order Blocks, Liquidity Sweeps, R:R calculation. |
 | `tests/test_saas_platform.py` | Subscriptions, billing, and trial engine | `PASSING` | 12 / 12 | 14-day free trial auto-provisioning and quota tracking. |
 | `tests/test_indicators_and_ict.py` | Technical indicators, ATR, RSI, ICT structures | `PASSING` | 10 / 10 | Real candle math without external dependency mocks. |
-| `tests/test_telegram_duplicate_prevention.py`| Telegram rate-limits and signal deduplication | `PASSING` | 6 / 6 | Max 4 signals/day, atomic outbox reservation. |
+| `tests/test_telegram_duplicate_prevention.py` | Telegram rate-limits and signal deduplication | `PASSING` | 6 / 6 | Max 4 signals/day, atomic outbox reservation. |
 
 ---
 
@@ -39,11 +39,14 @@
 ## 3. Automation Scripts & Verifications
 
 - **Frontend Compilation:**
+
   ```powershell
   npm run build
   # Output: dist/index.html (753ms) - 0 errors
   ```
+
 - **JavaScript Syntax Check:**
+
   ```powershell
   node --check taikry/web/app.js
   # Output: clean exit code 0

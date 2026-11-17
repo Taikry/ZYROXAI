@@ -40,7 +40,7 @@ from taikry.database.models import (
     UserSubscription,
     SubscriptionPlan
 )
-from taikry.config import MAX_RISK_PER_TRADE_PERCENT, get_symbol_config
+from taikry.config import MAX_RISK_PER_TRADE_PERCENT, INITIAL_PAPER_BALANCE, get_symbol_config
 from taikry.saas import (
     sign_up_user,
     login_user,

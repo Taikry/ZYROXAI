@@ -12,6 +12,7 @@
 This security audit inspects all entry points, cryptographic primitives, credential storage mechanisms, session lifecycles, and authorization boundaries across ZYROX AI.
 
 The audit identifies five primary attack vectors categorized as **Priority P0**:
+
 1. **Vector A:** Unauthenticated Dashboard Access & Private Route Leakage
 2. **Vector B:** Anonymous AI LLM Quota Bypass & Denial of Service
 3. **Vector C:** Hardcoded MT5 Bridge Secret & Unauthenticated Market Injection
@@ -26,10 +27,12 @@ The audit identifies five primary attack vectors categorized as **Priority P0**:
 
 - **Severity:** HIGH (CWE-306: Missing Authentication for Critical Function)
 - **Current State:**
+
   ```python
   # taikry/api/app.py:151
   app.mount("/dashboard", StaticFiles(directory=web_dir, html=True), name="dashboard")
   ```
+
   Static files are served directly by Starlette without middleware inspection. Unauthenticated visitors direct-linking `/dashboard/` load the terminal frontend and client-side scripts.
 - **Remediation Strategy:**
   1. Register explicit route handlers for `/dashboard`, `/dashboard/`, and `/dashboard/index.html`.
@@ -43,6 +46,7 @@ The audit identifies five primary attack vectors categorized as **Priority P0**:
 
 - **Severity:** HIGH (CWE-862: Missing Authorization)
 - **Current State:**
+
   ```python
   # taikry/api/routes.py:296-320
   token = authorization[7:].strip() if authorization ... else (zyrox_session or "").strip()
@@ -50,12 +54,14 @@ The audit identifies five primary attack vectors categorized as **Priority P0**:
       # validate and check quota
   # Proceeds unconditionally to chat_with_real_ai without token check!
   ```
+
   An attacker can omit the `Authorization` header and `zyrox_session` cookie to freely trigger costly multi-agent LLM invocations without consuming user quota or having an active subscription.
 - **Remediation Strategy:**
   1. Require an authenticated user context via FastAPI `Depends(get_current_user)`.
   2. Reject missing or expired credentials with HTTP 401 Unauthorized.
   3. Enforce plan-level quota checks before dispatching queries to `chat_with_real_ai`.
   4. Return consistent error structures:
+
      ```json
      {"detail": "Authentication required. Please sign in to access AI Chat."}
      ```
@@ -64,10 +70,12 @@ The audit identifies five primary attack vectors categorized as **Priority P0**:
 
 - **Severity:** CRITICAL (CWE-798: Use of Hard-coded Credentials)
 - **Current State:**
+
   ```python
   # taikry/data/mt5_receiver.py:66
   expected_token = MT5_BRIDGE_TOKEN or "zyrox_mt5_bridge_secure_token_change_me"
   ```
+
   If `MT5_BRIDGE_TOKEN` is unset in production, any external actor knowing or guessing the default string can inject fabricated ticks and candle data into the platform.
 - **Remediation Strategy:**
   1. Remove the hardcoded fallback token immediately.

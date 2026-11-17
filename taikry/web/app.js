@@ -260,41 +260,81 @@ function initTelegramWebApp() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  initSidebarState();
-  initTelegramWebApp();
-  initColorTheme();
-  initCockpitSize();
-  renderWatchlist();
-  initTickerRibbon();
-  renderCockpitChips();
-  if (window.innerWidth <= 900) {
-    switchMobileView("chart");
-  }
-
-  // Initialize Real Logos for Active Instrument
-  const topActiveIcon = document.getElementById("top-active-icon");
-  if (topActiveIcon) topActiveIcon.innerHTML = getAssetRealLogoHTML(currentSymbol);
-  const cockpitAssetIcon = document.getElementById("cockpit-asset-icon");
-  if (cockpitAssetIcon) cockpitAssetIcon.innerHTML = getAssetRealLogoHTML(currentSymbol);
-
-  // Initialize Native Pro Financial Chart Workspace
-  if (window.taikryChart) {
-    window.taikryChart.init("tradingview-container");
+function runWhenDOMReady(fn) {
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    window.setTimeout(fn, 1);
   } else {
-    loadTradingViewChart("OANDA:XAUUSD", "15");
+    document.addEventListener("DOMContentLoaded", fn);
+  }
+}
+
+runWhenDOMReady(() => {
+  // 1. Immediately handle auth redirect parameters (e.g. Telegram login success)
+  try {
+    handleAuthRedirectParams();
+  } catch (e) {
+    console.warn("Auth redirect param handler note:", e);
   }
 
-  const startupTasks = [fetchHealthAndPaper(), fetchMacroEvents(), pollRealtimePrices()];
-  window.ZyroxUI?.beginStartup({ tasks: startupTasks, timeoutMs: 14000, language: isKhmer ? "kh" : "en" });
-  triggerScan();
-  startRealtimePriceStream();
+  // 2. Safe layout and theme setups
+  try { initSidebarState(); } catch (e) { console.warn("initSidebarState error:", e); }
+  try { initTelegramWebApp(); } catch (e) { console.warn("initTelegramWebApp error:", e); }
+  try { initColorTheme(); } catch (e) { console.warn("initColorTheme error:", e); }
+  try { initCockpitSize(); } catch (e) { console.warn("initCockpitSize error:", e); }
+  try { renderWatchlist(); } catch (e) { console.warn("renderWatchlist error:", e); }
+  try { initTickerRibbon(); } catch (e) { console.warn("initTickerRibbon error:", e); }
+  try { renderCockpitChips(); } catch (e) { console.warn("renderCockpitChips error:", e); }
+  if (window.innerWidth <= 900) {
+    try { switchMobileView("chart"); } catch (e) { console.warn("switchMobileView error:", e); }
+  }
 
-  initLLMPillClickHandlers();
-  setupChatDragAndDrop();
-  handleAuthRedirectParams();
+  // 3. Initialize Real Logos for Active Instrument
+  try {
+    const topActiveIcon = document.getElementById("top-active-icon");
+    if (topActiveIcon) topActiveIcon.innerHTML = getAssetRealLogoHTML(currentSymbol);
+    const cockpitAssetIcon = document.getElementById("cockpit-asset-icon");
+    if (cockpitAssetIcon) cockpitAssetIcon.innerHTML = getAssetRealLogoHTML(currentSymbol);
+  } catch (e) {}
 
-  // Polling intervals
+  // 4. Initialize Native Pro Financial Chart Workspace
+  try {
+    if (window.taikryChart) {
+      window.taikryChart.init("tradingview-container");
+    } else {
+      loadTradingViewChart("OANDA:XAUUSD", "15");
+    }
+  } catch (e) {
+    console.warn("Chart workspace initialization note:", e);
+  }
+
+  // 5. Begin UI startup tasks with guaranteed dismissal
+  try {
+    const startupTasks = [
+      Promise.resolve(fetchHealthAndPaper()).catch(() => {}),
+      Promise.resolve(fetchMacroEvents()).catch(() => {}),
+      Promise.resolve(pollRealtimePrices()).catch(() => {})
+    ];
+    if (window.ZyroxUI?.beginStartup) {
+      window.ZyroxUI.beginStartup({ tasks: startupTasks, timeoutMs: 3500, language: isKhmer ? "kh" : "en" });
+    }
+  } catch (e) {
+    console.warn("Startup loader note:", e);
+  }
+
+  // Guaranteed failsafe: dismiss startup overlay after 3 seconds max
+  window.setTimeout(() => {
+    if (typeof window.dismissStartupLoader === "function") {
+      window.dismissStartupLoader();
+    }
+  }, 3000);
+
+  // 6. Start market scanning and real-time streams
+  try { triggerScan(); } catch (e) {}
+  try { startRealtimePriceStream(); } catch (e) {}
+  try { initLLMPillClickHandlers(); } catch (e) {}
+  try { setupChatDragAndDrop(); } catch (e) {}
+
+  // 7. Polling intervals
   setInterval(fetchHealthAndPaper, 10000);
   setInterval(fetchMacroEvents, 30000); // 30s live calendar countdown update
 });
@@ -311,6 +351,16 @@ function handleAuthRedirectParams() {
       url.searchParams.delete("new_user");
       window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
 
+      // Instantly dismiss any fullscreen startup overlay
+      if (typeof window.dismissStartupLoader === "function") {
+        window.dismissStartupLoader();
+      }
+
+      // Immediately refresh SaaS user profile so Telegram link and badges update
+      if (typeof checkSaasSession === "function") {
+        checkSaasSession();
+      }
+
       const title = isKhmer ? "ចូលប្រើប្រាស់ជោគជ័យ" : "Telegram Login Successful";
       const message = isNewUser
         ? (isKhmer ? "សូមស្វាគមន៍មកកាន់ ZYROX AI! ការសាកល្បង Pro Trial រយៈពេល 14 ថ្ងៃត្រូវបានបើកដំណើរការ។" : "Welcome to ZYROX AI! Your 14-day Pro trial is active.")
@@ -320,15 +370,18 @@ function handleAuthRedirectParams() {
         if (window.ZyroxToast) {
           window.ZyroxToast.success(title, message);
         }
-      }, 700);
+      }, 350);
     } else if (authError) {
       url.searchParams.delete("auth_error");
       window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+      if (typeof window.dismissStartupLoader === "function") {
+        window.dismissStartupLoader();
+      }
       window.setTimeout(() => {
         if (window.ZyroxToast) {
           window.ZyroxToast.error("Authentication Error", decodeURIComponent(authError));
         }
-      }, 700);
+      }, 350);
     }
   } catch (e) {
     console.debug("handleAuthRedirectParams note:", e);
@@ -8033,7 +8086,7 @@ async function submitSupportTicket() {
 }
 
 // Auto-check SaaS session on DOM ready
-document.addEventListener("DOMContentLoaded", () => {
+runWhenDOMReady(() => {
   checkSaasSession();
 });
 

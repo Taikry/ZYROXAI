@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/brand/zyrox-logo-icon.svg">
   <link rel="alternate icon" type="image/png" href="assets/brand/zyrox-logo-icon.png">
   <link rel="apple-touch-icon" href="assets/brand/zyrox-logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.6.9">
+  <link rel="stylesheet" href="styles.css?v=3.1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
@@ -31,6 +31,43 @@
     <p class="zyrox-loader-copy">Connecting to live services…</p>
     <div class="zyrox-loader-actions" hidden></div>
   </div>
+  <script>
+    (function () {
+      function dismissLoader() {
+        var loader = document.getElementById("zyrox-startup-loader");
+        if (loader && !loader.classList.contains("is-dismissed")) {
+          loader.setAttribute("aria-busy", "false");
+          loader.classList.add("is-dismissed");
+          setTimeout(function () {
+            if (loader && loader.parentNode) {
+              loader.parentNode.removeChild(loader);
+            }
+          }, 320);
+        }
+      }
+      window.dismissStartupLoader = dismissLoader;
+
+      // Unconditional safety failsafe: automatically dismiss after at most 3.5 seconds
+      var failsafeTimer = setTimeout(dismissLoader, 3500);
+
+      // Dismiss on window load if document has fully settled
+      window.addEventListener("load", function () {
+        setTimeout(dismissLoader, 800);
+      });
+
+      // Show emergency bypass button if loader is still active after 1.8s
+      setTimeout(function () {
+        var loader = document.getElementById("zyrox-startup-loader");
+        if (loader && !loader.classList.contains("is-dismissed")) {
+          var actions = loader.querySelector(".zyrox-loader-actions");
+          if (actions) {
+            actions.hidden = false;
+            actions.innerHTML = '<button type="button" class="btn btn-gold btn-sm" onclick="window.dismissStartupLoader()" style="margin-top:14px;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#02110c;border:none;">⚡ Open Dashboard / បើកផ្ទាំងបញ្ជា</button>';
+          }
+        }
+      }, 1800);
+    })();
+  </script>
 
   <!-- ==========================================================================
        MAIN TERMINAL SHELL
@@ -3409,12 +3446,12 @@
   <!-- Lightweight Charts Standalone Engine -->
   <script src="lightweight-charts.standalone.production.js"></script>
   <!-- Shared accessible loading, empty, error, and activity components -->
-  <script src="ui-kit.js?v=2.6.2"></script>
+  <script src="ui-kit.js?v=3.1.0"></script>
   <!-- Taikry Professional Interactive Chart Workspace Controller -->
-  <script src="chart.js?v=2.6.2"></script>
+  <script src="chart.js?v=3.1.0"></script>
   <div id="schema-studio-root"></div>
-  <script src="app.js?v=2.6.9"></script>
-  <script src="schema_designer.js?v=2.6.2"></script>
+  <script src="app.js?v=3.1.0"></script>
+  <script src="schema_designer.js?v=3.1.0"></script>
 
     <!-- ======================================================================
          MODAL: V6 CONCEPT EXPLORER

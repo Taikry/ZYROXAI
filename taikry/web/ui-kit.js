@@ -362,12 +362,18 @@
   function beginStartup(options = {}) {
     let overlay = document.getElementById("zyrox-startup-loader");
     if (!overlay) return Promise.resolve();
-    const renderedLoader = FullScreenLoader(options);
-    renderedLoader.id = overlay.id;
-    overlay.replaceWith(renderedLoader);
-    overlay = renderedLoader;
 
-    const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 14000);
+    let renderedLoader;
+    try {
+      renderedLoader = FullScreenLoader(options);
+      renderedLoader.id = overlay.id;
+      overlay.replaceWith(renderedLoader);
+      overlay = renderedLoader;
+    } catch (e) {
+      console.warn("Could not enhance startup loader, keeping base element:", e);
+    }
+
+    const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 3500);
     let finished = false;
     let timeoutId;
 
@@ -375,62 +381,48 @@
       if (finished) return;
       finished = true;
       clearTimeout(timeoutId);
-      overlay.setAttribute("aria-busy", "false");
-      overlay.classList.add("is-dismissed");
-      window.setTimeout(() => overlay.remove(), 300);
+      if (typeof root.dismissStartupLoader === "function") {
+        root.dismissStartupLoader();
+      }
+      if (overlay) {
+        overlay.setAttribute("aria-busy", "false");
+        overlay.classList.add("is-dismissed");
+        window.setTimeout(() => {
+          if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }, 300);
+      }
     };
 
     const showTimeout = () => {
       if (finished) return;
-      const status = overlay._status || overlay.querySelector(".zyrox-loader-copy");
-      if (status) {
-        status.textContent = options.language === "kh"
-          ? "សេវាផ្ទាល់ចំណាយពេលយូរ។ អ្នកអាចព្យាយាមភ្ជាប់ម្តងទៀត ឬបើកផ្ទាំងជួញដូរ Offline។"
-          : "Live services are taking longer than expected. You can retry connection or enter offline workspace.";
-      }
-      const actions = overlay._actionHost || overlay.querySelector(".zyrox-loader-actions");
-      if (actions) {
-        actions.hidden = false;
-        const retry = element("button", "zyrox-retry-button", options.language === "kh" ? "ព្យាយាមម្តងទៀត" : "Retry Connection");
-        retry.type = "button";
-        retry.style.marginRight = "10px";
-        retry.onclick = () => window.location.reload();
-
-        const proceed = element("button", "btn btn-outline btn-sm", options.language === "kh" ? "បើកផ្ទាំងជួញដូរ Offline" : "Open Offline Workspace");
-        proceed.type = "button";
-        proceed.onclick = () => {
-          dismiss();
-          if (root.ZyroxToast) {
-            root.ZyroxToast.warning(
-              options.language === "kh" ? "របៀបគ្មានអ៊ីនធឺណិត" : "Offline Mode",
-              options.language === "kh" ? "កំពុងដំណើរការក្នុងរបៀប Offline។" : "Running workspace in offline inspection mode."
-            );
-          }
-        };
-        actions.replaceChildren(retry, proceed);
-      }
-      overlay.classList.add("has-timeout");
+      dismiss();
     };
 
     timeoutId = window.setTimeout(showTimeout, timeoutMs);
     const tasks = Array.isArray(options.tasks) ? options.tasks : [];
 
     // Advance through the 6 stages dynamically as promises resolve
-    renderedLoader.setStage(1); // Stage 1: Authenticating session
-    let settled = 0;
-    tasks.forEach(t => {
-      Promise.resolve(t).finally(() => {
-        settled += 1;
-        const nextStage = Math.min(4, 1 + settled);
-        renderedLoader.setStage(nextStage);
+    if (renderedLoader && typeof renderedLoader.setStage === "function") {
+      renderedLoader.setStage(1); // Stage 1: Authenticating session
+      let settled = 0;
+      tasks.forEach(t => {
+        Promise.resolve(t).finally(() => {
+          settled += 1;
+          const nextStage = Math.min(4, 1 + settled);
+          renderedLoader.setStage(nextStage);
+        });
       });
-    });
+    }
 
     return Promise.allSettled(tasks).then(() => {
-      renderedLoader.setStage(5, options.language === "kh" ? "ផ្ទាំងជួញដូររួចរាល់" : "Ready");
+      if (renderedLoader && typeof renderedLoader.setStage === "function") {
+        renderedLoader.setStage(5, options.language === "kh" ? "ផ្ទាំងជួញដូររួចរាល់" : "Ready");
+      }
       window.setTimeout(() => {
         if (!finished) dismiss();
-      }, 450);
+      }, 350);
+    }).catch(() => {
+      dismiss();
     });
   }
 
