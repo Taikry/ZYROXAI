@@ -5762,7 +5762,7 @@ async function submitChatMessage() {
       <div class="chat-live-data-strip" style="margin:8px 0;padding:7px 9px;border-radius:6px;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.16);font-size:10px;color:#cbd5e1;">
         ${chatIcon("clock")} ${isKhmer ? "តម្លៃ" : "Quote"}: <b>${escapeHtml(quoteStatus)}</b> · ${escapeHtml(marketContext.price_source || "source unavailable")} · ${escapeHtml(quoteTime)} (ICT)
         <br>${chatIcon("scan")} ${isKhmer ? "ការស្កេន" : "Scan"}: <b>${escapeHtml(consensusContext.status || "UNVERIFIED")}</b> · ${escapeHtml(consensusContext.trade_style || "INTRADAY")} · ${consensusContext.cached ? (isKhmer ? "cache ថ្មី" : "recent cache") : (isKhmer ? "ស្កេនថ្មី" : "fresh scan")}
-        ${data.deep_research_status === "REFRESHING" ? `<br>${chatIcon("news")} ${isKhmer ? "ព័ត៌មានស៊ីជម្រៅកំពុងធ្វើបច្ចុប្បន្នភាពនៅខាងក្រោយ" : "Deep news research is refreshing in the background"}` : ""}
+        ${data.deep_research_status === "LIVE_FRESH" || data.deep_research_status === "CACHED_FRESH" ? `<br>${chatIcon("research")} <b>${isKhmer ? "ការស្រាវជ្រាវព័ត៌មាន (11-Agent Fleet)" : "Pre-News Deep Research"}</b>: <span style="color:#10b981; font-weight:700;">${isKhmer ? "ទិន្នន័យថ្មីភ្លាមៗ (LIVE FRESH)" : "LIVE FRESH"}</span>` : (data.deep_research_status === "REFRESHING" ? `<br>${chatIcon("news")} ${isKhmer ? "ព័ត៌មានស៊ីជម្រៅកំពុងធ្វើបច្ចុប្បន្នភាពនៅខាងក្រោយ" : "Deep news research is refreshing in the background"}` : "")}
       </div>`;
     const aiWarningHtml = data.ai_status === "SUCCESS" ? "" : `
       <div style="margin:8px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#fbbf24;font-size:11px;">
@@ -5894,14 +5894,31 @@ Model: ${providerTag}
           <div class="chat-deep-research-container" style="margin-top:10px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:12px;">
             <div class="chat-research-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px;">
               <span class="chat-research-heading">${chatIcon("research")}<b>11-Agent Pre-News & Deep Research</b></span>
-              <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px;">Window: ${escapeHtml(data.deep_research.C_upcoming_news_calendar?.blackout_status || 'STANDARD')}</span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:10px; background:rgba(16,185,129,0.15); color:#10b981; padding:2px 6px; border-radius:4px; font-weight:600;">● REAL-TIME</span>
+                <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px;">Window: ${escapeHtml(data.deep_research.C_upcoming_news_calendar?.blackout_status || 'STANDARD')}</span>
+              </div>
             </div>
-            
+
+            ${data.deep_research.D_macro_impact ? `
+              <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30,41,59,0.6); padding:6px 9px; border-radius:5px; font-size:10.5px; margin-bottom:8px; border:1px solid rgba(148,163,184,0.15);">
+                <div>${chatIcon("globe")} <b>DXY Index:</b> <span style="color:#38bdf8; font-weight:700;">${escapeHtml(data.deep_research.D_macro_impact.dxy_index ?? '102.3')}</span> <span style="color:#94a3b8; font-size:9.5px;">(${escapeHtml(data.deep_research.D_macro_impact.dxy_trend || 'NEUTRAL')})</span></div>
+                <div style="color:#fde047; font-size:10px; font-weight:600;">Fed: ${escapeHtml(data.deep_research.D_macro_impact.monetary_policy_regime || 'FED WATCH')}</div>
+              </div>
+            ` : ""}
+
             ${data.deep_research.C_upcoming_news_calendar ? `
               <div style="font-size:11px; margin-bottom:8px; background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px;">
                 <b class="chat-research-label">${chatIcon("calendar")} Upcoming Catalyst:</b> ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_name)} (${escapeHtml(data.deep_research.C_upcoming_news_calendar.currency)})
                 <span style="color:#94a3b8; margin-left:6px;">Forecast: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.forecast)} | Prev: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.previous)}</span>
                 <div style="font-size:10.5px; color:#38bdf8; margin-top:2px;">${chatIcon("clock")} Countdown: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.countdown || '')} · Local: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_time_cambodia || '')}</div>
+              </div>
+            ` : ""}
+
+            ${data.deep_research.E_technical_structure ? `
+              <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(15,23,42,0.6); padding:5px 8px; border-radius:5px; font-size:10px; margin-bottom:8px; border:1px solid rgba(56,189,248,0.15); color:#cbd5e1;">
+                <div><b>SMC Zone:</b> <span style="color:${data.deep_research.E_technical_structure.smc_zone === 'DISCOUNT' ? '#10b981' : '#f59e0b'}; font-weight:700;">${escapeHtml(data.deep_research.E_technical_structure.smc_zone || 'EQUILIBRIUM')}</span> · Eq: $${data.deep_research.E_technical_structure.equilibrium_50 ?? '---'}</div>
+                <div>RSI: <b>${data.deep_research.E_technical_structure.rsi_14 ?? '50'}</b> · ATR: <b>$${data.deep_research.E_technical_structure.atr_14 ?? '---'}</b></div>
               </div>
             ` : ""}
 

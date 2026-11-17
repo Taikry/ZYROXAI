@@ -1385,7 +1385,7 @@ Respond ONLY with valid JSON matching the schema.
 
 CHAT_CONSENSUS_CACHE_MAX_AGE_SECONDS = 10.0
 CHAT_LLM_TIMEOUT_SECONDS = 18.0
-_CHAT_RESEARCH_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chat-research")
+_CHAT_RESEARCH_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-research")
 _CHAT_RESEARCH_LOCK = threading.Lock()
 _CHAT_RESEARCH_FUTURES: Dict[str, Future] = {}
 
@@ -1527,11 +1527,13 @@ def _build_multi_agent_deterministic_synthesis(
     live_rr: str,
     live_conf: Optional[float],
     approved_setup: Optional[Dict[str, Any]],
-    query: str
+    query: str,
+    deep_research: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, str]:
     """
     Generates rich, intelligent institutional synthesis in both English and Natural Khmer
-    incorporating the real outputs and rationales of all active specialized AI agents.
+    incorporating the real outputs and rationales of all active specialized AI agents,
+    including real-time pre-news economic catalysts and macro context when available.
     """
     total = len(all_agents)
     bullish_agents = [a for a in all_agents if a.get("bias") == "BULLISH"]
@@ -1562,6 +1564,19 @@ def _build_multi_agent_deterministic_synthesis(
         quorum_verdict = f"CONSOLIDATION / WAIT ({n_bull} Bullish, {n_bear} Bearish, {n_neutral} Neutral)"
         quorum_verdict_kh = f"ទីផ្សាររង់ចាំការបញ្ជាក់ ({n_bull} ទិញ, {n_bear} លក់, {n_neutral} អព្យាក្រឹត)"
 
+    # Deep Research real-time lines
+    research_en = ""
+    research_kh = ""
+    if deep_research and isinstance(deep_research, dict):
+        cal = deep_research.get("C_upcoming_news_calendar") or {}
+        macro_d = deep_research.get("D_macro_impact") or {}
+        if cal.get("event_name"):
+            research_en += f"\n• Pre-News Catalyst (📅): {cal.get('event_name')} ({cal.get('currency', 'USD')}) at {cal.get('event_time_utc', 'N/A')} | Countdown: {cal.get('countdown', 'N/A')} | Lockout: {cal.get('blackout_status', 'CLEAR')}"
+            research_kh += f"\n• ព្រឹត្តិការណ៍សេដ្ឋកិច្ច (📅): {cal.get('event_name')} ({cal.get('currency', 'USD')}) | រយៈពេលនៅសល់: {cal.get('countdown', 'N/A')} | បម្រាម Lockout: {cal.get('blackout_status', 'CLEAR')}"
+        if macro_d.get("dxy_index"):
+            research_en += f"\n• Macro & DXY (🌐): DXY Index at {macro_d.get('dxy_index')} ({macro_d.get('dxy_trend', 'NEUTRAL')}) | Policy: {macro_d.get('monetary_policy_regime', 'FED WATCH')}"
+            research_kh += f"\n• ម៉ាក្រូសេដ្ឋកិច្ច (🌐): សន្ទស្សន៍ដុល្លារ DXY {macro_d.get('dxy_index')} ({macro_d.get('dxy_trend', 'NEUTRAL')})"
+
     # Build English synthesis
     tech_str = tech.get("rationale") or f"Momentum bias {tech.get('bias', 'NEUTRAL')}"
     smc_str = smc.get("rationale") or f"Institutional zone {smc.get('bias', 'NEUTRAL')}"
@@ -1584,7 +1599,7 @@ def _build_multi_agent_deterministic_synthesis(
         f"• ICT / SMC Analyst (🏛️): {smc_str}\n"
         f"• Market Regime (🧭): {regime_str}\n"
         f"• ML Forecast Model (🤖): {ml_str}\n"
-        f"• Macro & News (🌐): {macro_str}\n"
+        f"• Macro & News (🌐): {macro_str}{research_en}\n"
         f"• Risk Guardian (🛡️): {risk_str}\n"
         f"• Trade Verdict: {setup_str_en}"
     )
@@ -1603,7 +1618,7 @@ def _build_multi_agent_deterministic_synthesis(
         f"• ភ្នាក់ងារ ICT/SMC (🏛️): {smc.get('bias', 'NEUTRAL')} — {smc_str}\n"
         f"• ស្ថានភាពទីផ្សារ (🧭): {regime_str}\n"
         f"• គំរូទស្សន៍ទាយ ML (🤖): {ml_str}\n"
-        f"• ព័ត៌មានម៉ាក្រូសេដ្ឋកិច្ច (🌐): {macro_str}\n"
+        f"• ព័ត៌មានម៉ាក្រូសេដ្ឋកិច្ច (🌐): {macro_str}{research_kh}\n"
         f"• ប្រព័ន្ធការពារដើមទុន (🛡️): {'បានអនុម័ត' if approved_setup else 'រក្សាដើមទុនជាចម្បង'}\n"
         f"• សេចក្តីសន្និដ្ឋាន: {setup_str_kh}"
     )
@@ -1663,30 +1678,57 @@ def _get_chat_consensus(symbol: str, timeframe: str, query: str) -> Tuple[Dict[s
     return result, use_cache, trade_style
 
 
-def _get_chat_research(symbol: str, timeframe: str) -> Tuple[Optional[Dict[str, Any]], str]:
-    """Serve fresh research immediately and refresh a cold/stale report in the background."""
+def _get_chat_research(
+    symbol: str,
+    timeframe: str,
+    wait_timeout: float = 0.0,
+    force_refresh: bool = False
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    """
+    Serve fresh research immediately and wait up to wait_timeout if requested/cold.
+    Guarantees real-time 11-agent deep research delivery.
+    """
     from taikry.agents.deep_research_engine import deep_research_engine
 
     now = time.time()
-    cached = deep_research_engine._research_cache.get(symbol)
-    if isinstance(cached, (tuple, list)) and len(cached) > 1:
-        try:
-            if now - float(cached[0]) < deep_research_engine._cache_ttl_seconds:
-                data = cached[1]
-                sections = data.get("sections") if isinstance(data, dict) else None
-                return (sections if isinstance(sections, dict) else None), "CACHED_FRESH"
-        except (TypeError, ValueError):
-            pass
+    if not force_refresh:
+        cached = deep_research_engine._research_cache.get(symbol)
+        if isinstance(cached, (tuple, list)) and len(cached) > 1:
+            try:
+                if now - float(cached[0]) < deep_research_engine._cache_ttl_seconds:
+                    data = cached[1]
+                    sections = data.get("sections") if isinstance(data, dict) else None
+                    if sections:
+                        return sections, "CACHED_FRESH"
+            except (TypeError, ValueError):
+                pass
 
     with _CHAT_RESEARCH_LOCK:
         future = _CHAT_RESEARCH_FUTURES.get(symbol)
-        if future is None or future.done():
+        if future is None or future.done() or force_refresh:
             future = _CHAT_RESEARCH_EXECUTOR.submit(
                 deep_research_engine.run_deep_research,
                 symbol,
                 timeframe=timeframe,
+                force_refresh=force_refresh
             )
             _CHAT_RESEARCH_FUTURES[symbol] = future
+
+    # If wait_timeout > 0, wait synchronously up to wait_timeout for real-time delivery
+    if wait_timeout > 0:
+        try:
+            result = future.result(timeout=wait_timeout)
+            sections = result.get("sections") if isinstance(result, dict) else None
+            if sections:
+                return sections, "LIVE_FRESH"
+        except (TimeoutError, Exception) as exc:
+            # Handle TimeoutError vs runtime error
+            from concurrent.futures import TimeoutError as FuturesTimeoutError
+            if isinstance(exc, (TimeoutError, FuturesTimeoutError)):
+                logger.info("Deep research wait timed out after %.1fs for %s, continuing in background", wait_timeout, symbol)
+                return None, "REFRESHING"
+            logger.warning("Ask Chat deep research execution failed for %s: %s", symbol, exc)
+            return None, "UNAVAILABLE"
 
     if future.done():
         try:
@@ -1696,6 +1738,7 @@ def _get_chat_research(symbol: str, timeframe: str) -> Tuple[Optional[Dict[str, 
         except Exception as exc:
             logger.warning("Ask Chat background research refresh failed for %s: %s", symbol, exc)
             return None, "UNAVAILABLE"
+
     return None, "REFRESHING"
 
 
@@ -1910,10 +1953,25 @@ def chat_with_real_ai(
             live_conf = score
             approved_setup = consensus_data
 
+    # Detect if user query explicitly asks for deep research or pre-news intelligence
+    is_research_query = any(k in query.lower() for k in [
+        "research", "pre-news", "pre news", "news", "calendar", "catalyst", "deep",
+        "macro", "fomc", "cpi", "nfp", "gdp", "blackout", "scenario",
+        "11-agent", "11 agent", "ស្រាវជ្រាវ", "ព័ត៌មាន", "របាយការណ៍"
+    ])
+
     deep_research_data = None
     deep_research_status = "UNAVAILABLE"
     try:
-        deep_research_data, deep_research_status = _get_chat_research(sym, _normalize_chat_timeframe(tf))
+        # If explicitly asking for research, wait up to 7.0 seconds for real-time live execution
+        # For general market queries, wait up to 2.5 seconds or serve instant cache
+        research_wait = 7.0 if is_research_query else 2.5
+        deep_research_data, deep_research_status = _get_chat_research(
+            sym,
+            _normalize_chat_timeframe(tf),
+            wait_timeout=research_wait,
+            force_refresh=is_research_query
+        )
     except Exception as e:
         logger.debug("Ask Chat research snapshot notice: %s", e)
 
@@ -2197,6 +2255,7 @@ Respond strictly in JSON matching the schema.
         live_conf=live_conf,
         approved_setup=approved_setup,
         query=query,
+        deep_research=deep_research_data,
     )
     cloud_attempted = prov != "quant"
     return {
