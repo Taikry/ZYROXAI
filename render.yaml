@@ -48,6 +48,18 @@ services:
         value: "10485760"
       - key: MT5_BRIDGE_TOKEN
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
       - key: OANDA_API_TOKEN
         sync: false
       - key: OANDA_ACCOUNT_ID
