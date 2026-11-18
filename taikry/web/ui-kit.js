@@ -39,7 +39,7 @@
     return spinner;
   }
 
-    const APP_STARTUP_STAGES = [
+  const APP_STARTUP_STAGES = [
     { id: "app", en: "Loading application workspace", kh: "កំពុងផ្ទុកកន្លែងធ្វើការកម្មវិធី", pct: 15 },
     { id: "auth", en: "Authenticating security session", kh: "កំពុងផ្ទៀងផ្ទាត់សម័យសុវត្ថិភាព", pct: 35 },
     { id: "profile", en: "Loading account profile & paper balance", kh: "កំពុងផ្ទុកប្រវត្តិរូប និងសមតុល្យ Paper", pct: 55 },
@@ -218,7 +218,7 @@
   }
 
   function ButtonLoader(button, options = {}) {
-    if (!button) return { restore() {} };
+    if (!button) return { restore() { } };
     const original = {
       children: Array.from(button.childNodes).map(node => node.cloneNode(true)),
       disabled: button.disabled,
@@ -615,7 +615,7 @@
     return box;
   }
 
-    root.ZyroxToast = ZyroxToast;
+  root.ZyroxToast = ZyroxToast;
 
   root.ZyroxUI = Object.freeze({
     mount, Spinner, FullScreenLoader, PageLoader, SectionLoader, SkeletonLoader,

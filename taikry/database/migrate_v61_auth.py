@@ -38,6 +38,13 @@ def run_migration(engine=None) -> None:
                 connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32)"))
             logger.info("Added phone_number column to users table.")
 
+        if "country" not in columns:
+            if dialect == "sqlite":
+                connection.execute(text("ALTER TABLE users ADD COLUMN country VARCHAR(64)"))
+            else:
+                connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(64)"))
+            logger.info("Added country column to users table.")
+
         # Partial unique indexes for non-null values
         if dialect in ("sqlite", "postgresql"):
             try:

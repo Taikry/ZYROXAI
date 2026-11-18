@@ -65,6 +65,15 @@ def build_quote_record(
         connection_status = "STALE"
         is_executable = False
 
+    # STRICT BROKER SAFETY RULE: Only authentic EXNESS_MT5 quotes may be classified
+    # as REAL_BROKER_QUOTE or marked is_executable=True.
+    # OANDA, Yahoo, Binance, and other secondary feeds remain strictly REFERENCE_PRICE.
+    source_upper = str(source or "").upper()
+    if "EXNESS" not in source_upper and "MT5" not in source_upper:
+        if classification == QuoteClassification.REAL_BROKER_QUOTE:
+            classification = QuoteClassification.REFERENCE_PRICE
+        is_executable = False
+
     if classification != QuoteClassification.REAL_BROKER_QUOTE:
         is_executable = False
 
@@ -993,7 +1002,7 @@ class MultiProviderMarketData:
             except (TypeError, ValueError):
                 pass
 
-        # 2. OANDA v20 REST / Streaming Quote
+        # 2. OANDA v20 REST / Streaming Quote (Strictly Reference Price Only)
         quote = self.oanda.get_latest_quote(sym)
         if quote:
             bid = float(quote.get("bid", 0.0))
@@ -1006,14 +1015,14 @@ class MultiProviderMarketData:
                     ask=ask,
                     price=(bid + ask) / 2.0,
                     source_timestamp=quote.get("timestamp"),
-                    classification=QuoteClassification.REAL_BROKER_QUOTE,
+                    classification=QuoteClassification.REFERENCE_PRICE,
                     connection_status="CONNECTED",
                     source="OANDA_V20",
-                    is_executable=True,
+                    is_executable=False,
                     symbol_mapping=quote.get("instrument") or sym
                 )
 
-        # 3. Binance Spot Ticker (Crypto order book)
+        # 3. Binance Spot Ticker (Crypto order book - Reference Price Only)
         if get_symbol_config(sym).get("category") == "Crypto":
             quote = self.binance.get_latest_quote(sym)
             if quote:
@@ -1027,10 +1036,10 @@ class MultiProviderMarketData:
                         ask=ask,
                         price=(bid + ask) / 2.0,
                         source_timestamp=quote.get("timestamp"),
-                        classification=QuoteClassification.REAL_BROKER_QUOTE,
+                        classification=QuoteClassification.REFERENCE_PRICE,
                         connection_status="CONNECTED",
                         source="BINANCE_SPOT",
-                        is_executable=True,
+                        is_executable=False,
                         symbol_mapping=quote.get("symbol") or sym
                     )
 

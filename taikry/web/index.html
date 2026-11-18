@@ -2725,7 +2725,7 @@
       <!-- ==========================================================================
            14. USER PROFILE, SUBSCRIPTION PLAN & DEVICE HISTORY (V6.1 SPEC)
            ========================================================================== -->
-      <div id="tab-pane-account" class="terminal-full-overlay tab-pane-hidden" style="background: #070A0D; overflow-y: auto;">
+      <div id="tab-pane-account" class="terminal-full-overlay tab-pane-hidden">
         <div class="zyrox-profile-wrapper">
 
           <!-- Top Bar Header -->
@@ -2794,7 +2794,7 @@
               <div class="zyrox-profile-row">
                 <span class="zyrox-profile-row-label">Country</span>
                 <span class="zyrox-profile-row-val" id="prof-row-country">
-                  <span class="country-flag" style="font-size: 16px;">🇰🇭</span> Cambodia
+                  <span class="country-flag">🇰🇭</span> Cambodia
                 </span>
               </div>
               <div class="zyrox-profile-row">
@@ -3649,16 +3649,16 @@
 
           <!-- 4. Danger Zone -->
           <div class="zyrox-settings-section-title text-danger">⚠️ Danger Zone</div>
-          <div class="flex-between align-center" style="padding: 12px 0;">
+          <div class="flex-between align-center danger-zone-row">
             <div>
-              <div style="font-weight: 600; font-size: 14px;">Sign Out All Sessions</div>
+              <div class="danger-zone-title">Sign Out All Sessions</div>
               <div class="text-muted text-xs">Terminate your active session and return to landing page.</div>
             </div>
             <button class="btn btn-outline btn-sm" onclick="handleUserLogout()">🚪 Sign Out</button>
           </div>
-          <div class="flex-between align-center mt-12" style="border-top: 1px solid #1E252D; padding-top: 12px;">
+          <div class="flex-between align-center mt-12 danger-zone-row-divider">
             <div>
-              <div style="font-weight: 600; font-size: 14px; color: #EF4444;">Delete Account</div>
+              <div class="danger-zone-title-red">Delete Account</div>
               <div class="text-muted text-xs">Permanently delete your account, session credentials, and data.</div>
             </div>
             <button class="btn btn-danger btn-sm" onclick="confirmDeleteAccount()">🗑️ Delete Account</button>

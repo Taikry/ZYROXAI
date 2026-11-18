@@ -7674,9 +7674,9 @@ async function loadAccountProfile() {
     const devices = payload.devices || [];
     currentSaasUser = user;
 
-    // Fill User Avatar Letters (e.g. 'H' for Heng Taikry)
-    const fullName = user.full_name || "Heng Taikry";
-    const initial = (fullName.trim().charAt(0) || "H").toUpperCase();
+    // Fill User Avatar Letters
+    const fullName = user.full_name || (user.email ? user.email.split("@")[0] : "Trader");
+    const initial = (fullName.trim().charAt(0) || "U").toUpperCase();
 
     const topAv = document.getElementById("prof-top-avatar");
     if (topAv) topAv.textContent = initial;
@@ -7686,25 +7686,31 @@ async function loadAccountProfile() {
 
     // Fill User Details Card
     const heroName = document.getElementById("prof-hero-fullname");
-    if (heroName) heroName.textContent = fullName;
+    if (heroName) heroName.textContent = user.full_name || user.email || "Trader";
 
     const heroHandle = document.getElementById("prof-hero-handle");
-    if (heroHandle) heroHandle.textContent = user.handle || ("@" + (user.email ? user.email.split("@")[0] : "hengtaikry"));
+    if (heroHandle) heroHandle.textContent = user.handle || ("@" + (user.email ? user.email.split("@")[0] : "user"));
 
     const rowEmail = document.getElementById("prof-row-email");
     if (rowEmail) rowEmail.textContent = user.email || "";
 
     const rowCountry = document.getElementById("prof-row-country");
-    if (rowCountry) rowCountry.innerHTML = `<span class="country-flag" style="font-size: 16px;">${user.country_flag || '🇰🇭'}</span> ${user.country || 'Cambodia'}`;
+    if (rowCountry) {
+      if (user.country) {
+        rowCountry.innerHTML = `<span class="country-flag">${user.country_flag || ''}</span> ${escapeHtml(user.country)}`;
+      } else {
+        rowCountry.innerHTML = '<span class="text-muted">Not specified</span>';
+      }
+    }
 
     const rowPhone = document.getElementById("prof-row-phone");
-    if (rowPhone) rowPhone.textContent = user.mobile_phone || user.phone_number || "0968288832";
+    if (rowPhone) rowPhone.textContent = user.mobile_phone || user.phone_number || "Not provided";
 
     const rowTg = document.getElementById("prof-row-telegram");
-    if (rowTg) rowTg.textContent = user.telegram || "@heng_taikry";
+    if (rowTg) rowTg.textContent = user.telegram || "Not linked";
 
     const rowMember = document.getElementById("prof-row-member-since");
-    if (rowMember) rowMember.textContent = user.member_since || "Jul 06, 2026";
+    if (rowMember) rowMember.textContent = user.member_since || "Recent";
 
     // Fill Plan Card
     const planTitle = document.getElementById("prof-plan-title");
@@ -7721,32 +7727,37 @@ async function loadAccountProfile() {
 
     // Fill Device History List
     const devContainer = document.getElementById("prof-device-list");
-    if (devContainer && Array.isArray(devices) && devices.length > 0) {
-      devContainer.innerHTML = devices.map(d => {
-        const isCurr = Boolean(d.is_current);
-        const boxClass = isCurr ? "active" : "signed-out";
-        const badgeClass = isCurr ? "badge-this-device" : "badge-signed-out";
-        const badgeText = isCurr ? "● This device" : "Signed out";
-        const strokeColor = isCurr ? "#0ECB81" : "currentColor";
-        return `
-          <div class="zyrox-device-item">
-            <div class="zyrox-device-icon-box ${boxClass}">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-            </div>
-            <div class="zyrox-device-info">
-              <div class="zyrox-device-name-row">
-                <span class="zyrox-device-name">${escapeHtml(d.browser_os || "Safari · Mac")}</span>
-                <span class="zyrox-device-badge ${badgeClass}">${badgeText}</span>
+    if (devContainer) {
+      if (Array.isArray(devices) && devices.length > 0) {
+        devContainer.innerHTML = devices.map(d => {
+          const isCurr = Boolean(d.is_current);
+          const boxClass = isCurr ? "active" : "signed-out";
+          const badgeClass = isCurr ? "badge-this-device" : "badge-signed-out";
+          const badgeText = isCurr ? "● This device" : "Signed out";
+          const strokeColor = isCurr ? "#0ECB81" : "currentColor";
+          const ipText = d.ip_address ? escapeHtml(d.ip_address) : "IP not recorded";
+          return `
+            <div class="zyrox-device-item">
+              <div class="zyrox-device-icon-box ${boxClass}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
               </div>
-              <div class="zyrox-device-meta">${escapeHtml(d.ip_address || "175.100.52.54")} · ${escapeHtml(d.relative_time || "Just now")}</div>
+              <div class="zyrox-device-info">
+                <div class="zyrox-device-name-row">
+                  <span class="zyrox-device-name">${escapeHtml(d.browser_os || "Browser Session")}</span>
+                  <span class="zyrox-device-badge ${badgeClass}">${badgeText}</span>
+                </div>
+                <div class="zyrox-device-meta">${ipText} · ${escapeHtml(d.relative_time || "Recent")}</div>
+              </div>
             </div>
-          </div>
-        `;
-      }).join("");
+          `;
+        }).join("");
+      } else {
+        devContainer.innerHTML = '<div class="zyrox-device-empty text-muted" style="padding: 12px; font-size: 13px;">No active device sessions recorded.</div>';
+      }
     }
 
     // Fill Account Settings Form Fields

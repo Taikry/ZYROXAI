@@ -599,6 +599,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     salt = Column(String(64), nullable=False)
     full_name = Column(String(128), nullable=True)
+    country = Column(String(64), nullable=True, default=None)
     role = Column(String(20), default="USER", index=True, nullable=False)  # "USER", "ADMIN"
     is_verified = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)

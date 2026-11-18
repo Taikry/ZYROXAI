@@ -12888,3 +12888,32 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   margin-top: 4px;
 }
 
+#tab-pane-account {
+  background: #070A0D;
+  overflow-y: auto;
+}
+
+.country-flag {
+  font-size: 16px;
+}
+
+.danger-zone-row {
+  padding: 12px 0;
+}
+
+.danger-zone-row-divider {
+  border-top: 1px solid #1E252D;
+  padding-top: 12px;
+}
+
+.danger-zone-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.danger-zone-title-red {
+  font-weight: 600;
+  font-size: 14px;
+  color: #EF4444;
+}
+

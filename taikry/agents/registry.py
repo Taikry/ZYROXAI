@@ -41,6 +41,7 @@ class AgentMetadata(BaseModel):
     version: str = "2.0.0"
     configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
+    is_demo: bool = False
     last_successful_execution: Optional[str] = None
     execution_state: str = "IDLE"  # IDLE, QUEUED, RUNNING, COMPLETED, FAILED, SKIPPED, BLOCKED
     current_task: Optional[str] = None
@@ -274,6 +275,49 @@ class AgentRegistry:
             "agents": [a.metadata.model_dump() for a in agents],
             "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
+
+    def get_telemetry_snapshot(self) -> List[Dict[str, Any]]:
+        """
+        Returns strict V6.1.1 compliant telemetry for all registered agents.
+        Guarantees:
+        - status is strictly one of: IDLE, RUNNING, COMPLETED, FAILED, DISABLED, DEMO_MODE, STANDBY
+        - No fake progress or fake LIVE status.
+        - Required fields: agent_name, status, last_execution_utc, result_summary, error, is_demo, model_provider
+        """
+        valid_statuses = {"IDLE", "RUNNING", "COMPLETED", "FAILED", "DISABLED", "DEMO_MODE", "STANDBY"}
+        telemetry_list = []
+        for adapter in self._agents.values():
+            meta = adapter.metadata
+            is_demo = getattr(meta, "is_demo", False)
+            if not meta.enabled:
+                st = "DISABLED"
+            elif is_demo:
+                st = "DEMO_MODE"
+            elif meta.execution_state == "RUNNING":
+                st = "RUNNING"
+            elif meta.execution_state == "COMPLETED":
+                st = "COMPLETED"
+            elif meta.execution_state in ("FAILED", "ERROR") or meta.health_status == "DEGRADED":
+                st = "FAILED"
+            elif meta.execution_state in ("QUEUED", "PENDING", "STANDBY"):
+                st = "STANDBY"
+            else:
+                st = "IDLE"
+
+            if st not in valid_statuses:
+                st = "IDLE"
+
+            telemetry_list.append({
+                "agent_name": meta.name,
+                "agent_id": meta.agent_id,
+                "status": st,
+                "last_execution_utc": meta.last_completed_at or meta.last_successful_execution,
+                "result_summary": meta.last_task or (f"Specialization: {meta.specialization}" if meta.total_executions > 0 else "Ready"),
+                "error": meta.last_error,
+                "is_demo": is_demo,
+                "model_provider": meta.model_provider,
+            })
+        return telemetry_list
 
     def _register_default_fleet(self):
         """Initializes all specialized institutional agents."""

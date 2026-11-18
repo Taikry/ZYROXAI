@@ -34,6 +34,7 @@ from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
 from taikry.data.providers import market_data_engine, QuoteClassification
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
 from taikry.agents.registry import agent_registry
+from taikry.trading.confluence_scorer import calculate_confluence_scores
 
 logger = logging.getLogger("taikry.trading.xauusd_signal_engine")
 
@@ -75,17 +76,20 @@ DEFERRED_SIGNAL_AGENT_REASONS = {
 }
 
 
-def normalize_xauusd_symbol(raw_symbol: str) -> Optional[str]:
+def normalize_xauusd_symbol(raw_symbol: str) -> Dict[str, Any]:
     """
     Validates and normalizes the symbol strictly to XAUUSD.
-    Returns 'XAUUSD' if valid alias, otherwise None.
+
+    Returns a dict with:
+      - ``symbol``: canonical 'XAUUSD' on success
+      - ``status``: 'ACCEPTED' | 'REJECTED_NON_XAUUSD' | 'REJECTED_INVALID_INPUT'
     """
     if not raw_symbol or not isinstance(raw_symbol, str):
-        return None
+        return {"symbol": None, "status": "REJECTED_INVALID_INPUT"}
     cleaned = raw_symbol.strip().upper().replace(" ", "")
     if cleaned in XAUUSD_ALIASES:
-        return ALLOWED_CANONICAL_SYMBOL
-    return None
+        return {"symbol": ALLOWED_CANONICAL_SYMBOL, "status": "ACCEPTED"}
+    return {"symbol": None, "status": "REJECTED_NON_XAUUSD"}
 
 
 def get_cambodia_date_str(utc_dt: Optional[datetime.datetime] = None) -> str:
@@ -560,6 +564,16 @@ class XAUUSDSignalEngine:
         Synthesizes individual agent outputs into an institutional consensus decision.
         Returns: {decision: BUY|SELL|WAIT|NO TRADE, score, entry, sl, tp1, tp2, tp3, ...}
         """
+        norm = normalize_xauusd_symbol(symbol)
+        if norm.get("status") != "ACCEPTED":
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "confluence_score": 0,
+                "agent_consensus_pct": 0.0,
+                "rejection_reason": f"Instrument '{symbol}' rejected. Telegram Signal Engine accepts XAUUSD only.",
+            }
+
         # 1. Quality and coverage checks. Quality/specialist reports are recorded
         # alongside votes but never inflate the directional quorum denominator.
         eligible_voters = [
@@ -655,9 +669,12 @@ class XAUUSDSignalEngine:
             max_w = max(buy_weight, sell_weight)
             min_w = min(buy_weight, sell_weight)
             if min_w >= 0.35 * max_w:
+                raw_ratio = 100.0 * max_w / total_participant_weight if total_participant_weight else 0.0
                 return {
                     "decision": "WAIT",
                     "score": 50,
+                    "confluence_score": 0,
+                    "agent_consensus_pct": round(raw_ratio, 1),
                     "rejection_reason": f"Material conflict between agents: Bullish weight {buy_weight:.1f} vs Bearish weight {sell_weight:.1f}",
                     "evidence": all_evidence
                 }
@@ -667,9 +684,12 @@ class XAUUSDSignalEngine:
         elif sell_weight >= 1.0 and (buy_weight == 0 or sell_weight > buy_weight * 1.8):
             proposed_direction = "SELL"
         else:
+            raw_ratio = 100.0 * max(buy_weight, sell_weight) / total_participant_weight if total_participant_weight else 0.0
             return {
                 "decision": "WAIT",
                 "score": 60,
+                "confluence_score": 0,
+                "agent_consensus_pct": round(raw_ratio, 1),
                 "rejection_reason": f"No definitive quorum reached (Bull: {buy_weight:.1f}, Bear: {sell_weight:.1f})",
                 "evidence": all_evidence
             }
@@ -781,7 +801,6 @@ class XAUUSDSignalEngine:
             }
 
         # Evaluate 100-point transparent confluence score across 8 standard categories
-        from taikry.trading.confluence_scorer import calculate_confluence_scores
         timeframe_label = "M15"
         confluence_res = calculate_confluence_scores(
             symbol=symbol,
@@ -798,16 +817,34 @@ class XAUUSDSignalEngine:
 
         # Measure directional support against all participating agents. Do not
         # add an artificial floor; the configured quality gate handles it.
-        raw_score = 100.0 * max(buy_weight, sell_weight) / total_participant_weight if total_participant_weight else 0.0
-        fallback_score = max(0, min(self.max_score, int(round(raw_score))))
-        score = max(confluence_res.selected_score, fallback_score) if confluence_res.selected_score > 0 else fallback_score
-        if score < self.min_score:
+        raw_agent_ratio = 100.0 * max(buy_weight, sell_weight) / total_participant_weight if total_participant_weight else 0.0
+        agent_consensus_pct = max(0.0, min(100.0, raw_agent_ratio))
+
+        # Pure 100-point technical score from the confluence engine — never mixed with agent votes.
+        confluence_score = int(confluence_res.selected_score)
+
+        # Gate 1: confluence score must meet 75/100 threshold.
+        if confluence_score < 75:
             return {
                 "decision": "WAIT",
-                "score": score,
+                "confluence_score": confluence_score,
+                "agent_consensus_pct": round(agent_consensus_pct, 1),
+                "score": confluence_score,
                 "confluence_breakdown": confluence_res.to_dict(),
-                "rejection_reason": f"Measured confluence score {score}/100 is below the configured minimum {self.min_score}/100.",
-                "evidence": all_evidence
+                "rejection_reason": f"Confluence score {confluence_score}/100 below 75/100 threshold.",
+                "evidence": all_evidence,
+            }
+
+        # Gate 2: agent consensus must reach 60% quorum.
+        if agent_consensus_pct < 60.0:
+            return {
+                "decision": "WAIT",
+                "confluence_score": confluence_score,
+                "agent_consensus_pct": round(agent_consensus_pct, 1),
+                "score": confluence_score,
+                "confluence_breakdown": confluence_res.to_dict(),
+                "rejection_reason": f"Agent consensus {agent_consensus_pct:.1f}% below 60% quorum.",
+                "evidence": all_evidence,
             }
 
         # Candidate-dependent reviews run only after a directional plan and the
@@ -897,7 +934,9 @@ class XAUUSDSignalEngine:
 
         return {
             "decision": proposed_direction,
-            "score": score,
+            "confluence_score": confluence_score,
+            "agent_consensus_pct": round(agent_consensus_pct, 1),
+            "score": confluence_score,
             "confluence_breakdown": confluence_res.to_dict(),
             "trade_style": str(trade_style).upper(),
             "entry_method": "LIVE_ASK" if proposed_direction == "BUY" and quote_is_valid else ("LIVE_BID" if proposed_direction == "SELL" and quote_is_valid else "VERIFIED_MIDPOINT"),
@@ -951,15 +990,16 @@ class XAUUSDSignalEngine:
         validates levels, and persists approved signal to database.
         """
         # Step 1: Strict XAUUSD-Only Enforcement
-        canonical_symbol = normalize_xauusd_symbol(raw_symbol)
-        if not canonical_symbol:
+        norm_result = normalize_xauusd_symbol(raw_symbol)
+        if norm_result["status"] != "ACCEPTED":
             logger.warning(f"Rejected non-XAUUSD signal request: {raw_symbol}")
             return {
                 "success": False,
                 "error": f"Instrument '{raw_symbol}' rejected. Telegram Signal Engine accepts XAUUSD only.",
                 "canonical_symbol": None,
-                "status": "REJECTED_NON_XAUUSD"
+                "status": norm_result["status"]
             }
+        canonical_symbol = norm_result["symbol"]
 
         trade_style = str(trade_style or "INTRADAY").strip().upper()
         if trade_style in {"SCALP", "SCALPING"}:
@@ -1060,21 +1100,15 @@ class XAUUSDSignalEngine:
                 "status": "BLOCKED_STALE_BROKER_FEED"
             }
 
-        # A single validated quote snapshot supports either the desktop MT5
-        # bridge or Render's authenticated OANDA v20 provider.
+        # Verified quote snapshot: Only authentic Exness MT5 quotes can be executable.
         quote = market_data_engine.get_verified_quote(canonical_symbol)
         quote_classification = str(quote.get("quote_classification") or "") if quote else QuoteClassification.UNAVAILABLE
         is_executable = bool(quote.get("is_executable", False)) if quote else False
 
-        if not quote_classification and quote:
-            bid_val = float(quote.get("bid") or 0.0)
-            ask_val = float(quote.get("ask") or 0.0)
-            if bid_val > 0 and ask_val > bid_val:
-                quote_classification = QuoteClassification.REAL_BROKER_QUOTE
-                is_executable = True
-            else:
-                quote_classification = QuoteClassification.UNAVAILABLE
-                is_executable = False
+        # Fail-closed: Never promote an unclassified quote to REAL_BROKER_QUOTE
+        if not quote_classification:
+            quote_classification = QuoteClassification.UNAVAILABLE
+            is_executable = False
 
         if quote_classification == QuoteClassification.ESTIMATED_SPREAD:
             return {
@@ -1479,7 +1513,7 @@ class XAUUSDSignalEngine:
         """Extracts measured ATR from the technical analyst; returns zero when unavailable."""
         tech = agent_outputs.get("technical_analyst", {})
         levels = tech.get("key_levels", {})
-        atr_val = levels.get("atr")
+        atr_val = levels.get("atr") if levels.get("atr") is not None else levels.get("atr_14")
         try:
             atr = float(atr_val)
         except (TypeError, ValueError):

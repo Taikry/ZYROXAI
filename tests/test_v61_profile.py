@@ -31,6 +31,7 @@ def test_user_session():
             email=email,
             full_name="Heng Taikry",
             phone_number="0968288832",
+            country="Cambodia",
             hashed_password=hpass,
             salt=salt,
             role="USER",
@@ -43,6 +44,9 @@ def test_user_session():
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        user.country = "Cambodia"
+        db.commit()
 
     # Create session
     raw_token = "prof_test_raw_token_xyz_12345678901234567890"

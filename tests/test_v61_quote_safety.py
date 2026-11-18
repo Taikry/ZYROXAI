@@ -141,3 +141,49 @@ def test_engine_blocks_non_executable_or_unavailable(monkeypatch):
 
     assert result["success"] is False
     assert result["status"] == "BLOCKED_NO_EXECUTABLE_QUOTE"
+
+
+def test_oanda_and_yahoo_and_binance_forced_reference_only():
+    """Any non-Exness source must fail-safe to REFERENCE_PRICE and is_executable=False."""
+    rec_oanda = build_quote_record(
+        symbol="XAUUSD",
+        provider="OANDA",
+        bid=2650.0,
+        ask=2650.25,
+        source="OANDA_V20",
+        classification=QuoteClassification.REAL_BROKER_QUOTE,
+        is_executable=True
+    )
+    assert rec_oanda["quote_classification"] == QuoteClassification.REFERENCE_PRICE
+    assert rec_oanda["is_executable"] is False
+
+    rec_yahoo = build_quote_record(
+        symbol="XAUUSD",
+        provider="Yahoo Finance",
+        bid=2650.0,
+        ask=2650.25,
+        source="YAHOO",
+        classification=QuoteClassification.REAL_BROKER_QUOTE,
+        is_executable=True
+    )
+    assert rec_yahoo["quote_classification"] == QuoteClassification.REFERENCE_PRICE
+    assert rec_yahoo["is_executable"] is False
+
+
+def test_unclassified_quote_fails_closed(monkeypatch):
+    """An unclassified quote with valid bid/ask must NEVER be promoted to REAL_BROKER_QUOTE."""
+    from taikry.trading import xauusd_signal_engine as sem
+    monkeypatch.setattr(sem.market_data_engine, "get_verified_quote", lambda _symbol: {
+        "symbol": "XAUUSD",
+        "provider": "Unknown Unclassified Feed",
+        "bid": 2650.00,
+        "ask": 2650.25,
+        "price": 2650.12,
+        # quote_classification omitted entirely
+        "is_executable": False
+    })
+
+    result = xauusd_signal_engine.generate_xauusd_signal(raw_symbol="XAUUSD")
+    assert result["success"] is False
+    assert result["status"] == "BLOCKED_NO_EXECUTABLE_QUOTE"
+

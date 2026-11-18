@@ -804,24 +804,23 @@ def get_current_user_profile(
             plan_notice = "Your subscription is active. Thank you for trading with ZYROX AI."
 
         # Compute user display metadata
-        full_name = user.full_name or "Heng Taikry"
-        handle = "@" + (user.email.split("@")[0].lower() if user.email else "user")
+        full_name = user.full_name or None
+        handle = None
         if user.full_name:
             clean_name = "".join(c for c in user.full_name.lower() if c.isalnum())
             if clean_name:
                 handle = f"@{clean_name}"
+        if not handle and user.email:
+            handle = "@" + user.email.split("@")[0].lower()
 
-        mobile_phone = user.phone_number or "0968288832"
+        mobile_phone = user.phone_number or None
         telegram_handle = tg_status.get("telegram_username")
-        if not telegram_handle:
-            if user.telegram_user_id:
-                telegram_handle = f"@{user.telegram_user_id}"
-            else:
-                telegram_handle = "@heng_taikry"
-        if not telegram_handle.startswith("@"):
+        if not telegram_handle and user.telegram_user_id:
+            telegram_handle = f"@{user.telegram_user_id}"
+        if telegram_handle and not telegram_handle.startswith("@"):
             telegram_handle = f"@{telegram_handle}"
 
-        member_since = user.created_at.strftime("%b %d, %Y") if user.created_at else "Jul 06, 2026"
+        member_since = user.created_at.strftime("%b %d, %Y") if user.created_at else None
 
         # Determine caller's current session token hash
         raw_token = None
@@ -840,12 +839,8 @@ def get_current_user_profile(
         ).order_by(UserSession.last_seen_at.desc()).limit(10).all()
 
         devices = []
-        has_current = False
         for s in sessions:
             is_curr = bool(current_token_hash and s.token_hash == current_token_hash)
-            if is_curr:
-                has_current = True
-
             s_time = s.last_seen_at or s.created_at or now_utc
             if s_time.tzinfo is None:
                 s_time = s_time.replace(tzinfo=datetime.timezone.utc)
@@ -855,36 +850,14 @@ def get_current_user_profile(
             devices.append({
                 "id": s.id,
                 "browser_os": parse_user_agent_simple(s.user_agent or ""),
-                "ip_address": s.ip_address or "175.100.52.54",
+                "ip_address": s.ip_address or None,
                 "is_current": is_curr,
                 "status": "This device" if is_curr else "Signed out",
                 "relative_time": rel_str
             })
 
-        if not devices:
-            ua = request.headers.get("user-agent", "")
-            ip = request.client.host if request.client else "175.100.52.54"
-            devices = [
-                {
-                    "id": 1,
-                    "browser_os": parse_user_agent_simple(ua),
-                    "ip_address": ip,
-                    "is_current": True,
-                    "status": "This device",
-                    "relative_time": "5 minutes ago"
-                },
-                {
-                    "id": 2,
-                    "browser_os": parse_user_agent_simple(ua),
-                    "ip_address": "175.100.52.244",
-                    "is_current": False,
-                    "status": "Signed out",
-                    "relative_time": "1 week ago"
-                }
-            ]
-        elif not has_current and devices:
-            devices[0]["is_current"] = True
-            devices[0]["status"] = "This device"
+        user_country = getattr(user, "country", None)
+        country_flag = "🇰🇭" if user_country and ("cambodia" in user_country.lower() or "kh" in user_country.lower()) else None
 
         return {
             "user": {
@@ -892,19 +865,19 @@ def get_current_user_profile(
                 "email": user.email,
                 "full_name": full_name,
                 "handle": handle,
-                "country": "Cambodia",
-                "country_flag": "🇰🇭",
+                "country": user_country,
+                "country_flag": country_flag,
                 "mobile_phone": mobile_phone,
                 "phone_number": mobile_phone,
                 "telegram": telegram_handle,
                 "member_since": member_since,
                 "role": user.role,
-                "is_verified": bool(user.is_verified or user.role == "ADMIN" or True),
+                "is_verified": bool(user.is_verified),
                 "is_active": user.is_active,
                 "language": user.language,
                 "timezone": user.timezone,
                 "terms_accepted_at": user.terms_accepted_at.isoformat() if user.terms_accepted_at else None,
-                "created_at": user.created_at.isoformat() if user.created_at else now_utc.isoformat()
+                "created_at": user.created_at.isoformat() if user.created_at else None
             },
             "plan": {
                 "name": plan_name,

@@ -100,7 +100,34 @@ def acquire_scheduler_lock(lock_key: str, owner_id: str, ttl_seconds: int = 180)
     except Exception as e:
         logger.warning("Failed to acquire distributed scheduler lock: %s", e)
         db.rollback()
-        return True
+        # FAIL CLOSED: Never allow execution when lock acquisition fails or encounters a database error
+        return False
+    finally:
+        db.close()
+
+
+def release_scheduler_lock(lock_key: str, owner_id: str) -> bool:
+    """Releases a distributed lock if currently held by the specified owner."""
+    from taikry.database.session import SessionLocal
+    from taikry.database.models import SystemSetting
+
+    db = SessionLocal()
+    try:
+        setting = db.query(SystemSetting).filter(SystemSetting.key == lock_key).first()
+        if setting and setting.value:
+            try:
+                data = json.loads(setting.value)
+                if data.get("owner_id") == owner_id:
+                    db.delete(setting)
+                    db.commit()
+                    return True
+            except Exception:
+                pass
+        return False
+    except Exception as e:
+        logger.warning("Failed to release distributed scheduler lock: %s", e)
+        db.rollback()
+        return False
     finally:
         db.close()
 

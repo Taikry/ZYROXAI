@@ -2226,6 +2226,20 @@ def get_registered_agents_summary():
     return agent_registry.get_fleet_summary()
 
 
+@router.get("/api/v1/agents/telemetry")
+def get_agents_telemetry():
+    """
+    Returns verified real-time AI agent telemetry compliant with ZYROX AI V6.1.1.
+    All statuses are strictly one of IDLE, RUNNING, COMPLETED, FAILED, DISABLED, DEMO_MODE, STANDBY.
+    """
+    from taikry.agents.registry import agent_registry
+    return {
+        "status": "SUCCESS",
+        "telemetry": agent_registry.get_telemetry_snapshot(),
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
+
+
 class AgentConfigureRequest(BaseModel):
     enabled: Optional[bool] = None
     timeout_seconds: Optional[float] = None

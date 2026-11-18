@@ -51,6 +51,8 @@ def is_google_auth_configured() -> bool:
 
 
 def get_google_redirect_uri(base_url: Optional[str] = None) -> str:
+    if base_url and ("localhost" in base_url or "127.0.0.1" in base_url):
+        return f"{base_url.rstrip('/')}/api/v1/auth/google/callback"
     custom_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
     if custom_uri:
         return custom_uri
