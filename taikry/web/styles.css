@@ -13122,6 +13122,17 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   flex-wrap: wrap;
 }
 
+.btn-startup-open {
+  margin-top: 14px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #02110c;
+  border: none;
+}
+
 .tutorial-card-title-row {
   display: flex;
   align-items: flex-start;
