@@ -1,8 +1,8 @@
-name: ZYROX AI V6.1 CI Pipeline
+name: ZYROX AI CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "feature/**" ]
   pull_request:
     branches: [ main ]
 
@@ -26,12 +26,14 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest httpx
 
-      - name: Run V6.1 core unit tests
+      - name: Run Core & V6.2.2 Unit & Regression Tests
         env:
           DATABASE_URL: "sqlite:///./test_ci.db"
-          PUBLIC_APP_URL: "https://taikry-ai-trading.onrender.com"
+          PUBLIC_APP_URL: "https://zyroxai.onrender.com"
+          AUTO_START_MONITORING: "false"
+          ENVIRONMENT: "testing"
         run: |
-          pytest tests/test_v61_quote_safety.py tests/test_v61_auth_flows.py tests/test_v61_scheduler_and_scoring.py -v
+          pytest tests/test_v61_quote_safety.py tests/test_v61_auth_flows.py tests/test_v61_scheduler_and_scoring.py tests/test_xauusd_telegram_engine.py tests/test_v622_risk_reward_gate.py -v
 
   frontend-build:
     name: Frontend Typecheck & Build (Vite)
@@ -51,3 +53,21 @@ jobs:
 
       - name: TypeScript typecheck and Vite build
         run: npm run build
+
+  deploy-render:
+    name: Auto Deploy to Render
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook (if secret configured)
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Triggering Render automated deployment..."
+            curl -f -s -S -X POST "$RENDER_DEPLOY_HOOK_URL"
+            echo "Render deploy hook triggered successfully."
+          else
+            echo "RENDER_DEPLOY_HOOK_URL secret is not set. Render will auto-deploy via GitHub Git sync."
+          fi

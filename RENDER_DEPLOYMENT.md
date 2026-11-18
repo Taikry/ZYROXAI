@@ -61,3 +61,19 @@ Expected HTTP Response: `200 OK`
 - **To Roll Back a Deployment:**
   Use the Render Dashboard "Rollback" feature to revert to the previous successful deploy hash. Database migrations are backwards-compatible (all added columns are nullable).
 
+---
+
+## 5. Automated CI/CD & Auto-Deploy
+
+### 5.1 Native Render Auto-Deploy
+Render automatically deploys from GitHub:
+- Configured in `render.yaml` with `autoDeployTrigger: commit`.
+- Whenever code is pushed or merged to the tracked branch (e.g. `main`), Render builds the Docker image (`Dockerfile`) and deploys with zero-downtime healthcheck on `/ping`.
+
+### 5.2 GitHub Actions CI/CD Pipeline
+The workflow in `.github/workflows/ci.yml` runs on every push and pull request:
+1. **Backend Tests:** Executes pytest suite covering quote safety, auth flows, scheduler locking, confluence scoring, and V6.2.2 risk/reward gate.
+2. **Frontend Build:** Runs `tsc` typecheck and `vite build` to guarantee compilation integrity.
+3. **Render Deploy Trigger:** If `RENDER_DEPLOY_HOOK_URL` is configured in GitHub Secrets (`Settings > Secrets and variables > Actions`), the pipeline automatically pings Render's Deploy Hook on successful `main` builds.
+
+
