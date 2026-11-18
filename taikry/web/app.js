@@ -504,6 +504,22 @@ function toggleLanguage() {
     updateMacroCatalystUI(currentXauusdCatalyst);
     renderCockpitNewsQuickList(currentXauusdCatalyst, cachedMacroEvents);
   }
+
+  // Update Tutorial bilingual strings
+  setTxt("t-top-tutorial", isKhmer ? "មគ្គុទ្ទេសក៍ Dashboard" : "Dashboard Tutorial");
+  setTxt("t-nav-tutorial", isKhmer ? "មគ្គុទ្ទេសក៍" : "Tutorial");
+  setTxt("t-mobile-tutorial", isKhmer ? "មគ្គុទ្ទេសក៍ Dashboard" : "Dashboard Tutorial");
+  setTxt("tutorial-lang-label", isKhmer ? "English" : "ភាសាខ្មែរ");
+  const tutBackdrop = document.getElementById("zyrox-tutorial-backdrop");
+  if (tutBackdrop && !tutBackdrop.classList.contains("tutorial-hidden") && typeof window.renderTutorialStep === "function") {
+    const counterText = document.getElementById("tutorial-step-counter");
+    let activeIdx = 0;
+    if (counterText && counterText.textContent) {
+      const match = counterText.textContent.match(/\d+/);
+      if (match) activeIdx = Math.max(0, parseInt(match[0], 10) - 1);
+    }
+    window.renderTutorialStep(activeIdx);
+  }
 }
 
 let currentWatchlistSearch = "";
@@ -7636,7 +7652,8 @@ async function checkSaasSession() {
     const res = await fetch("/api/v1/auth/me", { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
-      currentSaasUser = data;
+      const user = data.user || data;
+      currentSaasUser = user;
       startPaperTradeStream();
       // Prepare a secure Telegram pairing link after a successful login. The
       // customer still opens the bot and confirms the link from Telegram.
@@ -7645,8 +7662,23 @@ async function checkSaasSession() {
       }
       const topLabel = document.getElementById("top-account-label");
       if (topLabel) {
-        const roleBadge = data.role === "ADMIN" ? "👑 Admin" : (data.full_name || "Account");
+        const roleBadge = (user.role === "ADMIN" || user.role === "super_admin") ? "👑 Admin" : (user.full_name || (user.email ? user.email.split("@")[0] : "Account"));
         topLabel.textContent = roleBadge;
+      }
+      const fullName = user.full_name || (user.email ? user.email.split("@")[0] : "Trader");
+      const initial = (fullName.trim().charAt(0) || "U").toUpperCase();
+      const topAv = document.getElementById("prof-top-avatar");
+      if (topAv) topAv.textContent = initial;
+      const heroAv = document.getElementById("prof-hero-avatar");
+      if (heroAv) heroAv.textContent = initial;
+
+      // Check first-time user onboarding tutorial auto-trigger
+      if (data.onboarding && !data.onboarding.completed && !data.onboarding.dismissed) {
+        if (typeof window.startInteractiveTutorial === "function") {
+          window.setTimeout(() => {
+            window.startInteractiveTutorial(false, data.onboarding.step || 1);
+          }, 800);
+        }
       }
     } else {
       stopPaperTradeStream();
@@ -7693,6 +7725,11 @@ async function loadAccountProfile() {
 
     const rowEmail = document.getElementById("prof-row-email");
     if (rowEmail) rowEmail.textContent = user.email || "";
+
+    const verBadge = document.getElementById("prof-verified-badge");
+    if (verBadge) {
+      verBadge.style.display = (user.is_verified || user.email_verified) ? "inline-flex" : "none";
+    }
 
     const rowCountry = document.getElementById("prof-row-country");
     if (rowCountry) {
@@ -8155,9 +8192,38 @@ async function submitSupportTicket() {
   }
 }
 
-// Auto-check SaaS session on DOM ready
+// Auto-check SaaS session & handle URL routes on DOM ready
+function checkInitialRouteTab() {
+  try {
+    const url = new URL(window.location.href);
+    const tabParam = (url.searchParams.get("tab") || url.searchParams.get("pane") || "").toLowerCase();
+    const hash = (window.location.hash || "").replace("#", "").toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+
+    if (tabParam === "profile" || tabParam === "account" || hash === "profile" || hash === "account" || path.endsWith("/profile") || path.endsWith("/profile/")) {
+      switchNavPane("account");
+    } else if (tabParam) {
+      switchNavPane(tabParam);
+    } else if (hash) {
+      switchNavPane(hash);
+    }
+  } catch (e) {
+    console.debug("Route check note:", e);
+  }
+}
+
+window.addEventListener("hashchange", () => {
+  const hash = (window.location.hash || "").replace("#", "").toLowerCase();
+  if (hash === "profile" || hash === "account") {
+    switchNavPane("account");
+  } else if (hash) {
+    switchNavPane(hash);
+  }
+});
+
 runWhenDOMReady(() => {
   checkSaasSession();
+  checkInitialRouteTab();
 });
 
 

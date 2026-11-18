@@ -193,27 +193,42 @@ def exchange_google_code_for_tokens(code: str, redirect_uri: str, code_verifier:
     if not is_google_auth_configured():
         return False, {"error": "Google OAuth is not configured"}
 
-    payload = {
-        "client_id": get_google_client_id(),
-        "client_secret": get_google_client_secret(),
-        "code": code,
-        "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri,
-    }
-    if code_verifier:
-        payload["code_verifier"] = code_verifier
+    primary_secret = get_google_client_secret()
+    candidate_secrets = [primary_secret]
+    # Fault-tolerance for letter 'O' vs digit '0' in Google client secret
+    if primary_secret.startswith("GOCSPX-O"):
+        candidate_secrets.append("GOCSPX-0" + primary_secret[9:])
+    elif primary_secret.startswith("GOCSPX-0"):
+        candidate_secrets.append("GOCSPX-O" + primary_secret[9:])
 
-    try:
-        with httpx.Client(timeout=12.0) as client:
-            resp = client.post(GOOGLE_TOKEN_ENDPOINT, data=payload)
-            data = resp.json()
-            if resp.status_code == 200 and "id_token" in data:
-                return True, data
-            err_msg = data.get("error_description") or data.get("error") or f"HTTP {resp.status_code}"
-            return False, {"error": f"Token exchange failed: {err_msg}"}
-    except Exception as e:
-        logger.error(f"Google token exchange network error: {e}")
-        return False, {"error": f"Network error during Google token exchange: {str(e)}"}
+    last_error = None
+    for sec in candidate_secrets:
+        payload = {
+            "client_id": get_google_client_id(),
+            "client_secret": sec,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
+
+        try:
+            with httpx.Client(timeout=12.0) as client:
+                resp = client.post(GOOGLE_TOKEN_ENDPOINT, data=payload)
+                data = resp.json()
+                if resp.status_code == 200 and "id_token" in data:
+                    return True, data
+                err_msg = data.get("error_description") or data.get("error") or f"HTTP {resp.status_code}"
+                last_error = err_msg
+                if "invalid_client" not in str(err_msg).lower():
+                    break
+        except Exception as e:
+            logger.error(f"Google token exchange network error: {e}")
+            last_error = str(e)
+            break
+
+    return False, {"error": f"Token exchange failed: {last_error or 'Unknown error'}"}
 
 
 def verify_google_id_token(id_token_str: str, expected_nonce: Optional[str] = None) -> Tuple[bool, Dict[str, Any]]:

@@ -119,14 +119,20 @@ def root_page():
 @app.get("/dashboard", include_in_schema=False)
 @app.get("/dashboard/", include_in_schema=False)
 @app.get("/dashboard/index.html", include_in_schema=False)
+@app.get("/dashboard/profile", include_in_schema=False)
+@app.get("/dashboard/profile/", include_in_schema=False)
+@app.get("/profile", include_in_schema=False)
 def dashboard_gate(request: Request):
     """
     Server-side authentication gate for the trading terminal dashboard.
     Redirects unauthenticated visitors to login modal/landing page.
     """
+    return_path = request.url.path or "/dashboard/"
+    if request.url.query:
+        return_path = f"{return_path}?{request.url.query}"
     user = get_authenticated_user_from_request(request)
     if not user:
-        return RedirectResponse(url="/?auth=signin&return_to=/dashboard/", status_code=303)
+        return RedirectResponse(url=f"/?auth=signin&return_to={return_path}", status_code=303)
     index_file = os.path.join(web_dir, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)

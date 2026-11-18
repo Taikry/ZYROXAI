@@ -605,6 +605,12 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     language = Column(String(10), default="en", nullable=False)  # "en", "kh"
     timezone = Column(String(50), default="Asia/Phnom_Penh", nullable=False)
+    onboarding_completed = Column(Boolean, default=False, nullable=False)
+    onboarding_step = Column(Integer, default=1, nullable=False)
+    onboarding_dismissed = Column(Boolean, default=False, nullable=False)
+    tutorial_version = Column(String(20), default="v6.2.1", nullable=True)
+    tutorial_last_seen_at = Column(DateTime, nullable=True)
+    dashboard_preferences = Column(JSON, nullable=True, default=dict)
     terms_accepted_at = Column(DateTime, nullable=True)
     terms_version = Column(String(20), default="v1.0")
     privacy_accepted_at = Column(DateTime, nullable=True)

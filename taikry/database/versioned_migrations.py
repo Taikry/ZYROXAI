@@ -30,6 +30,7 @@ def _migration_steps(database_engine) -> List[Migration]:
     from taikry.database.migrate_v7_rbac import run_migration as v7_saas_multi_tenant_rbac
     from taikry.database.migrate_telegram_oidc import run_migration as telegram_oidc_login
     from taikry.database.migrate_v61_auth import run_migration as v61_auth_credentials
+    from taikry.database.migrate_v62_onboarding import run_migration as v62_onboarding
 
     return [
         ("0001_telegram_system", "Telegram delivery and signal provenance schema", lambda: telegram_system(database_engine)),
@@ -46,6 +47,7 @@ def _migration_steps(database_engine) -> List[Migration]:
         ("0012_v7_saas_multi_tenant_rbac", "V7 multi-tenant RBAC, permissions, system settings, and feature flags", lambda: v7_saas_multi_tenant_rbac(database_engine)),
         ("0013_telegram_oidc_login", "Telegram Login OIDC stable subject schema and index", lambda: telegram_oidc_login(database_engine)),
         ("0014_v61_auth_credentials", "V6.1 Google OAuth and Phone OTP credentials and challenge schema", lambda: v61_auth_credentials(database_engine)),
+        ("0015_v62_onboarding", "V6.2 Onboarding progress, completion state, and dashboard preferences", lambda: v62_onboarding(database_engine)),
     ]
 
 

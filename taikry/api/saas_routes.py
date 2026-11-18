@@ -163,6 +163,20 @@ class UpdateProfileRequest(BaseModel):
     preferred_language: Optional[str] = None
     timezone: Optional[str] = None
     phone_number: Optional[str] = None
+    country: Optional[str] = None
+
+
+class OnboardingUpdateRequest(BaseModel):
+    step: Optional[int] = None
+    completed: Optional[bool] = None
+    dismissed: Optional[bool] = None
+    tutorial_version: Optional[str] = None
+
+
+class DashboardPreferencesRequest(BaseModel):
+    preferences: Optional[Dict[str, Any]] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
 
 
 class DeleteAccountRequest(BaseModel):
@@ -890,7 +904,14 @@ def get_current_user_profile(
             "devices": devices,
             "trial": trial_status,
             "entitlements": entitlements,
-            "telegram": tg_status
+            "telegram": tg_status,
+            "onboarding": {
+                "completed": bool(getattr(user, "onboarding_completed", False)),
+                "step": int(getattr(user, "onboarding_step", 1) or 1),
+                "dismissed": bool(getattr(user, "onboarding_dismissed", False)),
+                "tutorial_version": getattr(user, "tutorial_version", "v6.2.1") or "v6.2.1",
+                "tutorial_last_seen_at": user.tutorial_last_seen_at.isoformat() if getattr(user, "tutorial_last_seen_at", None) else None,
+            }
         }
     finally:
         pass
@@ -950,6 +971,8 @@ def update_profile_endpoint(payload: UpdateProfileRequest, user: User = Depends(
             u.full_name = payload.full_name.strip()
         if payload.phone_number is not None:
             u.phone_number = payload.phone_number.strip()
+        if payload.country is not None:
+            u.country = payload.country.strip()
         target_lang = payload.language or payload.preferred_language
         if target_lang in ("en", "kh"):
             u.language = target_lang
@@ -973,6 +996,125 @@ def delete_account_endpoint(payload: DeleteAccountRequest, response: Response, u
         ok = delete_user_account(db, user.id, payload.reason)
         response.delete_cookie(key=SESSION_COOKIE_NAME)
         return {"success": True, "message": "Account deleted successfully."}
+    finally:
+        db.close()
+
+
+# =============================================================================
+# V6.2.1 INTERACTIVE TUTORIAL & ONBOARDING PERSISTENCE ENDPOINTS
+# =============================================================================
+
+@saas_router.get("/api/v1/user/onboarding")
+def get_user_onboarding_endpoint(user: User = Depends(get_current_user)):
+    """Returns onboarding progress and tutorial status for current authenticated user."""
+    return {
+        "success": True,
+        "onboarding_completed": bool(getattr(user, "onboarding_completed", False)),
+        "onboarding_step": int(getattr(user, "onboarding_step", 1) or 1),
+        "onboarding_dismissed": bool(getattr(user, "onboarding_dismissed", False)),
+        "tutorial_version": getattr(user, "tutorial_version", "v6.2.1") or "v6.2.1",
+        "tutorial_last_seen_at": user.tutorial_last_seen_at.isoformat() if getattr(user, "tutorial_last_seen_at", None) else None,
+    }
+
+
+@saas_router.post("/api/v1/user/onboarding")
+def update_user_onboarding_endpoint(
+    payload: OnboardingUpdateRequest,
+    user: User = Depends(get_current_user)
+):
+    """Updates onboarding tutorial progress and completion state."""
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user.id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if payload.step is not None:
+            u.onboarding_step = max(1, min(14, int(payload.step)))
+        if payload.completed is not None:
+            u.onboarding_completed = bool(payload.completed)
+        if payload.dismissed is not None:
+            u.onboarding_dismissed = bool(payload.dismissed)
+        if payload.tutorial_version is not None:
+            u.tutorial_version = str(payload.tutorial_version).strip()
+        u.tutorial_last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+        db.refresh(u)
+        return {
+            "success": True,
+            "message": "Onboarding progress saved",
+            "data": {
+                "onboarding_completed": u.onboarding_completed,
+                "onboarding_step": u.onboarding_step,
+                "onboarding_dismissed": u.onboarding_dismissed,
+                "tutorial_version": u.tutorial_version,
+                "tutorial_last_seen_at": u.tutorial_last_seen_at.isoformat() if u.tutorial_last_seen_at else None
+            }
+        }
+    finally:
+        db.close()
+
+
+@saas_router.post("/api/v1/user/onboarding/reset")
+def reset_user_onboarding_endpoint(user: User = Depends(get_current_user)):
+    """Resets onboarding progress so user can restart tutorial from step 1."""
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user.id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        u.onboarding_completed = False
+        u.onboarding_dismissed = False
+        u.onboarding_step = 1
+        u.tutorial_last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+        db.refresh(u)
+        return {
+            "success": True,
+            "message": "Onboarding progress reset to step 1",
+            "data": {
+                "onboarding_completed": False,
+                "onboarding_step": 1,
+                "onboarding_dismissed": False,
+                "tutorial_version": u.tutorial_version
+            }
+        }
+    finally:
+        db.close()
+
+
+@saas_router.get("/api/v1/user/preferences")
+def get_user_preferences_endpoint(user: User = Depends(get_current_user)):
+    """Retrieves user dashboard preferences."""
+    return {
+        "success": True,
+        "preferences": getattr(user, "dashboard_preferences", {}) or {},
+        "language": getattr(user, "language", "en") or "en",
+        "timezone": getattr(user, "timezone", "Asia/Phnom_Penh") or "Asia/Phnom_Penh"
+    }
+
+
+@saas_router.post("/api/v1/user/preferences")
+def save_user_preferences_endpoint(
+    payload: DashboardPreferencesRequest,
+    user: User = Depends(get_current_user)
+):
+    """Saves user dashboard preferences."""
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == user.id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if payload.preferences is not None:
+            curr = dict(getattr(u, "dashboard_preferences", {}) or {})
+            curr.update(payload.preferences)
+            u.dashboard_preferences = curr
+        if payload.language in ("en", "kh"):
+            u.language = payload.language
+        if payload.timezone:
+            u.timezone = payload.timezone
+        db.commit()
+        return {"success": True, "message": "Preferences saved"}
     finally:
         db.close()
 
@@ -1194,6 +1336,7 @@ def google_auth_status_endpoint(request: Request):
     return get_google_auth_status(base_url=base_url)
 
 
+@saas_router.get("/api/v1/auth/google")
 @saas_router.get("/api/v1/auth/google/login")
 def google_auth_login_endpoint(request: Request, return_to: Optional[str] = "/dashboard/"):
     """Initiates Google OAuth Authorization Code flow or returns NEEDS_CONFIGURATION."""
