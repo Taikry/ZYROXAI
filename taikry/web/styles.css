@@ -13089,6 +13089,37 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
   height: 100%;
   background: linear-gradient(90deg, #0ECB81, #10B981);
   transition: width 0.3s ease;
+  width: 7.14%;
+}
+
+.tutorial-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tutorial-guide-support-card {
+  grid-column: 1 / -1;
+  border-color: rgba(14, 203, 129, 0.4) !important;
+  background: rgba(14, 203, 129, 0.04) !important;
+}
+
+.tutorial-guide-title-text {
+  color: #0ECB81;
+  font-weight: 700;
+}
+
+.tutorial-guide-desc {
+  color: #9CA3AF;
+  font-size: 13px;
+  margin: 8px 0 12px 0;
+  line-height: 1.5;
+}
+
+.tutorial-guide-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .tutorial-card-title-row {

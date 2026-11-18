@@ -2898,15 +2898,15 @@
 
         <div class="overview-grid">
           <!-- Interactive Walkthrough & Guide Card -->
-          <div class="section-card" style="grid-column: 1 / -1; border-color: rgba(14, 203, 129, 0.4); background: rgba(14, 203, 129, 0.04);">
+          <div class="section-card tutorial-guide-support-card">
             <div class="section-card-title flex-between">
-              <span style="color: #0ECB81; font-weight: 700;">🎓 Interactive Dashboard Tutorial & User Guide</span>
+              <span class="tutorial-guide-title-text">🎓 Interactive Dashboard Tutorial & User Guide</span>
               <button class="btn btn-gold btn-sm" onclick="startInteractiveTutorial(true)">▶ Start 14-Step Tour</button>
             </div>
-            <p style="color: #9CA3AF; font-size: 13px; margin: 8px 0 12px 0; line-height: 1.5;">
+            <p class="tutorial-guide-desc">
               Master all ZYROX AI institutional trading features: Live XAUUSD feed, MT5 bridge status, SMC & ICT multi-timeframe analysis, Agent Consensus Quorum, Risk Management, and Journal.
             </p>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="tutorial-guide-actions">
               <button class="btn btn-outline btn-sm" onclick="startInteractiveTutorial(true, 1)">🔄 Restart from Step 1</button>
               <button class="btn btn-outline btn-sm" onclick="startInteractiveTutorial(true, 4)">🧠 Jump to AI Analysis</button>
               <button class="btn btn-outline btn-sm" onclick="startInteractiveTutorial(true, 5)">🎯 Jump to Best Setup</button>
@@ -3719,7 +3719,7 @@
             <span class="tutorial-badge-kicker">ZYROX AI V6.2.1</span>
             <span class="tutorial-step-counter" id="tutorial-step-counter">Step 1 of 14</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <div class="tutorial-card-header-actions">
             <button type="button" class="tutorial-lang-btn" id="tutorial-card-lang-btn" onclick="toggleLanguage()" title="Switch Language / ប្តូរភាសា">
               🌐 <span id="tutorial-lang-label">ភាសាខ្មែរ</span>
             </button>
@@ -3729,7 +3729,7 @@
 
         <!-- Progress Bar -->
         <div class="tutorial-progress-track">
-          <div class="tutorial-progress-bar" id="tutorial-progress-bar" style="width: 7.14%;"></div>
+          <div class="tutorial-progress-bar" id="tutorial-progress-bar"></div>
         </div>
 
         <!-- Step Icon & Title -->
