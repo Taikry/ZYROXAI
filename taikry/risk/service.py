@@ -142,7 +142,13 @@ class RiskIntelligenceService:
             merged_overrides.update(custom_risk_options)
 
         active_profile = get_risk_profile(effective_mode, merged_overrides)
-        min_rr = float(active_profile.get("min_risk_reward_ratio", MIN_RISK_REWARD_RATIO))
+        from taikry.trading.risk_reward_gate import get_system_min_rr
+        system_floor = get_system_min_rr()
+        if custom_risk_options and "min_risk_reward_ratio" in custom_risk_options:
+            min_rr = float(custom_risk_options["min_risk_reward_ratio"])
+        else:
+            min_rr = float(active_profile.get("min_risk_reward_ratio", system_floor))
+        min_rr = max(system_floor, min_rr)
         risk_pct = float(active_profile.get("risk_per_trade_percent", RISK_PER_TRADE_PERCENT))
         max_spread_pct = float(active_profile.get("max_spread_pct", 0.20))
         news_mode = str(active_profile.get("news_filter_mode", "STANDARD"))

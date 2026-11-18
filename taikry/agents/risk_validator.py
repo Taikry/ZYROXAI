@@ -62,9 +62,13 @@ class RiskValidatorAgent:
         Returns strict institutional verdict adaptive to selected Risk Profile.
         """
 
+        from taikry.trading.risk_reward_gate import get_system_min_rr
+        system_floor = get_system_min_rr()
         custom_overrides = dict(risk_options or {})
         if min_risk_reward_ratio is not None:
             custom_overrides["min_risk_reward_ratio"] = min_risk_reward_ratio
+        elif "min_risk_reward_ratio" not in custom_overrides:
+            custom_overrides["min_risk_reward_ratio"] = system_floor
         if risk_per_trade_percent is not None:
             custom_overrides["risk_per_trade_percent"] = risk_per_trade_percent
         if max_spread_pct is not None:
@@ -72,7 +76,8 @@ class RiskValidatorAgent:
         if news_filter_mode is not None:
             custom_overrides["news_filter_mode"] = news_filter_mode
         active_profile = get_risk_profile(risk_mode, custom_overrides)
-        eff_min_rr = float(active_profile.get("min_risk_reward_ratio", MIN_RISK_REWARD_RATIO))
+        eff_min_rr = float(active_profile.get("min_risk_reward_ratio", system_floor))
+        eff_min_rr = max(system_floor, eff_min_rr)
         eff_risk_pct = float(active_profile.get("risk_per_trade_percent", RISK_PER_TRADE_PERCENT))
         eff_max_spread = float(active_profile.get("max_spread_pct", 0.20))
         eff_news_mode = str(active_profile.get("news_filter_mode", "STANDARD")).upper()

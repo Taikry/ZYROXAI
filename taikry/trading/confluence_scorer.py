@@ -34,7 +34,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 
 MINIMUM_ACTIONABLE_SCORE = 75
-DEFAULT_MIN_RISK_REWARD = 1.5
+DEFAULT_MIN_RISK_REWARD = 1.1
 
 
 class ConfluenceScoreResult:

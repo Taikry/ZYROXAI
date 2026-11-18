@@ -705,6 +705,73 @@
                   </div>
                 </div>
 
+                <!-- ⚖️ RISK/REWARD CONFIRMATION GATE CARD -->
+                <div class="rr-confirmation-card" id="card-risk-reward-confirmation">
+                  <div class="rr-card-header">
+                    <div class="rr-card-title">
+                      <span class="rr-icon">⚖️</span>
+                      <span class="rr-title-text" id="t-rr-card-title">Risk/Reward Confirmation Gate</span>
+                    </div>
+                    <div class="rr-status-badge status-wait" id="rr-approval-status-badge">WAIT</div>
+                  </div>
+
+                  <div class="rr-metrics-grid">
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">ENTRY PRICE</div>
+                      <div class="rr-metric-val val-cyan" id="rr-card-entry">--</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">STOP LOSS</div>
+                      <div class="rr-metric-val val-red" id="rr-card-sl">--</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">TAKE PROFIT (TP1)</div>
+                      <div class="rr-metric-val val-green" id="rr-card-tp1">--</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">RISK DISTANCE</div>
+                      <div class="rr-metric-val" id="rr-card-risk-dist">--</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">REWARD DISTANCE</div>
+                      <div class="rr-metric-val" id="rr-card-reward-dist">--</div>
+                    </div>
+                    <div class="rr-metric-box highlight-rr">
+                      <div class="rr-metric-label">R:R RATIO (TP1)</div>
+                      <div class="rr-metric-val val-gold" id="rr-card-ratio">--</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">MIN REQUIRED</div>
+                      <div class="rr-metric-val" id="rr-card-min-required">1:1.1</div>
+                    </div>
+                    <div class="rr-metric-box">
+                      <div class="rr-metric-label">APPROVAL STATUS</div>
+                      <div class="rr-metric-val" id="rr-card-status-text">WAIT</div>
+                    </div>
+                  </div>
+
+                  <!-- Multi-TP R:R Breakdown -->
+                  <div class="rr-tp-targets-row" id="rr-tp-targets-row">
+                    <span class="rr-tp-pill">TP1: <b id="rr-pill-tp1">--</b> (R:R <b id="rr-pill-tp1-rr">--</b>)</span>
+                    <span class="rr-tp-pill">TP2: <b id="rr-pill-tp2">--</b> (R:R <b id="rr-pill-tp2-rr">--</b>)</span>
+                    <span class="rr-tp-pill">TP3: <b id="rr-pill-tp3">--</b> (R:R <b id="rr-pill-tp3-rr">--</b>)</span>
+                  </div>
+
+                  <!-- Rejection & Explanation Banner -->
+                  <div class="rr-explanation-banner rr-hidden" id="rr-explanation-banner">
+                    <div class="rr-explanation-icon" id="rr-explanation-icon">⚠️</div>
+                    <div class="rr-explanation-content">
+                      <div class="rr-explanation-title" id="rr-explanation-title">Signal Rejected</div>
+                      <div class="rr-explanation-body" id="rr-explanation-body">Signal rejected: Risk/Reward ratio is below the minimum required 1:1.1.</div>
+                      <div class="rr-explanation-details" id="rr-explanation-details">
+                        <span>Actual: <b id="rr-exp-actual">--</b></span>
+                        <span>Required: <b id="rr-exp-required">1:1.1</b></span>
+                        <span>Difference: <b id="rr-exp-diff">--</b></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- 🧠 SMART TRADING ASSISTANT & STAGED EXECUTION -->
                 <div class="smart-trading-strip" id="smart-trading-strip">
                   <div class="smart-strip-header">

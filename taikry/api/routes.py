@@ -2917,19 +2917,75 @@ class XAUUSDAdminConfigRequest(BaseModel):
     expiry_hours: Optional[int] = None
 
 
-@router.post("/api/v1/xauusd/signals/admin/config")
-def update_xauusd_admin_config_endpoint(req: XAUUSDAdminConfigRequest, _: bool = Depends(require_admin_access)):
+@router.get("/api/v1/xauusd/signals/admin/config")
+def get_xauusd_admin_config_endpoint(_: bool = Depends(require_admin_access)):
     """
-    Updates administrative parameters for the XAUUSD Telegram Signal Engine.
-    Enforces that daily limit cannot exceed 4.
+    Returns current administrative parameters for the XAUUSD Signal Engine.
     """
     from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
+    from taikry.trading.risk_reward_gate import get_system_min_rr
+
+    current_min_rr = get_system_min_rr()
+    return {
+        "status": "SUCCESS",
+        "current_config": {
+            "daily_limit": xauusd_signal_engine.daily_limit,
+            "min_rr": current_min_rr,
+            "min_risk_reward_ratio": current_min_rr,
+            "min_score": xauusd_signal_engine.min_score,
+            "max_score": xauusd_signal_engine.max_score,
+            "expiry_hours": xauusd_signal_engine.expiry_hours,
+        }
+    }
+
+
+@router.post("/api/v1/xauusd/signals/admin/config")
+def update_xauusd_admin_config_endpoint(
+    req: XAUUSDAdminConfigRequest,
+    request: Request,
+    _: bool = Depends(require_admin_access)
+):
+    """
+    Updates administrative parameters for the XAUUSD Telegram Signal Engine.
+    Enforces that daily limit cannot exceed 4, validates positive numeric
+    Risk/Reward ratio, persists to SystemSetting, and writes an AuditLog entry.
+    """
+    from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
+    from taikry.trading.risk_reward_gate import set_system_min_rr, get_system_min_rr
+
+    actor_id = None
+    token = request.cookies.get("zyrox_session") or (
+        request.headers.get("Authorization", "")[7:].strip()
+        if request.headers.get("Authorization", "").startswith("Bearer ")
+        else None
+    )
+    if token:
+        from taikry.database.session import SessionLocal
+        from taikry.auth.auth_service import authenticate_session
+        db = SessionLocal()
+        try:
+            u = authenticate_session(db, token)
+            if u:
+                actor_id = getattr(u, "id", None)
+        except Exception:
+            pass
+        finally:
+            db.close()
+
+    ip_addr = request.client.host if request.client else None
 
     if req.daily_limit is not None:
         # Strict hard limit: cannot exceed 4
         xauusd_signal_engine.daily_limit = max(1, min(4, req.daily_limit))
     if req.min_rr is not None:
-        xauusd_signal_engine.min_rr = max(1.5, req.min_rr)
+        try:
+            new_rr = float(req.min_rr)
+            if not math.isfinite(new_rr) or new_rr < 1.0 or new_rr > 20.0:
+                raise ValueError("Minimum Risk/Reward ratio must be a positive numeric value between 1.0 and 20.0.")
+            saved_rr = set_system_min_rr(new_rr, actor_user_id=actor_id, ip_address=ip_addr)
+            xauusd_signal_engine.min_rr = saved_rr
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
     if req.min_score is not None:
         xauusd_signal_engine.min_score = max(75, min(95, req.min_score))
     if req.max_score is not None:
@@ -2937,11 +2993,15 @@ def update_xauusd_admin_config_endpoint(req: XAUUSDAdminConfigRequest, _: bool =
     if req.expiry_hours is not None:
         xauusd_signal_engine.expiry_hours = max(1, min(24, req.expiry_hours))
 
+    current_min_rr = get_system_min_rr()
+    xauusd_signal_engine.min_rr = current_min_rr
+
     return {
         "status": "SUCCESS",
         "current_config": {
             "daily_limit": xauusd_signal_engine.daily_limit,
-            "min_rr": xauusd_signal_engine.min_rr,
+            "min_rr": current_min_rr,
+            "min_risk_reward_ratio": current_min_rr,
             "min_score": xauusd_signal_engine.min_score,
             "max_score": xauusd_signal_engine.max_score,
             "expiry_hours": xauusd_signal_engine.expiry_hours

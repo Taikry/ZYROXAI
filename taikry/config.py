@@ -195,7 +195,7 @@ def _finite_env_float(name: str, default: float, minimum: float, maximum: Option
 INITIAL_PAPER_BALANCE = _finite_env_float("INITIAL_PAPER_BALANCE", 100000.0, 1.0)
 MAX_RISK_PER_TRADE_PERCENT = 2.0
 RISK_PER_TRADE_PERCENT = _finite_env_float("RISK_PER_TRADE_PERCENT", 0.5, 0.1, MAX_RISK_PER_TRADE_PERCENT)
-MIN_RISK_REWARD_RATIO = _finite_env_float("MIN_RISK_REWARD_RATIO", 2.0, 1.0)
+MIN_RISK_REWARD_RATIO = _finite_env_float("MIN_RISK_REWARD_RATIO", 1.1, 1.0)
 MAX_DAILY_LOSS_PERCENT = _finite_env_float("MAX_DAILY_LOSS_PERCENT", 2.5, 0.1, 100.0)
 MAX_SIMULTANEOUS_POSITIONS = int(os.getenv("MAX_SIMULTANEOUS_POSITIONS", "3"))
 SLIPPAGE_PIPS = float(os.getenv("SLIPPAGE_PIPS", "1.0"))

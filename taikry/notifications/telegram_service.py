@@ -2951,12 +2951,28 @@ Use <code>/vip</code> only for the separate legacy VIP Channel membership."""
         except (TypeError, ValueError):
             entry_low = entry_high = None
         entry_str = f"{entry_low:.2f} — {entry_high:.2f}" if (entry_low is not None and entry_high is not None and entry_low <= entry_high) else f"{entry:.2f}"
-        risk_distance = abs(entry - sl)
-        rr1 = abs(tp1 - entry) / risk_distance
-        rr2 = abs(tp2 - entry) / risk_distance
-        rr3 = abs(tp3 - entry) / risk_distance
-        if not all(math.isfinite(value) for value in (rr1, rr2, rr3)) or rr1 < MIN_RISK_REWARD_RATIO:
-            return reject(f"Signal reward/risk is below the required 1:{MIN_RISK_REWARD_RATIO:.2f} minimum.")
+        from taikry.trading.risk_reward_gate import validate_signal_risk_reward, get_system_min_rr
+        min_required_rr = get_system_min_rr()
+        rr_validation = validate_signal_risk_reward(
+            symbol=raw_sym,
+            direction=action_name,
+            entry=entry,
+            stop_loss=sl,
+            take_profit_1=tp1,
+            take_profit_2=tp2,
+            take_profit_3=tp3,
+            min_rr_threshold=min_required_rr,
+            confluence_score=int(score),
+            quote_verified=True,
+            quote_fresh=True,
+            technical_confirmed=True,
+            other_checks_passed=True,
+        )
+        if not rr_validation.is_approved:
+            return reject(rr_validation.rejection_reason or f"Signal reward/risk is below the required 1:{min_required_rr:.1f} minimum.")
+        rr1 = rr_validation.rr_tp1
+        rr2 = rr_validation.rr_tp2 or (abs(tp2 - entry) / max(0.0001, risk_distance))
+        rr3 = rr_validation.rr_tp3 or (abs(tp3 - entry) / max(0.0001, risk_distance))
         timeframes = html.escape(", ".join(map(str, signal_data.get("timeframes_analyzed") or ["N/A"])))
         evidence = signal_data.get("supporting_evidence", [])
         evidence_text = "\n".join([f"• {html.escape(str(ev))}" for ev in evidence[:4]]) if evidence else "• No supporting evidence was attached."

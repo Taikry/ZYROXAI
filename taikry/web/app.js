@@ -456,6 +456,7 @@ function toggleLanguage() {
   setTxt("lang-btn-text", dict.lang_btn);
   setTxt("c-tab-xauusd-signals", isKhmer ? "🥇 សញ្ញា XAUUSD" : "🥇 Gold Signals");
   setTxt("t-xauusd-panel-title", isKhmer ? "🥇 សញ្ញាជួញដូរមាស XAUUSD ក្នុងពេលជាក់ស្ដែងជាមួយ AI ទាំងអស់" : "🥇 XAUUSD Real-Time Signals & All Agent AI Quorum");
+  setTxt("t-rr-card-title", isKhmer ? "ទ្វារផ្ទៀងផ្ទាត់សមាមាត្រហានិភ័យ/ផលចំណេញ (R:R)" : "Risk/Reward Confirmation Gate");
 
   // Main Tabs & Sections
   setTxt("t-tab-signals", dict.tab_signals);
@@ -3699,6 +3700,149 @@ function updateCockpitPlanCard(data) {
     console.warn("Could not populate smart trading assistant strip:", err);
   }
 
+  // Update Risk/Reward Confirmation Gate Card (V6.2.2)
+  try {
+    updateRiskRewardConfirmationCard(data);
+  } catch (err) {
+    console.warn("Could not update Risk/Reward confirmation card:", err);
+  }
+
+}
+
+function updateRiskRewardConfirmationCard(data) {
+  if (!data) return;
+
+  const card = document.getElementById("card-risk-reward-confirmation");
+  if (!card) return;
+
+  const statusBadge = document.getElementById("rr-approval-status-badge");
+  const entryEl = document.getElementById("rr-card-entry");
+  const slEl = document.getElementById("rr-card-sl");
+  const tp1El = document.getElementById("rr-card-tp1");
+  const riskDistEl = document.getElementById("rr-card-risk-dist");
+  const rewardDistEl = document.getElementById("rr-card-reward-dist");
+  const ratioEl = document.getElementById("rr-card-ratio");
+  const minReqEl = document.getElementById("rr-card-min-required");
+  const statusTextEl = document.getElementById("rr-card-status-text");
+
+  const pillTp1 = document.getElementById("rr-pill-tp1");
+  const pillTp1RR = document.getElementById("rr-pill-tp1-rr");
+  const pillTp2 = document.getElementById("rr-pill-tp2");
+  const pillTp2RR = document.getElementById("rr-pill-tp2-rr");
+  const pillTp3 = document.getElementById("rr-pill-tp3");
+  const pillTp3RR = document.getElementById("rr-pill-tp3-rr");
+
+  const expBanner = document.getElementById("rr-explanation-banner");
+  const expTitle = document.getElementById("rr-explanation-title");
+  const expBody = document.getElementById("rr-explanation-body");
+  const expActual = document.getElementById("rr-exp-actual");
+  const expRequired = document.getElementById("rr-exp-required");
+  const expDiff = document.getElementById("rr-exp-diff");
+
+  const candidate = data.candidate_plan || data.agents?.agent_4_risk;
+  const rrVal = data.rr_validation || {};
+
+  const entry = Number(rrVal.entry_price ?? data.entry_price ?? candidate?.entry_price);
+  const sl = Number(rrVal.stop_loss ?? data.stop_loss ?? candidate?.stop_loss);
+  const tp1 = Number(rrVal.take_profit_1 ?? data.take_profit_1 ?? candidate?.take_profit_1);
+  const tp2 = Number(rrVal.take_profit_2 ?? data.take_profit_2 ?? candidate?.take_profit_2);
+  const tp3 = Number(rrVal.take_profit_3 ?? data.take_profit_3 ?? candidate?.take_profit_3);
+
+  const hasLevels = Number.isFinite(entry) && entry > 0 && Number.isFinite(sl) && sl > 0 && Number.isFinite(tp1) && tp1 > 0;
+  const riskDist = Number(rrVal.risk_distance ?? (hasLevels ? Math.abs(entry - sl) : 0));
+  const rewardDist1 = Number(rrVal.reward_distance_1 ?? (hasLevels ? Math.abs(tp1 - entry) : 0));
+  const rewardDist2 = Number(rrVal.reward_distance_2 ?? (hasLevels && Number.isFinite(tp2) && tp2 > 0 ? Math.abs(tp2 - entry) : 0));
+  const rewardDist3 = Number(rrVal.reward_distance_3 ?? (hasLevels && Number.isFinite(tp3) && tp3 > 0 ? Math.abs(tp3 - entry) : 0));
+
+  const minRequired = Number(rrVal.min_required_rr ?? 1.1);
+
+  let rawRR1 = rrVal.rr_tp1 ?? data.risk_reward_1 ?? data.risk_reward_ratio;
+  if (typeof rawRR1 === "string" && rawRR1.includes(":")) {
+    rawRR1 = Number(rawRR1.split(":").pop());
+  }
+  const numRR1 = Number(rawRR1);
+  const hasRR1 = Number.isFinite(numRR1) && numRR1 > 0;
+  const computedRR1 = hasRR1 ? numRR1 : (hasLevels && riskDist > 0 ? (rewardDist1 / riskDist) : 0);
+
+  const rawRR2 = rrVal.rr_tp2 ?? data.risk_reward_2;
+  const rawRR3 = rrVal.rr_tp3 ?? data.risk_reward_3;
+
+  // Determine gate status: APPROVED | REJECTED | INVALID | WAIT
+  let status = rrVal.status;
+  if (!status) {
+    if (!hasLevels) {
+      status = "WAIT";
+    } else if (data.setup_status === "APPROVE" && computedRR1 >= minRequired) {
+      status = "APPROVED";
+    } else if (computedRR1 > 0 && computedRR1 < minRequired) {
+      status = "REJECTED";
+    } else if (riskDist <= 0 || (entry - sl) * (tp1 - entry) <= 0) {
+      status = "INVALID";
+    } else {
+      status = "WAIT";
+    }
+  }
+
+  // Update metrics
+  const decimals = currentSymbol && currentSymbol.includes("JPY") ? 3 : 2;
+  const fmt = (v) => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v).toFixed(decimals) : "--";
+  const fmtDist = (v) => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v).toFixed(2) : "--";
+
+  if (entryEl) entryEl.innerText = fmt(entry);
+  if (slEl) slEl.innerText = fmt(sl);
+  if (tp1El) tp1El.innerText = fmt(tp1);
+  if (riskDistEl) riskDistEl.innerText = fmtDist(riskDist);
+  if (rewardDistEl) rewardDistEl.innerText = fmtDist(rewardDist1);
+  if (ratioEl) ratioEl.innerText = computedRR1 > 0 ? `1:${computedRR1.toFixed(2)}` : "--";
+  if (minReqEl) minReqEl.innerText = `1:${minRequired.toFixed(1)}`;
+  if (statusTextEl) statusTextEl.innerText = status;
+
+  // Multi-TP breakdown
+  if (pillTp1) pillTp1.innerText = fmt(tp1);
+  if (pillTp1RR) pillTp1RR.innerText = computedRR1 > 0 ? `1:${computedRR1.toFixed(2)}` : "--";
+  if (pillTp2) pillTp2.innerText = fmt(tp2);
+  if (pillTp2RR) pillTp2RR.innerText = Number(rawRR2) > 0 ? `1:${Number(rawRR2).toFixed(2)}` : (hasLevels && riskDist > 0 && rewardDist2 > 0 ? `1:${(rewardDist2 / riskDist).toFixed(2)}` : "--");
+  if (pillTp3) pillTp3.innerText = fmt(tp3);
+  if (pillTp3RR) pillTp3RR.innerText = Number(rawRR3) > 0 ? `1:${Number(rawRR3).toFixed(2)}` : (hasLevels && riskDist > 0 && rewardDist3 > 0 ? `1:${(rewardDist3 / riskDist).toFixed(2)}` : "--");
+
+  // Status Badge Class
+  const statusCls = `status-${status.toLowerCase()}`;
+  if (statusBadge) {
+    statusBadge.className = `rr-status-badge ${statusCls}`;
+    statusBadge.innerText = status;
+  }
+
+  // Explanation Banner
+  if (expBanner) {
+    if (status === "REJECTED") {
+      expBanner.classList.remove("rr-hidden");
+      if (expTitle) expTitle.innerText = isKhmer ? "សញ្ញាត្រូវបានច្រានចោល" : "Signal Rejected";
+      if (expBody) {
+        expBody.innerText = rrVal.rejection_reason || `Signal rejected: Risk/Reward ratio is below the minimum required 1:${minRequired.toFixed(1)}.`;
+      }
+      if (expActual) expActual.innerText = `1:${computedRR1.toFixed(2)}`;
+      if (expRequired) expRequired.innerText = `1:${minRequired.toFixed(1)}`;
+      if (expDiff) expDiff.innerText = `-${Math.abs(minRequired - computedRR1).toFixed(2)}`;
+    } else if (status === "INVALID") {
+      expBanner.classList.remove("rr-hidden");
+      if (expTitle) expTitle.innerText = isKhmer ? "កម្រិតតម្លៃមិនត្រឹមត្រូវ" : "Invalid Price Levels";
+      if (expBody) {
+        expBody.innerText = rrVal.rejection_reason || "Incorrect entry, Stop Loss, or Take Profit geometry.";
+      }
+      if (expActual) expActual.innerText = "--";
+      if (expRequired) expRequired.innerText = `1:${minRequired.toFixed(1)}`;
+      if (expDiff) expDiff.innerText = "--";
+    } else if (status === "WAIT" && rrVal.rejection_reason) {
+      expBanner.classList.remove("rr-hidden");
+      if (expTitle) expTitle.innerText = isKhmer ? "រង់ចាំការបញ្ជាក់ទិន្នន័យ" : "Awaiting Gate Confirmation";
+      if (expBody) expBody.innerText = rrVal.rejection_reason;
+      if (expActual) expActual.innerText = computedRR1 > 0 ? `1:${computedRR1.toFixed(2)}` : "--";
+      if (expRequired) expRequired.innerText = `1:${minRequired.toFixed(1)}`;
+      if (expDiff) expDiff.innerText = "--";
+    } else {
+      expBanner.classList.add("rr-hidden");
+    }
+  }
 }
 
 function switchToDebateTab() {
@@ -4712,6 +4856,11 @@ async function loadSignalsCenterData() {
       const fmtPrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "--";
       const rawRR = s.risk_reward_ratio ?? s.risk_reward_1;
       const rrValue = rawRR == null || !Number.isFinite(Number(rawRR)) ? "N/A" : Number(rawRR).toFixed(1);
+      const rawRR2 = s.risk_reward_2;
+      const rr2Val = rawRR2 != null && Number.isFinite(Number(rawRR2)) ? Number(rawRR2).toFixed(1) : null;
+      const rawRR3 = s.risk_reward_3;
+      const rr3Val = rawRR3 != null && Number.isFinite(Number(rawRR3)) ? Number(rawRR3).toFixed(1) : null;
+      const multiRRStr = (rr2Val && rr3Val) ? ` (TP2 1:${rr2Val} · TP3 1:${rr3Val})` : "";
       const rawScore = s.setup_score ?? s.confidence ?? s.ai_score;
       const scoreNumber = rawScore == null ? NaN : Number(rawScore);
       const scoreDisplay = Number.isFinite(scoreNumber) ? `${Math.round(scoreNumber > 1 ? scoreNumber : scoreNumber * 100)}%` : "N/A";
@@ -4752,7 +4901,7 @@ async function loadSignalsCenterData() {
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Risk-to-Reward:</span>
-              <span class="sig-lvl-val text-gold">${rrValue === "N/A" ? "N/A" : `1:${rrValue}`}</span>
+              <span class="sig-lvl-val text-gold">${rrValue === "N/A" ? "N/A" : `1:${rrValue}${multiRRStr}`}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Setup Confidence:</span>

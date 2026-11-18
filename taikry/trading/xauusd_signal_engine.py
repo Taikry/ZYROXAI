@@ -35,6 +35,15 @@ from taikry.data.providers import market_data_engine, QuoteClassification
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
 from taikry.agents.registry import agent_registry
 from taikry.trading.confluence_scorer import calculate_confluence_scores
+from taikry.trading.risk_reward_gate import (
+    validate_signal_risk_reward,
+    get_system_min_rr,
+    DEFAULT_MIN_RISK_REWARD,
+    STATUS_APPROVED,
+    STATUS_REJECTED,
+    STATUS_INVALID,
+    STATUS_WAIT,
+)
 
 logger = logging.getLogger("taikry.trading.xauusd_signal_engine")
 
@@ -49,7 +58,7 @@ CAMBODIA_TZ = zoneinfo.ZoneInfo("Asia/Phnom_Penh")
 
 # Default Operational Parameters
 DEFAULT_DAILY_LIMIT = 4
-DEFAULT_MIN_RR = MIN_RISK_REWARD_RATIO
+DEFAULT_MIN_RR = DEFAULT_MIN_RISK_REWARD
 DEFAULT_MIN_SCORE = int(os.getenv("MIN_AI_SCORE_THRESHOLD", "75"))
 DEFAULT_MAX_SCORE = int(os.getenv("MAX_AI_SCORE_THRESHOLD", "100"))
 DEFAULT_MAX_ENTRY_DEVIATION_POINTS = 3.5  # Max allowable price drift from entry
@@ -76,20 +85,18 @@ DEFERRED_SIGNAL_AGENT_REASONS = {
 }
 
 
-def normalize_xauusd_symbol(raw_symbol: str) -> Dict[str, Any]:
+def normalize_xauusd_symbol(raw_symbol: str) -> Optional[str]:
     """
     Validates and normalizes the symbol strictly to XAUUSD.
 
-    Returns a dict with:
-      - ``symbol``: canonical 'XAUUSD' on success
-      - ``status``: 'ACCEPTED' | 'REJECTED_NON_XAUUSD' | 'REJECTED_INVALID_INPUT'
+    Returns canonical 'XAUUSD' on success, or None if invalid or non-XAUUSD.
     """
     if not raw_symbol or not isinstance(raw_symbol, str):
-        return {"symbol": None, "status": "REJECTED_INVALID_INPUT"}
+        return None
     cleaned = raw_symbol.strip().upper().replace(" ", "")
     if cleaned in XAUUSD_ALIASES:
-        return {"symbol": ALLOWED_CANONICAL_SYMBOL, "status": "ACCEPTED"}
-    return {"symbol": None, "status": "REJECTED_NON_XAUUSD"}
+        return ALLOWED_CANONICAL_SYMBOL
+    return None
 
 
 def get_cambodia_date_str(utc_dt: Optional[datetime.datetime] = None) -> str:
@@ -152,9 +159,8 @@ def calculate_trade_levels(
     stop = round(stop, 2)
     risk = entry - stop if is_buy else stop - entry
 
-    # The nearest structural target is used only when it still meets the
-    # configured reward/risk floor. ATR multiples remain the fallback.
-    min_rr = max(float(min_rr), 2.0)
+    # Structural targets are evaluated strictly without inventing levels.
+    eff_min_rr = max(float(min_rr), 1.0)
     target_candidates = [technical_levels.get("take_profit_1"), smc_zones.get(structure_key)]
     viable_distances = []
     for raw_target in target_candidates:
@@ -163,28 +169,24 @@ def calculate_trade_levels(
         except (TypeError, ValueError):
             continue
         distance = target - entry if is_buy else entry - target
-        if math.isfinite(distance) and distance >= risk * min_rr:
+        if math.isfinite(distance) and distance >= risk * eff_min_rr:
             viable_distances.append(distance)
-    first_distance = min(viable_distances) if viable_distances else risk * min_rr
-    tp1_rr = first_distance / risk
-    tp2_rr = max(3.3, tp1_rr + 1.0)
-    tp3_rr = max(4.8, tp2_rr + 1.5)
+    first_distance = min(viable_distances) if viable_distances else risk * eff_min_rr
     sign = 1.0 if is_buy else -1.0
     tp1 = round(entry + sign * first_distance, 2)
-    actual_rr = abs(tp1 - entry) / risk
-    if actual_rr < min_rr:
-        tp1 = round(entry + sign * risk * (min_rr + 0.02), 2)
-        first_distance = abs(tp1 - entry)
-    tp1_rr = first_distance / risk
+    # Conservative TP1 R:R is computed faithfully from actual levels
+    tp1_rr = round(abs(tp1 - entry) / max(0.0001, risk), 2)
+    tp2_rr = round(max(tp1_rr + 0.8, tp1_rr * 1.5), 2)
+    tp3_rr = round(max(tp2_rr + 1.2, tp2_rr * 1.5), 2)
     return {
         "stop_loss": round(stop, 2),
         "take_profit_1": tp1,
         "take_profit_2": round(entry + sign * risk * tp2_rr, 2),
         "take_profit_3": round(entry + sign * risk * tp3_rr, 2),
         "risk_distance": risk,
-        "risk_reward_1": round(tp1_rr, 2),
-        "risk_reward_2": round(tp2_rr, 2),
-        "risk_reward_3": round(tp3_rr, 2),
+        "risk_reward_1": tp1_rr,
+        "risk_reward_2": tp2_rr,
+        "risk_reward_3": tp3_rr,
     }
 
 
@@ -196,7 +198,7 @@ class XAUUSDSignalEngine:
 
     def __init__(self):
         self.daily_limit = min(DEFAULT_DAILY_LIMIT, max(1, int(MAX_DAILY_XAUUSD_SIGNALS)))
-        self.min_rr = DEFAULT_MIN_RR
+        self._min_rr_override: Optional[float] = None
         self.min_score = DEFAULT_MIN_SCORE
         self.max_score = DEFAULT_MAX_SCORE
         self.max_entry_dev = DEFAULT_MAX_ENTRY_DEVIATION_POINTS
@@ -206,6 +208,16 @@ class XAUUSDSignalEngine:
         self._live_analysis_cache: Dict[str, Any] = {}
         self._live_analysis_cache_time: float = 0.0
         self._live_cache_ttl: float = 3.5
+
+    @property
+    def min_rr(self) -> float:
+        if self._min_rr_override is not None:
+            return self._min_rr_override
+        return get_system_min_rr()
+
+    @min_rr.setter
+    def min_rr(self, val: Optional[float]) -> None:
+        self._min_rr_override = float(val) if val is not None else None
 
     # -------------------------------------------------------------------------
     # 1. ATOMIC DAILY QUOTA & DEDUPLICATION CHECKS
@@ -565,7 +577,7 @@ class XAUUSDSignalEngine:
         Returns: {decision: BUY|SELL|WAIT|NO TRADE, score, entry, sl, tp1, tp2, tp3, ...}
         """
         norm = normalize_xauusd_symbol(symbol)
-        if norm.get("status") != "ACCEPTED":
+        if not norm:
             return {
                 "decision": "NO TRADE",
                 "score": 0,
@@ -708,15 +720,20 @@ class XAUUSDSignalEngine:
         tp2_rr = max(3.3, tp1_rr + 1.2)
         tp3_rr = max(4.8, tp2_rr + 1.5)
 
-        quality_quote = agent_outputs.get("data_quality_agent", {})
-        try:
-            bid = float(quality_quote.get("bid_price"))
-            ask = float(quality_quote.get("ask_price"))
-            quote_is_valid = math.isfinite(bid) and math.isfinite(ask) and bid > 0 and ask > bid
-        except (TypeError, ValueError):
+        quality_quote = agent_outputs.get("data_quality_agent")
+        if quality_quote is not None:
+            try:
+                bid = float(quality_quote.get("bid_price"))
+                ask = float(quality_quote.get("ask_price"))
+                quote_is_valid = math.isfinite(bid) and math.isfinite(ask) and bid > 0 and ask > bid and quality_quote.get("is_fresh", False)
+            except (TypeError, ValueError):
+                bid = ask = 0.0
+                quote_is_valid = False
+        else:
             bid = ask = 0.0
-            quote_is_valid = False
-        entry = round((ask if proposed_direction == "BUY" else bid) if quote_is_valid else verified_price, 2)
+            quote_is_valid = bool(math.isfinite(verified_price) and verified_price > 0)
+        has_live_bid_ask = quote_is_valid and bid > 0 and ask > 0 and ask > bid
+        entry = round((ask if proposed_direction == "BUY" else bid) if has_live_bid_ask else verified_price, 2)
         technical_levels = agent_outputs.get("technical_analyst", {}).get("key_levels", {})
         smc_zones = agent_outputs.get("ict_smc_analyst", {}).get("key_price_zones", {})
         try:
@@ -932,6 +949,37 @@ class XAUUSDSignalEngine:
                     "participating_count": len(successful_agents),
                 }
 
+        # Gate 3: Centralized Risk/Reward Gate (TP1 minimum ratio >= 1.1)
+        rr_gate_res = validate_signal_risk_reward(
+            symbol=symbol,
+            direction=proposed_direction,
+            entry=entry,
+            stop_loss=sl,
+            take_profit_1=tp1,
+            take_profit_2=tp2,
+            take_profit_3=tp3,
+            bid=bid if quote_is_valid else None,
+            ask=ask if quote_is_valid else None,
+            spread=spread_price,
+            min_rr_threshold=self.min_rr,
+            confluence_score=confluence_score,
+            quote_verified=quote_is_valid,
+            quote_fresh=True,
+            technical_confirmed=True,
+            other_checks_passed=True,
+        )
+        if not rr_gate_res.is_approved:
+            return {
+                "decision": "WAIT",
+                "confluence_score": confluence_score,
+                "agent_consensus_pct": round(agent_consensus_pct, 1),
+                "score": confluence_score,
+                "confluence_breakdown": confluence_res.to_dict(),
+                "rejection_reason": rr_gate_res.rejection_reason or "Risk/Reward ratio is below the minimum required 1:1.1.",
+                "rr_validation": rr_gate_res.to_dict(),
+                "evidence": all_evidence,
+            }
+
         return {
             "decision": proposed_direction,
             "confluence_score": confluence_score,
@@ -945,9 +993,10 @@ class XAUUSDSignalEngine:
             "take_profit_1": tp1,
             "take_profit_2": tp2,
             "take_profit_3": tp3,
-            "risk_reward_1": rr1,
-            "risk_reward_2": rr2,
-            "risk_reward_3": rr3,
+            "risk_reward_1": rr_gate_res.rr_tp1,
+            "risk_reward_2": rr_gate_res.rr_tp2,
+            "risk_reward_3": rr_gate_res.rr_tp3,
+            "rr_validation": rr_gate_res.to_dict(),
             "supporting_evidence": all_evidence[:6],
             "agent_opinions": agent_outputs,
             "eligible_count": total_eligible,
@@ -990,16 +1039,16 @@ class XAUUSDSignalEngine:
         validates levels, and persists approved signal to database.
         """
         # Step 1: Strict XAUUSD-Only Enforcement
-        norm_result = normalize_xauusd_symbol(raw_symbol)
-        if norm_result["status"] != "ACCEPTED":
+        canonical_symbol = normalize_xauusd_symbol(raw_symbol)
+        if not canonical_symbol:
             logger.warning(f"Rejected non-XAUUSD signal request: {raw_symbol}")
+            status_code = "REJECTED_INVALID_INPUT" if not raw_symbol or not isinstance(raw_symbol, str) else "REJECTED_NON_XAUUSD"
             return {
                 "success": False,
                 "error": f"Instrument '{raw_symbol}' rejected. Telegram Signal Engine accepts XAUUSD only.",
                 "canonical_symbol": None,
-                "status": norm_result["status"]
+                "status": status_code
             }
-        canonical_symbol = norm_result["symbol"]
 
         trade_style = str(trade_style or "INTRADAY").strip().upper()
         if trade_style in {"SCALP", "SCALPING"}:
@@ -1266,34 +1315,39 @@ class XAUUSDSignalEngine:
                 "status": f"REJECTED_{decision}"
             }
 
-        # Step 7: Price & Level Ordering Validation
+        # Step 7: Centralized Risk/Reward & Geometric Ordering Gate
         entry = consensus["entry_price"]
         sl = consensus["stop_loss"]
         tp1 = consensus["take_profit_1"]
         tp2 = consensus["take_profit_2"]
         tp3 = consensus["take_profit_3"]
 
-        if decision == "BUY":
-            if not (sl < entry < tp1 < tp2 < tp3):
-                return {
-                    "success": False,
-                    "error": f"Invalid BUY price ordering: SL({sl}) < Entry({entry}) < TP1({tp1}) < TP2({tp2}) < TP3({tp3}) violated.",
-                    "status": "INVALID_PRICE_ORDERING"
-                }
-        else:  # SELL
-            if not (sl > entry > tp1 > tp2 > tp3):
-                return {
-                    "success": False,
-                    "error": f"Invalid SELL price ordering: SL({sl}) > Entry({entry}) > TP1({tp1}) > TP2({tp2}) > TP3({tp3}) violated.",
-                    "status": "INVALID_PRICE_ORDERING"
-                }
-
-        # Minimum Reward-to-Risk Validation
-        if consensus["risk_reward_1"] < self.min_rr:
+        rr_validation = validate_signal_risk_reward(
+            symbol=canonical_symbol,
+            direction=decision,
+            entry=entry,
+            stop_loss=sl,
+            take_profit_1=tp1,
+            take_profit_2=tp2,
+            take_profit_3=tp3,
+            bid=bid,
+            ask=ask,
+            spread=spread_price,
+            min_rr_threshold=self.min_rr,
+            confluence_score=consensus.get("score"),
+            quote_verified=True,
+            quote_fresh=True,
+            technical_confirmed=True,
+            other_checks_passed=True,
+        )
+        if not rr_validation.is_approved:
             return {
                 "success": False,
-                "error": f"Minimum R:R floor violated: TP1 R:R is 1:{consensus['risk_reward_1']}, required >= 1:{self.min_rr}",
-                "status": "INSUFFICIENT_RR"
+                "error": rr_validation.rejection_reason,
+                "rejection_reason": rr_validation.rejection_reason,
+                "rr_validation": rr_validation.to_dict(),
+                "status": f"REJECTED_{rr_validation.status}",
+                "canonical_symbol": canonical_symbol,
             }
 
         # Run the same V3 risk gateway used by authenticated analysis before
@@ -1321,6 +1375,7 @@ class XAUUSDSignalEngine:
                 account_equity=float(account_equity or INITIAL_PAPER_BALANCE),
                 candle_df=v3_candles,
                 timeframe=setup_timeframe,
+                custom_risk_options={"min_risk_reward_ratio": self.min_rr},
                 structure_info={
                     "confirmed": bool(
                         agent_outputs.get("ict_smc_analyst", {}).get("structure_confirmed")
@@ -1485,6 +1540,7 @@ class XAUUSDSignalEngine:
                 "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,
                 "supporting_evidence": consensus["supporting_evidence"],
+                "rr_validation": consensus.get("rr_validation", rr_validation.to_dict()),
                 "risk_v3": consensus.get("risk_v3"),
                 "invalidation_conditions_en": invalidation_en,
                 "invalidation_conditions_kh": invalidation_kh,
