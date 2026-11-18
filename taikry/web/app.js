@@ -631,7 +631,7 @@ function selectSymbol(sym, tvSymbol, runAnalysis = true) {
   if (runAnalysis) triggerScan();
 
   // If on mobile screen, automatically return to chart view to inspect the asset
-  if (window.innerWidth <= 900) {
+  if (window.innerWidth <= 900 && (activeMainTab === "charts" || activeMainTab === "signals" || !activeMainTab)) {
     switchMobileView("chart");
   }
 
@@ -7734,7 +7734,23 @@ async function loadAccountProfile() {
     const rowCountry = document.getElementById("prof-row-country");
     if (rowCountry) {
       if (user.country) {
-        rowCountry.innerHTML = `<span class="country-flag">${user.country_flag || ''}</span> ${escapeHtml(user.country)}`;
+        let flagHtml = user.country_flag || "";
+        if (user.country.toLowerCase().includes("cambodia")) {
+          flagHtml = `<svg class="country-flag-svg" width="20" height="14" viewBox="0 0 640 480" style="border-radius:2px; vertical-align:-2px; margin-right:4px; box-shadow:0 1px 3px rgba(0,0,0,0.5);" aria-label="Cambodia Flag">
+            <rect width="640" height="480" fill="#032ea1"/>
+            <rect width="640" height="240" y="120" fill="#e00025"/>
+            <g fill="#ffffff">
+              <path d="M200,330 h240 v-12 h-240 z"/>
+              <path d="M220,318 h200 v-16 h-200 z"/>
+              <path d="M245,302 h150 v-18 h-150 z"/>
+              <polygon points="320,175 302,245 338,245"/>
+              <polygon points="265,205 252,248 278,248"/>
+              <polygon points="375,205 362,248 388,248"/>
+              <rect x="250" y="248" width="140" height="38"/>
+            </g>
+          </svg>`;
+        }
+        rowCountry.innerHTML = `<span class="country-flag">${flagHtml}</span> ${escapeHtml(user.country)}`;
       } else {
         rowCountry.innerHTML = '<span class="text-muted">Not specified</span>';
       }
@@ -8202,6 +8218,8 @@ function checkInitialRouteTab() {
 
     if (tabParam === "profile" || tabParam === "account" || hash === "profile" || hash === "account" || path.endsWith("/profile") || path.endsWith("/profile/")) {
       switchNavPane("account");
+      window.setTimeout(() => switchNavPane("account"), 80);
+      window.setTimeout(() => switchNavPane("account"), 300);
     } else if (tabParam) {
       switchNavPane(tabParam);
     } else if (hash) {

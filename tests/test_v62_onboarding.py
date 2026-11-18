@@ -48,6 +48,11 @@ def test_onboarding_users():
         db.add(user_a)
         db.commit()
         db.refresh(user_a)
+    else:
+        user_a.onboarding_completed = False
+        user_a.onboarding_step = 1
+        user_a.onboarding_dismissed = False
+        db.commit()
 
     # Session for User A
     tok_a = "onboarding_tok_a_12345678901234567890"

@@ -30,7 +30,7 @@ def test_user_session():
         user = User(
             email=email,
             full_name="Heng Taikry",
-            phone_number="0968288832",
+            phone_number="0968288899",
             country="Cambodia",
             hashed_password=hpass,
             salt=salt,
@@ -46,6 +46,7 @@ def test_user_session():
         db.refresh(user)
     else:
         user.country = "Cambodia"
+        user.phone_number = "0968288899"
         db.commit()
 
     # Create session
@@ -93,7 +94,7 @@ def test_auth_me_returns_profile_spec(client, test_user_session):
     assert u["email"] == "prof_test_user@zyrox.ai"
     assert u["country"] == "Cambodia"
     assert u["country_flag"] == "🇰🇭"
-    assert u["mobile_phone"] == "0968288832"
+    assert u["mobile_phone"] == "0968288899"
     assert u["member_since"] == "Jul 06, 2026"
     assert u["is_verified"] is True
 
@@ -118,7 +119,7 @@ def test_update_profile_phone_and_language(client, test_user_session):
 
     update_payload = {
         "full_name": "Heng Taikry",
-        "phone_number": "0968288832",
+        "phone_number": "0968288899",
         "language": "kh",
         "timezone": "Asia/Phnom_Penh"
     }
@@ -129,5 +130,5 @@ def test_update_profile_phone_and_language(client, test_user_session):
     res2 = client.get("/api/v1/auth/me")
     assert res2.status_code == 200
     data2 = res2.json()
-    assert data2["user"]["phone_number"] == "0968288832" or data2["user"]["mobile_phone"] == "0968288832"
+    assert data2["user"]["phone_number"] == "0968288899" or data2["user"]["mobile_phone"] == "0968288899"
     assert data2["user"]["language"] == "kh"
